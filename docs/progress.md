@@ -1027,3 +1027,89 @@ retries: a failed cell is a cell with a reason attached.
 
 `python -m glyph.cli grid --arms a2 a4 a6 --instance-seeds 1001 1002
 --budgets 5000 15000 --dry-run` prints the plan without running it.
+
+---
+
+# 2026-08-27, overnight (cont. 2) — A4 completes, and the code arm behaves as designed
+
+## A4, the first interpretable arm result
+
+`pi_mid`, `instance_seed=1001`, 120 test items, 15000 H100-s budget, 27.8 min.
+
+```
+overall   0.3700
+by_split  iid 0.3769   comp 0.4130   depth 0.2500
+tail      0.1544
+artifact  a 3499-byte Python solver
+
+spent 6905 / 15000 H100-s      $7.67
+  frontier_in    3861.0
+  frontier_out   3040.2      99.94%  the agent
+  oracle_query      4.25       0.06%
+  gpu_second        0.086            the sandbox running the solver
+```
+
+**`tail` is 0.154 against an overall of 0.370 — a drop to 42%.** That is the
+code container's predicted signature, arriving on the first run that got far
+enough to show it. The plan states it outright: *"code 臂：只能硬编码查到的
+2000 条，覆盖到的全对,tail 上归零"* — precise on what was bought, weak on what
+was not. Half the phase diagram's explanation is this gap, and it is visible
+in one run.
+
+`depth` at 0.25 against `iid` at 0.377 is the other predicted weakness
+showing up: expressions nested deeper than anything in the demos.
+
+One run, one instance, one seed. Not evidence of anything yet, but the
+mechanism the design is built on is producing the shape it was supposed to.
+
+For contrast, A2 on the same instance and preset scored 0.058 overall with
+`tail` 0.022 — but at a different budget (3000 vs 15000) and with 12 turns
+against 12, so the two are **not** comparable. Paired comparison at matched
+budgets is what `worker.py` exists to enforce, and it has not been run.
+
+## A6 crashed on the bug that was already fixed
+
+```
+BudgetExhausted: 3224.4 / 3000.0 H100-s after frontier_in
+```
+
+Identical to A4's first failure. The A6 process had been launched *before*
+the orchestrator fix landed, so it was running the old code — the crash
+confirms the bug was real and general rather than something specific to A4.
+Relaunched against the fixed orchestrator with a 15000 budget.
+
+## Self-check #4: pi_mid and pi_high both INVALID, for the same reason
+
+```
+pi_mid   answers parsed 40/60   truncated 1   out=171222
+pi_high  answers parsed  0/60   truncated 3   out=192000   (= 3 x the 64000 cap)
+```
+
+At `effort=high` the teacher spends its entire output budget thinking about
+an unanswerable task and never reaches the answers. On `pi_high` every one of
+the three calls hit the cap exactly and not a single answer came back.
+
+The coverage guard refused to score both, which is the whole reason it was
+added — an unguarded version would have reported `pi_high` as **0/60, perfectly
+hidden**, the strongest possible pass, from a run that measured nothing at
+all.
+
+Relaunched at `--chunk 10 --max-tokens 100000`, so each call has roughly six
+times the room per item.
+
+**Only `pi_low` has produced a valid #4 result so far**, and that is the one
+showing the leak. Whether pi_mid and pi_high leak is still unmeasured — the
+numbers in the invalid runs are not evidence in either direction. Worth noting
+that the earlier invalid pi_mid figure of 2/47 on table-dependent items sits
+*below* that preset's measured null of 0.2233, so there is no hint of a leak
+there, but a run with a third of its answers missing cannot support even that.
+
+## A note on effort as a controlled variable
+
+The plan fixes `effort=high` across all arms and sweeps it only in E7, which
+is right for the arms. Self-check #4 is not an arm, and at `high` the teacher
+burns 64000 output tokens per 20 items without answering. If the re-run at
+chunk 10 still truncates, the options are a smaller chunk again, or running
+#4 at a lower effort and saying so — a hiddenness check is asking "can it
+guess", and a teacher that thinks itself out of an answer has not
+demonstrated hiddenness, it has demonstrated a token budget.
