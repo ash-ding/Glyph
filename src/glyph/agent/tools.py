@@ -165,6 +165,7 @@ class ToolBox:
         student = Student(self.base_model, adapter_path=path)
         got = student.answer([e for e, _ in dev], ledger=self.ledger)
         hits = sum(g.strip() == a.strip() for g, (_, a) in zip(got.answers, dev))
+        student.close()
         del student
         return {"dev_accuracy": round(hits / len(dev), 4), "n": len(dev),
                 "remaining_h100s": round(self.ledger.remaining, 3)}
@@ -179,6 +180,7 @@ class ToolBox:
         got = student.answer([e for e, _ in dev], ledger=self.ledger)
         bad = [{"expr": e, "want": a, "got": g}
                for g, (e, a) in zip(got.answers, dev) if g.strip() != a.strip()]
+        student.close()
         del student
         return {"n_inspected": len(dev), "n_wrong": len(bad), "examples": bad[:k]}
 

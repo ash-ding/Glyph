@@ -23,8 +23,16 @@ crossover estimate.
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
+
+# vLLM starts its engine in a subprocess, and the default `fork` cannot
+# inherit an already-initialised CUDA context.  Any caller that touched the
+# GPU first -- A6 trains before it generates, which is the normal order --
+# would get "Cannot re-initialize CUDA in forked subprocess" at the point of
+# building the student.  Set before vLLM is imported anywhere.
+os.environ.setdefault("VLLM_WORKER_MULTIPROC_METHOD", "spawn")
 
 
 @dataclass
@@ -43,8 +51,19 @@ class Student:
                  context: str | None = None, max_new_tokens: int = 24,
                  max_model_len: int = 8192, gpu_memory_utilization: float = 0.85,
                  max_lora_rank: int = 64, dtype: str = "bfloat16"):
-        from vllm import LLM
+        import gc
+
+        import torch
         from transformers import AutoTokenizer
+        from vllm import LLM
+
+        # A6 has just finished training; its optimiser state and model are
+        # dead but still resident, and vLLM sizes its KV cache from what it
+        # sees free. Without this the student gets a fraction of the memory
+        # it should and the arm looks slower than it is.
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
         self.tok = AutoTokenizer.from_pretrained(base_model)
         self.context = context
@@ -71,6 +90,16 @@ class Student:
         if not self.context:
             return 0
         return len(self.tok(self.context, add_special_tokens=False)["input_ids"])
+
+    def close(self) -> None:
+        """Release the engine so the next Student can have the memory."""
+        import gc
+
+        import torch
+        self.llm = None
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     def answer(self, exprs: list[str], *, ledger=None, prompt_of=None,
                **_ignored) -> Generation:
