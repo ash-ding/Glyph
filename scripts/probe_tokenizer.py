@@ -1,147 +1,206 @@
 #!/usr/bin/env python3
 """Self-check #6 -- pick the surface notation for values (D8) and the digit
-layout that goes with it (D3).
+layout it goes with (D3).
 
 D8 is settled as option A: the surface form spells out a value's digits, so
-the digit structure the tables rely on survives tokenisation.  Which exact
-notation, and over how many digits of what base, is not settled by argument
--- it is settled by running the student's tokenizer and looking at where the
-boundaries actually fall.
+the structure the tables rely on survives tokenisation.  Which notation, over
+how many digits of what base, is not settled by argument -- it is settled by
+running a tokenizer and looking at where the boundaries actually fall.
 
-**The criterion is that no token may straddle a digit boundary.**
+**The criterion is that no token may cover two or more digit positions.**
 
-An earlier version of this script asked for something stricter and wrong:
-that every digit land inside its own single token.  Current tokenizers --
-Qwen3 among them -- split numbers into one token per character, so a base-17
-digit like `13` occupies two tokens no matter how it is written.  Under that
-criterion every candidate fails at any base above 10, which says nothing
-about the notation and everything about the test.
+Two earlier versions of this script got that wrong in opposite directions and
+both mistakes were in the test, not in the notation:
 
-What the design actually needs is weaker and checkable: the student must be
-able to tell where one digit ends and the next begins.  A digit spread over
-two tokens is fine as long as no token reaches across a boundary and smears
-two digit positions together.  That is what gets checked here, against the
-real `render_value`, using the tokenizer's own character offsets.
+  * asking that every digit land in its own single token.  Current
+    tokenizers split numbers one token per character, so a base-17 digit
+    like `13` spans two tokens however it is written; under that rule
+    nothing can pass above base 10, which says nothing about the notation.
+  * failing a token that swallows a separator along with its digit -- `_a`
+    as one token.  That smears nothing.  It is one token per digit, which
+    is the cleanest signal available.  What breaks the design is a token
+    covering two *digits*, because then there is no boundary left for the
+    student to key on.
 
-`flat` fails by construction and is kept only to show why: it renders the
-decimal index (`v802`), not the digits, so at any base but 10 the characters
-have nothing to do with digit positions -- and even at base 10 it drops
-leading zeros, so the field count varies with the value.
+Coverage is exhaustive by default.  Tokenisation is content-dependent, so a
+form that never straddles across a handful of samples can still straddle on
+the next one; the earlier six-value spot check also mis-estimated cost by
+half a token per value.
+
+`letter_*` forms are proposed, not implemented: `grammar.py` cannot render
+them yet.  They are measured here because a digit written as a letter is one
+character wide at any base below 27 -- fixed-width and potentially much
+cheaper -- and the design already states that digits carry no arithmetic
+meaning, so letters cost nothing conceptually.
 
     python scripts/probe_tokenizer.py Qwen/Qwen3-1.7B
+    python scripts/probe_tokenizer.py Qwen/Qwen3-1.7B --teacher
 """
 
 from __future__ import annotations
 
-import sys
+import argparse
 
 from glyph.config import GlyphConfig
-from glyph.grammar import digits, render_value
 
-# Layouts worth considering: all land near |V| ~ 5000, and D3 is open
-# precisely because which one the student learns most cleanly is empirical.
-LAYOUTS = [(17, 3), (10, 4), (8, 4), (7, 4)]
-FORMS = ("underscore", "bracket", "flat")
-
-#: Values whose digits exercise one-character and two-character fields, a
-#: zero field, and a leading-zero field.
-SAMPLES = (802, 0, 1, 4912, 170, 289)
+LAYOUTS = [(17, 3), (10, 4), (8, 4)]
+IMPLEMENTED = ("underscore", "bracket", "flat")
+PROPOSED = ("letter_sep", "letter_flat")
 
 
-def digit_spans(idx: int, cfg: GlyphConfig) -> list[tuple[int, int]] | None:
-    """Character span of each digit field in the rendered value.
+def render(idx: int, base: int, ndig: int, form: str):
+    """Render a value; return it with the character span of each digit field.
 
-    Returns None when the form exposes no digit fields at all.
+    A span list of None means the form exposes no digit fields at all.
     """
-    ds = digits(idx, cfg)
-    form = cfg.value_form
+    ds = [(idx // base ** k) % base for k in range(ndig)]
     if form == "flat":
-        return None
-    if form == "underscore":
-        pos, sep, spans = 2, 1, []          # "v_"
-    elif form == "bracket":
-        pos, sep, spans = 2, 1, []          # "v["
-    else:
-        raise ValueError(f"unknown value_form {form!r}")
-    for k, d in enumerate(ds):
-        text = str(d)
-        spans.append((pos, pos + len(text)))
-        pos += len(text) + (sep if k < len(ds) - 1 else 0)
-    return spans
+        return f"v{idx}", None
+
+    letters = form.startswith("letter")
+    parts = [chr(ord("a") + d) if letters else str(d) for d in ds]
+    head, sep, tail = {
+        "underscore": ("v_", "_", ""),
+        "letter_sep": ("v_", "_", ""),
+        "bracket": ("v[", ",", "]"),
+        "letter_flat": ("v", "", ""),
+    }[form]
+
+    s, spans, pos = head, [], len(head)
+    for k, p in enumerate(parts):
+        spans.append((pos, pos + len(p)))
+        s += p
+        pos += len(p)
+        if k < len(parts) - 1:
+            s += sep
+            pos += len(sep)
+    return s + tail, spans
 
 
-def straddles(tok_span: tuple[int, int], fields: list[tuple[int, int]]) -> bool:
-    """True if this token reaches across a digit boundary."""
-    a, b = tok_span
-    for s, e in fields:
-        # overlaps the field but is not contained in it
-        if a < e and b > s and not (a >= s and b <= e):
-            return True
-    return False
+def smears(span, fields) -> bool:
+    """True if this token covers two or more digit positions."""
+    a, b = span
+    return sum(1 for s, e in fields if a < e and b > s) > 1
 
 
-def check(tok, cfg: GlyphConfig) -> tuple[bool, str, float]:
-    """Returns (passes, reason, mean tokens per value)."""
-    total = 0
-    for idx in SAMPLES:
-        if idx >= cfg.n_values:
-            continue
-        s = render_value(idx, cfg)
-        enc = tok(s, add_special_tokens=False, return_offsets_mapping=True)
-        offsets = enc["offset_mapping"]
-        total += len(offsets)
-        fields = digit_spans(idx, cfg)
-        if fields is None:
-            return False, "form carries no digit fields (renders the decimal index)", 0.0
-        for span in offsets:
-            if straddles(tuple(span), fields):
-                piece = s[span[0]:span[1]]
-                return False, f"token {piece!r} straddles a digit boundary in {s!r}", 0.0
-    n = sum(1 for i in SAMPLES if i < cfg.n_values)
-    return True, "ok", total / n
+def audit(tok, base: int, ndig: int, form: str, limit: int | None) -> dict:
+    n = base ** ndig
+    idxs = range(n) if limit is None or n <= limit else range(0, n, max(1, n // limit))
+    strings, spans = [], []
+    for i in idxs:
+        s, f = render(i, base, ndig, form)
+        if f is None:
+            return {"ok": False, "why": "renders the decimal index, not the digits",
+                    "cost": None, "n": 0}
+        strings.append(s)
+        spans.append(f)
+
+    offsets = tok(strings, add_special_tokens=False,
+                  return_offsets_mapping=True)["offset_mapping"]
+    total, bad = 0, None
+    for s, fields, offs in zip(strings, spans, offsets):
+        total += len(offs)
+        if bad is None:
+            for o in offs:
+                if smears(tuple(o), fields):
+                    bad = f"{s!r}: token {s[o[0]:o[1]]!r} covers two digits"
+                    break
+    return {"ok": bad is None, "why": bad or "ok",
+            "cost": total / len(strings), "n": len(strings)}
 
 
-def main(model: str) -> int:
+def teacher_cost(forms: list[str], base: int, ndig: int, n: int = 300) -> dict[str, float]:
+    """Tokens per value on the teacher.
+
+    The agent reads demos and pays for every oracle query in the teacher's
+    tokens, so the notation is billed on both sides of the ledger.
+    `count_tokens` is blocked by org policy on this Vertex project, so the
+    number comes from `usage.input_tokens` on a real request instead.
+    """
+    from glyph.vertex import TEACHER, client
+
+    c = client()
+
+    def count(text: str) -> int:
+        return c.messages.create(
+            model=TEACHER, max_tokens=16,
+            thinking={"type": "disabled"},      # input_tokens is unaffected
+            messages=[{"role": "user", "content": text}],
+        ).usage.input_tokens
+
+    envelope = count("x") - 1
+    out = {}
+    for form in forms:
+        vals = [render(i * 7 % (base ** ndig), base, ndig, form)[0] for i in range(n)]
+        out[form] = (count(" ".join(vals)) - envelope) / n
+    return out
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("model", nargs="?", default="Qwen/Qwen3-1.7B")
+    ap.add_argument("--limit", type=int, default=None,
+                    help="sample this many values instead of checking all of them")
+    ap.add_argument("--teacher", action="store_true",
+                    help="also bill each notation against the teacher (costs a few API calls)")
+    args = ap.parse_args()
+
     from transformers import AutoTokenizer
 
-    tok = AutoTokenizer.from_pretrained(model)
+    tok = AutoTokenizer.from_pretrained(args.model)
     if not tok.is_fast:
-        print(f"{model} has no fast tokenizer; offsets are unavailable.")
+        print(f"{args.model} has no fast tokenizer; character offsets are unavailable.")
         return 2
 
-    print(f"tokenizer: {model}")
-    print("criterion: no token may straddle a digit boundary\n")
-    print(f"  {'layout':<10} {'|V|':>6}  {'form':<11} {'tok/value':>9}  verdict")
-    print(f"  {'-' * 10} {'-' * 6}  {'-' * 11} {'-' * 9}  {'-' * 40}")
+    print(f"student tokenizer: {args.model}")
+    print("criterion: no token may cover two or more digit positions")
+    print(f"coverage: {'every value' if args.limit is None else f'{args.limit} sampled'}\n")
+    print(f"  {'layout':<7} {'form':<12} {'checked':>8} {'tok/val':>8}  verdict")
+    print(f"  {'-'*7} {'-'*12} {'-'*8} {'-'*8}  {'-'*46}")
 
     passing: list[tuple[float, str, int, int]] = []
     for base, ndig in LAYOUTS:
-        for form in FORMS:
-            cfg = GlyphConfig(base=base, n_digits=ndig, value_form=form)
-            ok, why, cost = check(tok, cfg)
-            layout = f"{base}^{ndig}"
-            if ok:
-                passing.append((cost, form, base, ndig))
-                print(f"  {layout:<10} {cfg.n_values:>6}  {form:<11} {cost:>9.1f}  PASS")
+        for form in IMPLEMENTED + PROPOSED:
+            if form in PROPOSED and base > 26:
+                continue
+            r = audit(tok, base, ndig, form, args.limit)
+            mark = "" if form in IMPLEMENTED else " *"
+            if r["ok"]:
+                passing.append((r["cost"], form, base, ndig))
+                print(f"  {base}^{ndig:<5} {form + mark:<12} {r['n']:>8} "
+                      f"{r['cost']:>8.2f}  PASS")
             else:
-                print(f"  {layout:<10} {cfg.n_values:>6}  {form:<11} {'-':>9}  fail: {why}")
+                print(f"  {base}^{ndig:<5} {form + mark:<12} {r['n']:>8} "
+                      f"{'-':>8}  fail: {r['why'][:46]}")
+        print()
 
-    print()
     if not passing:
         print("NO CANDIDATE PASSES -- reopen D8.")
         return 1
 
-    cost, form, base, ndig = min(passing)
-    print(f"cheapest passing: value_form={form!r}, base={base}, n_digits={ndig} "
-          f"({cost:.1f} tokens per value, |V|={base ** ndig})")
+    print("* proposed only: grammar.py cannot render these yet.\n")
+    passing.sort()
+    print("cheapest passing on the student:")
+    for cost, form, base, ndig in passing[:6]:
+        print(f"  {cost:>5.2f} tok/value   {form:<12} {base}^{ndig}")
+
+    if args.teacher:
+        cheapest_layout = (passing[0][2], passing[0][3])
+        forms = sorted({f for _, f, b, d in passing if (b, d) == cheapest_layout})
+        print(f"\nteacher, at {cheapest_layout[0]}^{cheapest_layout[1]}:")
+        for form, cost in sorted(teacher_cost(forms, *cheapest_layout).items(),
+                                 key=lambda kv: kv[1]):
+            print(f"  {cost:>5.2f} tok/value   {form}")
+
     print()
-    print("Token cost is not the only axis, and it is the weaker one: it sets")
-    print("how much the context arm pays per query, while the digit layout sets")
-    print("whether the student can learn the tables at all.  Settle D3 on the")
-    print("capacity check (self-check #5, `scripts/capacity_check.py`), which")
-    print("sweeps the same layouts, and use this table to break ties on cost.")
+    print("Token cost is the weaker axis and it is not neutral: the context arm")
+    print("re-pays it on every one of 10^4 test queries, so a cheaper notation")
+    print("directly weakens the weights arm's economic advantage.  That is the")
+    print("honest direction -- the plan already refuses to handicap A2 by")
+    print("disabling its prefix cache.  Settle the digit layout on self-check #5")
+    print("(scripts/capacity_check.py), which sweeps the same layouts.")
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(sys.argv[1] if len(sys.argv) > 1 else "Qwen/Qwen3-1.7B"))
+    raise SystemExit(main())

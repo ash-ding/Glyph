@@ -24,6 +24,22 @@ Read `README.md` first; it carries the design rationale.
    value notation; converting between them would either leak the digit
    structure or quietly favour one arm.
 
+## The progress log
+
+`docs/progress.md` is the running record of the work: milestones, self-checks
+that passed or failed, decisions that moved, and problems found -- including
+the ones still open. Append to it **as the work happens**, not at the end.
+
+Every entry carries what was actually run, not only what was concluded: the
+command, the config, the numbers it produced, and where it ran. A conclusion
+without its evidence has to be re-run before anyone can trust it, and that is
+the expensive way to find out. Numbers go in as numbers -- a table of results
+beats a sentence describing them.
+
+Record failures, dead ends, and open questions as plainly as results. A check
+that exposed a problem earns more space in the log than one that passed: the
+next person needs to know what is broken far more than what is fine.
+
 ## Settled decisions
 
 - **D1 → B**: no `floor` split. Test set fully solvable, ceiling 100%.
