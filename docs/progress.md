@@ -683,3 +683,188 @@ condition under which the plan says it will break in practice.
 **The E9 ladder's pricing is unverified.** Sonnet 4.5's rate must be looked up
 before it enters the ledger; the plan warns explicitly against copying Sonnet
 5's $2/$10.
+
+---
+
+# 2026-08-27, overnight — self-check #4 finds a real leak, and the loop runs
+
+## The null hypothesis was wrong, and that mattered more than the bug
+
+`1/|V|` was the criterion from the start. It asks whether the teacher can
+guess a value uniformly, and nobody was ever going to. Two things are
+legitimately free: the **skeleton**, which the design *intends* to be
+inferable from demos, and whatever **table entries the demos reveal outright**.
+
+Measured on the same 300 items, `seed=1001`:
+
+| preset | true skeleton + identity table | true skeleton + demo-revealed table | trivial skeleton + demo-revealed | uniform |
+|---|---|---|---|---|
+| pi_low | 0.0000 / d 0.343 | 0.0000 / d 0.345 | 0.0000 / d 0.343 | 0.0002 |
+| pi_mid | 0.2233 / d 0.237 | 0.2233 / d 0.238 | 0.1467 / d 0.162 | 0.0002 |
+| pi_high | 0.7833 / d 0.763 | **0.8900** / d 0.896 | 0.2767 / d 0.468 | 0.1250 |
+
+Demos reveal 99u+0b entries at pi_low, 75u+2b at pi_mid, 16u+0b at pi_high.
+
+**On pi_high the legitimate null alone scores 0.89 exact.** Against a `1/|V|`
+criterion of 0.125, the check would have reported a catastrophic leak from a
+benchmark behaving exactly as designed. The check now measures its null
+instead of assuming one.
+
+Trivial strategies that know nothing at all, for reference:
+
+| preset | copy the input list | first value | last value |
+|---|---|---|---|
+| pi_low | 0.0000 / d 0.343 | 0.0000 / d 0.115 | 0.0000 / d 0.022 |
+| pi_mid | **0.1500** / d 0.168 | 0.0967 / d 0.102 | 0.0033 / d 0.040 |
+| pi_high | 0.1533 / d 0.418 | **0.4200** / d 0.408 | 0.3467 / d 0.339 |
+
+Echoing the input scores 15% on pi_mid and 42% on pi_high. The earlier
+10-item pi_mid reading of 2/10 sits inside that band and was never evidence
+of anything.
+
+## pi_low fails, and this one is real
+
+```
+pi_low, 60 items, teacher Opus 4.8, effort high, no queries at all
+
+  every legitimate null      exact 0.0000   digit 0.343
+  best copy strategy         exact 0.0000   digit 0.343
+  trivial skeleton + TRUE table   exact 0.0633   digit 0.680
+  TEACHER, demos only        exact 0.1167   digit 0.7810
+  answers parsed 60/60, no truncation, 23.5m, in=9443 out=125576
+```
+
+From 30 demos and zero queries the teacher **beats an oracle holding the
+entire true table**. Its digit accuracy exceeds every baseline that has no
+table knowledge by more than a factor of two. It is extrapolating table
+entries it was never shown.
+
+This is **risk R3 in the Glyph spec**, stated there as: *"ICL 其实能外推得很好
+→ 学习算法那条理由消失，只剩经济学，论文变薄但不死。"* It is also, in
+miniature, the question A0′ exists to answer — except A0′ hands over the full
+purchased record, and this is 30 free demos.
+
+**What it would mean if it holds.** H1's claim strength is set by whether the
+weights arm wins on economics or on learning algorithm. If in-context
+learning extrapolates these tables from 99 revealed entries, the
+learning-algorithmic half weakens and the honest claim is the economic one.
+The plan already commits to reporting that outcome plainly rather than
+dressing it up, so this is a result rather than a problem — but it is a
+result that changes the paper.
+
+**Why it is not yet confirmed.** Teacher scored on 60 items, nulls on 300 —
+different samples. The two scripts' digit-alignment differs slightly. One
+preset, one instance seed, one teacher. The corrected check computes the null
+on the same items with the same metric, and needs a clean re-run across seeds
+before any of this is load-bearing.
+
+**Worth trying before concluding.** pi_low has `n_structural=2`,
+`max_transform_depth=0`, `guard_prob=0` -- the skeleton is nearly trivial by
+construction, so almost all of the teacher's advantage has to be coming from
+the table. Raising `mlp_temp` (the smoothness knob) is the designed response
+if the table turns out to be too interpolable; that is what the knob is for.
+
+## Two more org-policy walls on this Vertex project
+
+Both are environment constraints, not code problems, and both are recorded
+because they deviate from what the plan assumes.
+
+**`structured_outputs` is refused for partner models.** The plan's §6.3 asks
+for `strict: true` on every tool so the API guarantees argument shape and this
+side does no defensive parsing. A request carrying it returns 400:
+`constraints/vertexai.allowedPartnerModelFeatures`. `strict` is now off and
+`agent/schema.py::validate()` does the same job client-side -- required keys,
+unknown keys, enums, ranges. Weaker: a malformed call becomes an error the
+model sees and retries rather than something the API made impossible. But
+`declare_target` still cannot record a role outside the enum, which is the
+property the analysis depends on. Turn it back on if the policy is ever
+widened; the schemas already carry `additionalProperties: false`.
+
+**`count_tokens` is refused** (recorded in the earlier entry, repeated here
+because it now has a consequence): the ledger cannot price a prompt before
+sending it, only after.
+
+## The closed loop runs
+
+A4 end to end on lumen-3 -- agent loop, oracle, sandbox, seal, score:
+
+```
+run_start  arm=a4  allowed=['code']  budget=4000 H100-s  tools=[query_oracle, write_code, seal]
+query_oracle -> 31 queries   spent  199 H100-s
+query_oracle -> 59 queries   spent  456
+query_oracle -> 83 queries   spent  853
+query_oracle -> 108 queries  spent 1339
+query_oracle -> 134 queries  spent 1793
+query_oracle -> 148 queries  spent 2571
+```
+
+No malformed queries, budget tracked, tools correctly restricted to the code
+arm.
+
+## The budget axis is measuring the wrong thing
+
+The trace above is the finding. **148 oracle queries cost about 1.3 H100-s.
+The other ~2570 are the agent's own tokens.**
+
+At the ledger's rates -- `$5/MTok` in, `$4/hr` H100 -- one H100-second buys
+222 input tokens, and one oracle query is priced at `$1e-5`, i.e. 0.009
+H100-seconds. So:
+
+| | cost in H100-s |
+|---|---|
+| 2000 oracle queries (the plan's Q) | ~18 |
+| one agent turn with a 10k-token context | ~45 |
+| a 20-turn conversation with growing context | ~2500 |
+
+**Information purchase is two orders of magnitude cheaper than thinking about
+it.** Nothing in the unified currency enforces the plan's `Q ≈ 2000`; an agent
+should rationally query until it runs out of context, and the budget sweep in
+E1 would mostly be sweeping *conversation length*, not *information bought*.
+
+That undercuts the setup's central asymmetry. The whole reason the weights arm
+exists is that `Q ≈ 2000` against `|V| = 4913` leaves the tables half-covered
+at best -- but that only bites if something actually stops the agent at 2000.
+
+Three ways out, none taken:
+
+1. **Raise `usd_per_oracle_query`** until the query budget binds. Defensible
+   -- a query is a call into a hidden system, and its price is ours to set --
+   but the number would be chosen to produce the regime we want, which needs
+   saying out loud in the paper.
+2. **A separate hard cap on queries**, orthogonal to the compute budget. This
+   matches how the spec actually talks (`Q` and `B` are discussed as different
+   things), and makes the information axis explicit rather than emergent.
+3. **Accept it** and re-frame: the binding constraint is the agent's own
+   inference, and the crossover is about deliberation cost. A coherent story,
+   but not the one the plan tells.
+
+My read is that (2) is closest to what the documents already assume, but this
+is a design decision and it is not mine to take. It needs settling **before
+E1**, because the budget axis is Fig. 1's x-axis.
+
+## Environment note
+
+vLLM 0.28.0 installed, and **torch stayed at 2.13.0+cu130** -- the downgrade
+risk that motivated the hand-rolled cache did not materialise. numpy moved
+2.4.6 -> 2.3.5, which nothing depends on. Verified: `torch.cuda.is_available()`
+true, 8 GPUs, vLLM generation working with prefix caching on, 32 prompts in
+0.07 s.
+
+vLLM's prefix-cached answers match the discarded hand-rolled cache's answers
+exactly, including the one borderline item where both differ from an uncached
+run -- independent corroboration that the bf16 divergence documented earlier
+is a property of prefix caching in general rather than of that implementation.
+
+## State at end of session
+
+Done tonight: self-check #4 built and its criterion corrected twice; the pi_low
+leak found; the second capacity sweep (D2 settled, `letter_sep` shown
+cost-only, unary asymmetry quantified); sandbox, seal, train, agent and arms
+written; A4 verified end to end; vLLM in place.
+
+Not done: E0 and E0b have not been run. `worker.py` still does not exist.
+A2, A6 and A0′ have not been executed even once. The corrected #4 has not been
+re-run across seeds.
+
+Blocking on a decision: `value_form`; the unary/binary asymmetry; the budget
+axis above; D3. None of them were decided unilaterally.
