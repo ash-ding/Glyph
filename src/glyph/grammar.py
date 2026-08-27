@@ -73,9 +73,18 @@ def render_value(idx: int, cfg: GlyphConfig) -> str:
         return "v_" + "_".join(str(d) for d in ds)
     if form == "bracket":
         return "v[" + ",".join(str(d) for d in ds) + "]"
+    if form == "letter_sep":
+        _need_letters(cfg)
+        return "v_" + "_".join(chr(ord("a") + d) for d in ds)
     if form == "flat":
         return f"v{idx}"
     raise ValueError(f"unknown value_form {form!r}")
+
+
+def _need_letters(cfg: GlyphConfig) -> None:
+    if cfg.base > 26:
+        raise ValueError(
+            f"value_form 'letter_sep' needs base <= 26, got {cfg.base}")
 
 
 def parse_value(tok: str, cfg: GlyphConfig) -> int:
@@ -89,6 +98,17 @@ def parse_value(tok: str, cfg: GlyphConfig) -> int:
         if not (tok.startswith("v[") and tok.endswith("]")):
             raise SyntaxError(f"bad value {tok!r}")
         return undigits(tuple(int(p) for p in tok[2:-1].split(",")), cfg)
+    if form == "letter_sep":
+        _need_letters(cfg)
+        parts = tok.split("_")
+        if parts[0] != "v" or len(parts) != cfg.n_digits + 1:
+            raise SyntaxError(f"bad value {tok!r}")
+        ds = []
+        for c in parts[1:]:
+            if len(c) != 1 or not ("a" <= c < chr(ord("a") + cfg.base)):
+                raise SyntaxError(f"bad digit {c!r} in {tok!r}")
+            ds.append(ord(c) - ord("a"))
+        return undigits(tuple(ds), cfg)
     if form == "flat":
         if not tok.startswith("v"):
             raise SyntaxError(f"bad value {tok!r}")

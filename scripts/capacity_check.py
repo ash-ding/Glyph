@@ -69,7 +69,9 @@ HOLDOUT_MOD = 10          # 1 in 10 entries is never trained on
 SEED = 20260827
 
 
-def build_tables(coupling: float, base: int, n_digits: int) -> Tables:
+def build_tables(coupling: float, base: int, n_digits: int,
+                 value_form: str = "underscore",
+                 unary_coupling: float | None = None) -> Tables:
     """The pi=0 table config, with D3's digit layout left open.
 
     Self-check #6 turned D3 into a live decision: Qwen3 splits numbers into
@@ -79,7 +81,8 @@ def build_tables(coupling: float, base: int, n_digits: int) -> Tables:
     actually helps the student is an empirical question -- which is what
     this check answers.
     """
-    cfg = CFG.with_(binary_coupling=coupling, base=base, n_digits=n_digits)
+    cfg = CFG.with_(binary_coupling=coupling, base=base, n_digits=n_digits,
+                    value_form=value_form, unary_coupling=unary_coupling)
     return Tables(cfg, np.random.default_rng(SEED))
 
 
@@ -200,6 +203,9 @@ def main() -> int:
     ap.add_argument("--coupling", type=float, default=CFG.binary_coupling)
     ap.add_argument("--base", type=int, default=CFG.base)
     ap.add_argument("--n-digits", type=int, default=CFG.n_digits)
+    ap.add_argument("--value-form", default="underscore")
+    ap.add_argument("--unary-coupling", type=float, default=None,
+                    help="give the unary tables the digit-wise form binary has")
     ap.add_argument("--model", default="Qwen/Qwen3-1.7B")
     ap.add_argument("--steps", type=int, default=3000)
     ap.add_argument("--batch", type=int, default=128)
@@ -213,7 +219,8 @@ def main() -> int:
 
     torch.manual_seed(SEED)
     device = "cuda"
-    tables = build_tables(args.coupling, args.base, args.n_digits)
+    tables = build_tables(args.coupling, args.base, args.n_digits,
+                          args.value_form, args.unary_coupling)
 
     tok = AutoTokenizer.from_pretrained(args.model)
     if tok.pad_token_id is None:
@@ -224,7 +231,9 @@ def main() -> int:
     model.config.use_cache = False
 
     label = (f"{args.task} coupling={args.coupling:g} "
-             f"base={args.base}^{args.n_digits}")
+             f"base={args.base}^{args.n_digits} form={args.value_form}"
+             + ("" if args.unary_coupling is None
+                else f" unary_dw={args.unary_coupling:g}"))
     print(f"=== capacity check: {label} ===", flush=True)
     print(f"    student {args.model} | table params {tables.param_count():,} "
           f"| |V| {tables.cfg.n_values}", flush=True)
@@ -270,7 +279,9 @@ def main() -> int:
     print(f"    verdict: {verdict}\n", flush=True)
 
     result = {"task": args.task, "coupling": args.coupling,
-              "base": args.base, "n_digits": args.n_digits, "model": args.model,
+              "base": args.base, "n_digits": args.n_digits,
+              "value_form": args.value_form, "unary_coupling": args.unary_coupling,
+              "model": args.model,
               "steps": args.steps, "batch": args.batch, "lr": args.lr,
               "fit": fit, "reach": reach, "chance": chance, "verdict": verdict,
               "minutes": round((time.time() - t0) / 60, 1)}

@@ -13,7 +13,12 @@ from dataclasses import dataclass, replace
 # digits, so the digit structure survives tokenisation.  The exact notation
 # is a sub-decision resolved by self-check #6 (scripts/probe_tokenizer.py);
 # until that runs, `underscore` is the placeholder default.
-VALUE_FORMS = ("underscore", "bracket", "flat")
+# `letter_sep` writes each digit as a letter (v_d_n_c).  Self-check #6
+# measures it at 4.00 student tokens per value against `underscore`'s 8.24,
+# fixed-width and one token per digit.  Available but NOT the default: the
+# switch halves what the context arm pays per query, so it moves the
+# experiment's economics and is a decision, not an optimisation.
+VALUE_FORMS = ("underscore", "bracket", "flat", "letter_sep")
 
 
 @dataclass(frozen=True)
@@ -35,6 +40,14 @@ class GlyphConfig:
     mlp_width: int = 64
     mlp_temp: float = 1.0       # pre-activation scale; higher = less smooth
     binary_coupling: float = 0.25   # D2: 0 = purely digit-wise, large = naive 96-dim MLP
+    # Unary operators are a single joint MLP over the whole embedding, with
+    # no per-digit factorisation -- unlike the binary operators, which D2
+    # gave one.  Self-check #5 found that this makes unary the *harder* half
+    # to extrapolate (reach 0.46 vs binary's 0.80), inverting what the spec
+    # assumes.  Setting this to a float rebuilds the unary tables the same
+    # way the binary ones are built, with this coupling weight, so the two
+    # halves can be compared.  None keeps the original joint MLP.
+    unary_coupling: float | None = None
 
     # ---- expression sampling ----------------------------------------
     atomic_ratio: float = 0.5   # primary continuous knob for sweeping pi

@@ -19,7 +19,7 @@ def test_value_codec_roundtrip(cfg):
         assert parse_value(render_value(i, cfg), cfg) == i
 
 
-@pytest.mark.parametrize("form", ["underscore", "bracket", "flat"])
+@pytest.mark.parametrize("form", ["underscore", "bracket", "flat", "letter_sep"])
 def test_every_value_form_roundtrips(form):
     cfg = PRESETS["smoke"].with_(value_form=form)
     for i in range(cfg.n_values):

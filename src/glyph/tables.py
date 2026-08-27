@@ -58,7 +58,12 @@ class FrozenMLP:
 @dataclass
 class UnaryOp:
     name: str
-    mlp: FrozenMLP
+    mlp: FrozenMLP                          # joint map over the whole embedding
+    # Present only when cfg.unary_coupling is set: the digit-wise form, built
+    # exactly like BinaryOp so the two halves are comparable.
+    per_digit: list[FrozenMLP] | None = None
+    mix: FrozenMLP | None = None
+    alpha: float = 0.0
 
 
 @dataclass
@@ -79,11 +84,8 @@ class Tables:
         self.digit_emb = rng.normal(size=(cfg.n_digits, cfg.base, cfg.d_digit))
         self.all_emb = np.stack([self._embed(i) for i in range(cfg.n_values)])
 
-        self.unary = [
-            UnaryOp(f"u{k}", FrozenMLP(rng, cfg.d_total, cfg.d_total,
-                                       cfg.mlp_width, cfg.mlp_temp))
-            for k in range(cfg.n_unary)
-        ]
+        self.unary = [self._make_unary(f"u{k}", cfg, rng)
+                      for k in range(cfg.n_unary)]
         self.binary = [
             BinaryOp(
                 f"b{k}",
@@ -103,6 +105,20 @@ class Tables:
         self._cache_u: dict[tuple[str, int], int] = {}
         self._cache_b: dict[tuple[str, int, int], int] = {}
 
+    @staticmethod
+    def _make_unary(name: str, cfg: GlyphConfig, rng) -> UnaryOp:
+        joint = FrozenMLP(rng, cfg.d_total, cfg.d_total, cfg.mlp_width, cfg.mlp_temp)
+        if cfg.unary_coupling is None:
+            return UnaryOp(name, joint)
+        return UnaryOp(
+            name, joint,
+            per_digit=[FrozenMLP(rng, cfg.d_digit, cfg.d_digit,
+                                 max(8, cfg.mlp_width // 2), cfg.mlp_temp)
+                       for _ in range(cfg.n_digits)],
+            mix=FrozenMLP(rng, cfg.d_total, cfg.d_total, cfg.mlp_width, cfg.mlp_temp),
+            alpha=cfg.unary_coupling,
+        )
+
     # -- embedding -----------------------------------------------------
     def _embed(self, idx: int) -> np.ndarray:
         ds = digits(idx, self.cfg)
@@ -119,9 +135,19 @@ class Tables:
     def apply_unary(self, name: str, i: int) -> int:
         key = (name, i)
         hit = self._cache_u.get(key)
-        if hit is None:
-            hit = self._decode(self._u[name].mlp(self.embed(i)))
-            self._cache_u[key] = hit
+        if hit is not None:
+            return hit
+        op = self._u[name]
+        if op.per_digit is None:
+            y = op.mlp(self.embed(i))
+        else:
+            di = digits(i, self.cfg)
+            y = np.concatenate([op.per_digit[k](self.digit_emb[k][di[k]])
+                                for k in range(self.cfg.n_digits)])
+            if op.alpha:
+                y = y + op.alpha * op.mix(self.embed(i))
+        hit = self._decode(y)
+        self._cache_u[key] = hit
         return hit
 
     def apply_binary(self, name: str, i: int, j: int) -> int:
@@ -146,7 +172,9 @@ class Tables:
     # -- reporting -----------------------------------------------------
     def param_count(self) -> int:
         n = self.digit_emb.size
-        n += sum(o.mlp.n_params for o in self.unary)
+        for o in self.unary:
+            n += (o.mlp.n_params if o.per_digit is None
+                  else sum(m.n_params for m in o.per_digit) + o.mix.n_params)
         for o in self.binary:
             n += sum(m.n_params for m in o.per_digit) + o.mix.n_params
         return n
