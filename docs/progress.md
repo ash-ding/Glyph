@@ -868,3 +868,162 @@ re-run across seeds.
 
 Blocking on a decision: `value_form`; the unary/binary asymmetry; the budget
 axis above; D3. None of them were decided unilaterally.
+
+---
+
+# 2026-08-27, overnight (cont.) — the first arm result, and what it says about the budget
+
+## A2 ran end to end
+
+The first complete arm: agent loop, oracle, seal, student generation, scored.
+`pi_mid`, `instance_seed=1001`, 120 test items, 3000 H100-s budget, 12.1
+minutes.
+
+```
+overall   0.0583
+by_split  iid 0.0513   comp 0.1071   depth 0.0000
+tail      0.0215
+artifact  a context prefix of 2141 characters
+```
+
+Not a result to interpret — one instance, one seed, a trimmed test set, and
+the budget axis is unsettled. What matters is that the path works and that
+the ledger is now populated with real numbers.
+
+## The ledger settles the budget question
+
+```
+spent 2161 / 3000 H100-s      $2.40
+
+  frontier_in     891.3   ┐
+  frontier_out   1268.5   ┘  2159.8   99.95%   the agent's own conversation
+  oracle_query      0.93            0.04%   buying information
+  gpu_second        0.31            0.014%  the student actually answering
+```
+
+This is the same finding as the A4 trace, now with the whole run accounted
+for. **Buying information is 0.04% of the budget. The student answering 120
+queries is 0.014%.** Essentially the entire "compute budget" is the frontier
+agent talking to itself.
+
+Two things follow, and both matter before E1:
+
+**The query budget does not exist as a constraint.** The plan's `Q ≈ 2000`
+against `|V| = 4913` is the reason the weights arm exists — the tables cannot
+be bought outright. But 2000 queries cost about 18 H100-s here, so nothing
+stops an agent from buying far more. The asymmetry the design rests on is
+currently enforced by the agent's disinclination rather than by the protocol.
+
+**A2's per-query cost, the thing the crossover is supposed to turn on, is
+invisible at this scale.** The whole argument for a crossover is that context
+is re-paid on every test query while weights are paid once. Here the student's
+inference over the full test set cost 0.31 H100-s against 2160 for the
+prepare phase — a ratio of about 7000:1. At 10⁴ items instead of 120 it would
+be roughly 26 H100-s, still around 1% of the prepare budget. **A2's cost
+disadvantage cannot show up in a total that the agent's own tokens dominate
+by three orders of magnitude.**
+
+That is not a bug in the ledger; the rates follow published prices, which is
+what the plan asks for. It is that prepare-phase frontier tokens and
+test-phase student inference are quantities of very different size, and
+summing them into one scalar buries the smaller one.
+
+Options, none taken:
+
+1. **Report test-phase cost on its own axis** alongside the total. The
+   crossover in the plan is about the *marginal* cost of answering, and that
+   is a quantity the current single total cannot express.
+2. **A separate hard cap on oracle queries**, so the information axis is
+   explicit. Closest to how the documents already talk about `Q` and `B` as
+   different things.
+3. **Raise the test-set size and the query price together** until both land
+   in the same range as the agent's tokens. Makes the single scalar work, but
+   the numbers would be chosen to produce the regime we want, which has to be
+   said out loud.
+
+Whatever is chosen, it should be settled before E1 — this is Fig. 1's x-axis
+and Fig. 1 is the paper.
+
+## A crash that would have killed every A6 run
+
+vLLM starts its engine in a subprocess, and the default `fork` cannot inherit
+an already-initialised CUDA context: *"Cannot re-initialize CUDA in forked
+subprocess"*. It matters here because **A6 trains before it generates**,
+which is the normal order, so the GPU is always already live when the student
+is built.
+
+*Corrected while writing this entry, having first overstated it.* vLLM 0.28
+usually notices and rescues itself — the A6 run in flight was started from
+the pre-fix code and logged *"We must use the `spawn` multiprocessing start
+method. Overriding ... Reasons: CUDA is initialized"*, then carried on. But
+that detection does not always fire: in the test suite it did not, and the
+engine died. So this is not "every A6 run would have crashed"; it is that
+whether an A6 run crashes depends on a heuristic firing.
+`VLLM_WORKER_MULTIPROC_METHOD=spawn` is now set before vLLM is imported
+anywhere, which removes the dependence rather than the symptom.
+
+Alongside it, a subtler one with no error message: after training, the
+optimiser state and model are dead but still resident, and vLLM sizes its KV
+cache from whatever it sees free. Without an explicit reclaim, A6's student
+would silently get a fraction of the memory it should and the arm would look
+slower than it is — a performance difference that would have been read as a
+property of the weights container. `Student` now reclaims on construction and
+exposes `close()`; dev-evaluation students are released the same way.
+
+## Self-check #4, pi_mid: INVALID, and the guard earned its place
+
+```
+pi_mid   |V|=4913  n=60
+  overall        5/60 = 0.0833   digit 0.4138
+  needs tables   2/47            digit 0.4379
+  skeleton only  3/13            digit 0.3086
+  answers parsed 40/60   truncated 1
+  INVALID -- coverage 67%, 1 truncated call
+```
+
+The teacher ran out of output tokens on one chunk and only 40 of 60 answers
+came back. The coverage guard added earlier refused to score it — which is
+exactly the failure mode that produced the very first misleading "hidden"
+verdict. Needs a re-run at a smaller `--chunk`.
+
+Worth noting even from an invalid run: `2/47` on table-dependent items is
+**below** the measured pi_mid null of 0.2233, so there is no sign of a leak
+here. The pi_low result stands alone so far, which is consistent — pi_low is
+the preset whose skeleton is nearly trivial by construction, so the table is
+where all its difficulty lives and where a leak would show.
+
+Also visible: 13 of 60 pi_mid items need no table at all, against 0 of 60 at
+pi_low. The split by table-dependence is doing real work.
+
+## Tests
+
+60 green, up from 36 at the start of the session. New: `test_sandbox.py` (7),
+`test_agent.py` (13), `test_infer.py` (3, rewritten for vLLM).
+
+`test_agent.py` covers the invariants that would not raise if they broke and
+would instead make a difference between arms look like a difference between
+containers: the arm boundary is the tool list; a role outside the enum cannot
+reach the trace; a malformed query is billed but not banked; dev does not
+overlap training; training without `declare_target` is refused; a target
+cannot be redeclared.
+
+One of those tests found a mistake in itself rather than in the code — a
+hand-written expression was rejected as malformed because the smoke preset
+requires lists of at least two elements. Tests now draw expressions from the
+instance's own demos instead of assuming the grammar.
+
+## `worker.py` exists now
+
+The plan's paired-comparison rule is a property of the scheduler rather than
+a line in the method section. Jobs are emitted instance-major, so every arm
+at a budget point runs on the same hidden interpreter; an instance with a
+failed arm is reported loudly rather than averaged over, because a partially
+finished instance cannot be used in a paired comparison and quietly using
+what is left puts instance difficulty back into the error bar.
+
+One subprocess per run — vLLM and torch do not survive being set up twice in
+one process, and a crash should cost one cell rather than the sweep. Nothing
+retries: a failed cell is a cell with a reason attached.
+
+`python -m glyph.cli grid --arms a2 a4 a6 --instance-seeds 1001 1002
+--budgets 5000 15000 --dry-run` prints the plan without running it.
