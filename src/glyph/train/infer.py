@@ -27,11 +27,23 @@ import os
 import re
 from dataclasses import dataclass
 
-# vLLM starts its engine in a subprocess, and the default `fork` cannot
-# inherit an already-initialised CUDA context.  Any caller that touched the
-# GPU first -- A6 trains before it generates, which is the normal order --
-# would get "Cannot re-initialize CUDA in forked subprocess" at the point of
-# building the student.  Set before vLLM is imported anywhere.
+# The engine runs in this process, not a subprocess.  Two footguns disappear
+# with it, and both had already gone off:
+#
+#   fork cannot inherit an initialised CUDA context, and A6 trains before it
+#   generates, so the GPU is always live by the time the student is built --
+#   "Cannot re-initialize CUDA in forked subprocess".
+#
+#   spawn avoids that but re-imports the entry module in the child, so every
+#   driver script would have to guard `if __name__ == "__main__"` or the
+#   whole run re-executes. A library that only works when the caller
+#   remembers a guard is a library that will break on someone's ad-hoc
+#   script, and it did.
+#
+# In-process costs the engine's isolation, which buys nothing here: this is
+# offline batch generation of one model, not a served endpoint.  The spawn
+# setting stays as a fallback for anyone who overrides the first variable.
+os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
 os.environ.setdefault("VLLM_WORKER_MULTIPROC_METHOD", "spawn")
 
 
@@ -92,11 +104,23 @@ class Student:
         return len(self.tok(self.context, add_special_tokens=False)["input_ids"])
 
     def close(self) -> None:
-        """Release the engine so the next Student can have the memory."""
+        """Release the engine so the next Student can have the memory.
+
+        Running in-process means the engine's NCCL group belongs to us and
+        outlives the object unless it is torn down; leaving it up leaks the
+        allocation the next student needs.
+        """
+        import contextlib
         import gc
 
         import torch
         self.llm = None
+        with contextlib.suppress(Exception):
+            from vllm.distributed import destroy_model_parallel
+            destroy_model_parallel()
+        with contextlib.suppress(Exception):
+            if torch.distributed.is_initialized():
+                torch.distributed.destroy_process_group()
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()

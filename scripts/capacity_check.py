@@ -65,7 +65,7 @@ from glyph.tables import Tables
 # The pi=0 end is the only place this question is interesting: it is where
 # the tables carry the difficulty.
 CFG = PRESETS["pi_low"]
-HOLDOUT_MOD = 10          # 1 in 10 entries is never trained on
+HOLDOUT_MOD = 10          # 1 in 10 entries is never trained on; 0 = none
 SEED = 20260827
 
 
@@ -87,13 +87,13 @@ def build_tables(coupling: float, base: int, n_digits: int,
 
 
 def is_holdout_unary(i: int) -> bool:
-    return i % HOLDOUT_MOD == 0
+    return HOLDOUT_MOD > 0 and i % HOLDOUT_MOD == 0
 
 
 def is_holdout_binary(i: int, j: int) -> bool:
     # Deterministic, O(1), and independent of the digit structure so the
     # held-out set is not accidentally an easier or harder region.
-    return (i * 7919 + j) % HOLDOUT_MOD == 0
+    return HOLDOUT_MOD > 0 and (i * 7919 + j) % HOLDOUT_MOD == 0
 
 
 def render_example(task: str, tables: Tables, i: int, j: int | None) -> tuple[str, str]:
@@ -198,6 +198,7 @@ def eval_split(model, tok, tables: Tables, task: str, held_out: bool,
 
 
 def main() -> int:
+    global HOLDOUT_MOD
     ap = argparse.ArgumentParser()
     ap.add_argument("--task", choices=["unary", "binary"], required=True)
     ap.add_argument("--coupling", type=float, default=CFG.binary_coupling)
@@ -212,8 +213,13 @@ def main() -> int:
     ap.add_argument("--lr", type=float, default=1e-5)
     ap.add_argument("--eval-n", type=int, default=1000)
     ap.add_argument("--eval-batch", type=int, default=256)
+    ap.add_argument("--holdout-mod", type=int, default=HOLDOUT_MOD,
+                    help="1 entry in N is never trained on; 0 trains on "
+                         "everything, which answers 'can it hold the whole "
+                         "table' rather than 'can it extrapolate'")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
+    HOLDOUT_MOD = args.holdout_mod
 
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -268,14 +274,23 @@ def main() -> int:
     model.eval()
     model.config.use_cache = True
     fit = eval_split(model, tok, tables, args.task, False, args.eval_n, args.eval_batch, device)
-    reach = eval_split(model, tok, tables, args.task, True, args.eval_n, args.eval_batch, device)
+    # With no held-out region there is nothing to reach for; reporting a
+    # `reach` there would be reporting `fit` twice under two names.
+    reach = ({"exact": float("nan"), "digit": float("nan")} if HOLDOUT_MOD == 0
+             else eval_split(model, tok, tables, args.task, True, args.eval_n,
+                             args.eval_batch, device))
     chance = 1.0 / tables.cfg.n_values
 
     print(f"\n    fit    exact {fit['exact']:.3f}   digit {fit['digit']:.3f}")
     print(f"    reach  exact {reach['exact']:.3f}   digit {reach['digit']:.3f}")
     print(f"    chance exact {chance:.5f}   digit {1 / tables.cfg.base:.3f}")
-    verdict = ("LEARNABLE" if reach["exact"] > 10 * chance and reach["digit"] > 2 / tables.cfg.base
-               else "NOT REACHED -- design decision required")
+    if HOLDOUT_MOD == 0:
+        verdict = ("HOLDS THE WHOLE TABLE" if fit["exact"] > 0.99
+                   else f"cannot hold the whole table: fit {fit['exact']:.3f}")
+    else:
+        verdict = ("LEARNABLE"
+                   if reach["exact"] > 10 * chance and reach["digit"] > 2 / tables.cfg.base
+                   else "NOT REACHED -- design decision required")
     print(f"    verdict: {verdict}\n", flush=True)
 
     result = {"task": args.task, "coupling": args.coupling,
@@ -283,6 +298,7 @@ def main() -> int:
               "value_form": args.value_form, "unary_coupling": args.unary_coupling,
               "model": args.model,
               "steps": args.steps, "batch": args.batch, "lr": args.lr,
+              "holdout_mod": HOLDOUT_MOD,
               "fit": fit, "reach": reach, "chance": chance, "verdict": verdict,
               "minutes": round((time.time() - t0) / 60, 1)}
     if args.out:
