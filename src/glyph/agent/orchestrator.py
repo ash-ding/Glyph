@@ -107,9 +107,20 @@ def run_agent(inst: GlyphInstance, ledger: Ledger, trace: TraceWriter,
             except Exception as exc:
                 trace.emit("api_error", arm=arm, turn=turn, error=str(exc)[:400])
                 raise
-            _charge_usage(ledger, msg.usage)
             blocks, stop_reason = _blocks(msg), msg.stop_reason
             cache.put(key, {"blocks": blocks, "stop_reason": stop_reason})
+            try:
+                _charge_usage(ledger, msg.usage)
+            except BudgetExhausted as exc:
+                # The tokens were spent -- the reply already came back -- so
+                # the ledger keeps the overspend. What must not happen is the
+                # run dying here: a prepare phase that runs out of budget is
+                # supposed to seal what it has, which is a comparable
+                # number, rather than leave a hole in the grid.
+                trace.emit("budget_exhausted", arm=arm, turn=turn,
+                           where="frontier_usage", detail=str(exc))
+                messages.append({"role": "assistant", "content": blocks})
+                break
 
         messages.append({"role": "assistant", "content": blocks})
         calls = [b for b in blocks if b["type"] == "tool_use"]
