@@ -1219,3 +1219,105 @@ output budget without answering has demonstrated a token budget, not
 hiddenness. `request_kwargs` now takes an optional effort override, documented
 as being for the self-checks only, and `hiddenness_check.py` defaults to
 `medium`. Re-running all three presets at that setting.
+
+---
+
+# 2026-08-27 — A6 completes; pi_low's leak is confirmed cleanly; pi_high still will not answer
+
+## A6, on the fourth attempt
+
+Through the production path (`python -m glyph.cli run --arm a6`), which is
+what `worker.py` dispatches, so this validated the code a sweep would
+actually use.
+
+```
+overall   0.0333
+tail      0.0323
+artifact  an 81 MB LoRA adapter
+
+spent 3053 / 15000 H100-s      $3.39
+  frontier_in    1843.6
+  frontier_out   1177.3     98.9%
+  gpu_second       31.1     1.0%   training and inference together
+  oracle_query      1.17    0.04%
+```
+
+`gpu_second` at 31.1 is the first non-trivial GPU figure in any run — A2's
+was 0.31 and A4's 0.086 — and it is still 1% of the total.
+
+**The three arms are not comparable yet.** They ran at different budgets (A2
+at 3000, A4 at 15000, A6 spent 3053 of 15000), on the same instance but
+without the paired discipline. Reading `A4 0.370 > A2 0.058 > A6 0.033` as an
+ordering would be reading budget differences. That is exactly what
+`worker.py` exists to prevent, and it has not yet been used for a real grid.
+
+What this run does establish is that the whole loop executes: agent buys,
+declares a target, synthesises, trains, evaluates on purchased dev, seals,
+and the adapter answers the sealed test set through the same scoring path as
+the other two.
+
+## Four failures, and only the first was a product bug
+
+Worth writing down because the pattern was mine, not the code's.
+
+1. **Budget exhaustion during billing** propagated out and killed the run —
+   a real bug, in the handler's coverage. Fixed.
+2. `fork` cannot inherit an initialised CUDA context, and A6 trains before it
+   generates. I set `spawn`.
+3. `spawn` re-imports the entry module in the child, so a driver script
+   without an `__main__` guard re-runs itself. I moved to in-process.
+4. In-process, my `close()` tore down the process group, and the *second*
+   student in the run died on half-initialised distributed state — "Process
+   group is not initialized in the world group map".
+
+Three, four and the fix for two were all consequences of the previous fix.
+The root cause never moved: **A6 builds several students in one run** — one
+per dev evaluation inside the agent loop, one more for the sealed test set —
+and I kept rebuilding the engine around each.
+
+The right shape is one engine per process with adapters swapped per request,
+which is what `LoRARequest` is for. Verified: three students in sequence, one
+with a context prefix, `engines built: 1`. It also removes minutes of GPU time
+per dev evaluation that were being spent reloading 1.7B parameters.
+
+I should have stopped after the second failure and looked at the shape rather
+than patching the symptom three times.
+
+## Self-check #4: pi_low's leak is now clean
+
+```
+pi_low   effort=medium   60/60 answers parsed   0 truncated
+  needs tables   6/60 = 0.100   digit 0.771
+  null (demos)   0.000          digit 0.384
+  p = 3.5e-15                   LEAK SUSPECTED
+```
+
+Full coverage, no truncation, scored against the measured null. **Two
+independent runs at different effort settings — `high` gave 7/60, `medium`
+gives 6/60 — agree.** The teacher extrapolates table entries it was never
+shown, from 30 demos and no queries.
+
+## pi_high: my diagnosis was wrong
+
+I wrote that the obstacle was `effort`, not chunk size, and lowered it.
+
+```
+effort=high     chunk 20   out=192000   3 truncated   0/60 answers
+effort=medium   chunk 15   out=256000   4 truncated   0/60 answers
+```
+
+**Lowering effort made it worse, not better.** Every chunk burns the full
+64000-token output cap and emits nothing. That is not a thinking-depth
+problem, and my explanation did not survive its first test.
+
+What is different about `pi_high`: `|V| = 8` but the skeleton is the hardest
+of the three — 8 structural operators, depth 5, guards on almost everything —
+and 42 of 60 items need no table at all. The teacher appears to get stuck
+trying to pin the skeleton down and never reaches the answers.
+
+`pi_mid` is also still INVALID at 75% coverage, so the only preset with a
+valid #4 result remains `pi_low`.
+
+Running a proper one-variable-at-a-time diagnostic rather than guessing
+again: effort and `max_tokens` and chunk size varied separately on 2–5 items,
+reporting `stop_reason` and how many characters of text come back.

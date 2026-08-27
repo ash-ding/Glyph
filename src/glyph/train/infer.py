@@ -10,15 +10,30 @@ whole cost story is that its prompt is re-paid on every one of 10^4 queries.
 Real deployments prefill a shared prefix once and reuse its KV cache, so
 measuring A2 without that would inflate its cost several times over and
 manufacture the crossover this experiment is supposed to discover -- the plan
-calls the disabled version a straw man.  vLLM does this natively via
-`enable_prefix_caching`, which is why generation runs here rather than
-through a hand-rolled cache: a cache written by us would be one more thing
-that has to be proven equivalent to the uncached path before any A2 number
-can be trusted.
+calls the disabled version a straw man.  vLLM does this natively.
 
-Sampling is greedy (`temperature=0`).  Test-time decoding is not one of the
-variables under study, and letting it vary would put noise straight into the
-crossover estimate.
+**One engine per process, adapters swapped per request.**  A6 builds a
+student several times in a single run -- once for each dev evaluation inside
+the agent loop, once more for the sealed test set -- and standing an engine
+up and tearing it down each time went wrong in three separate ways before
+this shape was settled on:
+
+  fork could not inherit an initialised CUDA context, and A6 trains before it
+  generates, so the GPU is always live by then;
+
+  spawn avoided that but re-imports the entry module in the child, so every
+  driver script had to guard `__main__` or re-run itself;
+
+  in-process fixed both, and then tearing the engine down between students
+  left vLLM's distributed state half-initialised -- "Process group is not
+  initialized in the world group map" -- on the next one.
+
+Reusing the engine removes the whole class of problem, and it is what vLLM's
+`LoRARequest` is for.  It is also much faster: reloading 1.7B parameters
+between dev evaluations was minutes of GPU time buying nothing.
+
+Sampling is greedy.  Test-time decoding is not one of the variables under
+study, and letting it vary would put noise straight into the crossover.
 """
 
 from __future__ import annotations
@@ -27,24 +42,15 @@ import os
 import re
 from dataclasses import dataclass
 
-# The engine runs in this process, not a subprocess.  Two footguns disappear
-# with it, and both had already gone off:
-#
-#   fork cannot inherit an initialised CUDA context, and A6 trains before it
-#   generates, so the GPU is always live by the time the student is built --
-#   "Cannot re-initialize CUDA in forked subprocess".
-#
-#   spawn avoids that but re-imports the entry module in the child, so every
-#   driver script would have to guard `if __name__ == "__main__"` or the
-#   whole run re-executes. A library that only works when the caller
-#   remembers a guard is a library that will break on someone's ad-hoc
-#   script, and it did.
-#
-# In-process costs the engine's isolation, which buys nothing here: this is
-# offline batch generation of one model, not a served endpoint.  The spawn
-# setting stays as a fallback for anyone who overrides the first variable.
+# The engine runs in this process. See the module docstring for why; the
+# spawn setting remains a fallback for anyone who overrides the first.
 os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
 os.environ.setdefault("VLLM_WORKER_MULTIPROC_METHOD", "spawn")
+
+#: One engine per (base model, shape). Built on first use, never torn down --
+#: a process runs one arm, and the engine dies with it.
+_ENGINES: dict[tuple, object] = {}
+_ADAPTER_IDS: dict[str, int] = {}
 
 
 @dataclass
@@ -56,20 +62,16 @@ class Generation:
     prefix_caching: bool
 
 
-class Student:
-    """The small model, optionally with a context prefix and/or an adapter."""
-
-    def __init__(self, base_model: str, *, adapter_path: str | None = None,
-                 context: str | None = None, max_new_tokens: int = 24,
-                 max_model_len: int = 8192, gpu_memory_utilization: float = 0.85,
-                 max_lora_rank: int = 64, dtype: str = "bfloat16"):
+def _engine(base_model: str, max_model_len: int, gpu_memory_utilization: float,
+            max_lora_rank: int, dtype: str):
+    key = (base_model, max_model_len, gpu_memory_utilization, max_lora_rank, dtype)
+    if key not in _ENGINES:
         import gc
 
         import torch
-        from transformers import AutoTokenizer
         from vllm import LLM
 
-        # A6 has just finished training; its optimiser state and model are
+        # A6 has just finished training; the optimiser state and model are
         # dead but still resident, and vLLM sizes its KV cache from what it
         # sees free. Without this the student gets a fraction of the memory
         # it should and the arm looks slower than it is.
@@ -77,25 +79,42 @@ class Student:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        self.tok = AutoTokenizer.from_pretrained(base_model)
-        self.context = context
-        self.adapter_path = adapter_path
-        self.max_new_tokens = max_new_tokens
-
-        self.llm = LLM(
-            model=base_model,
-            dtype=dtype,
+        _ENGINES[key] = LLM(
+            model=base_model, dtype=dtype,
             enable_prefix_caching=True,      # the fairness requirement above
-            enable_lora=bool(adapter_path),
-            max_lora_rank=max_lora_rank if adapter_path else 16,
+            # Always on: an engine built without it cannot serve an adapter
+            # later, and A2 and A6 may share a process in a grid run.
+            enable_lora=True, max_lora_rank=max_lora_rank,
             max_model_len=max_model_len,
             gpu_memory_utilization=gpu_memory_utilization,
             disable_log_stats=True,
         )
+    return _ENGINES[key]
+
+
+class Student:
+    """The small model, optionally with a context prefix and/or an adapter."""
+
+    def __init__(self, base_model: str, *, adapter_path: str | None = None,
+                 context: str | None = None, max_new_tokens: int = 24,
+                 max_model_len: int = 8192, gpu_memory_utilization: float = 0.85,
+                 max_lora_rank: int = 64, dtype: str = "bfloat16"):
+        from transformers import AutoTokenizer
+
+        self.tok = AutoTokenizer.from_pretrained(base_model)
+        self.context = context
+        self.adapter_path = adapter_path
+        self.max_new_tokens = max_new_tokens
+        self.llm = _engine(base_model, max_model_len, gpu_memory_utilization,
+                           max_lora_rank, dtype)
+
         self._lora = None
         if adapter_path:
             from vllm.lora.request import LoRARequest
-            self._lora = LoRARequest("student", 1, adapter_path)
+            if adapter_path not in _ADAPTER_IDS:
+                _ADAPTER_IDS[adapter_path] = len(_ADAPTER_IDS) + 1
+            self._lora = LoRARequest(f"student{_ADAPTER_IDS[adapter_path]}",
+                                     _ADAPTER_IDS[adapter_path], adapter_path)
 
     @property
     def prefix_tokens(self) -> int:
@@ -104,35 +123,20 @@ class Student:
         return len(self.tok(self.context, add_special_tokens=False)["input_ids"])
 
     def close(self) -> None:
-        """Release the engine so the next Student can have the memory.
+        """Drop this student's handle. The engine stays up for the next one.
 
-        Running in-process means the engine's NCCL group belongs to us and
-        outlives the object unless it is torn down; leaving it up leaks the
-        allocation the next student needs.
+        Tearing the engine down here is what broke A6: vLLM's distributed
+        state does not survive being re-initialised in the same process.
         """
-        import contextlib
-        import gc
-
-        import torch
         self.llm = None
-        with contextlib.suppress(Exception):
-            from vllm.distributed import destroy_model_parallel
-            destroy_model_parallel()
-        with contextlib.suppress(Exception):
-            if torch.distributed.is_initialized():
-                torch.distributed.destroy_process_group()
-        gc.collect()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
 
     def answer(self, exprs: list[str], *, ledger=None, prompt_of=None,
                **_ignored) -> Generation:
         """Greedy-decode an answer per expression.
 
         Batching is vLLM's business: the whole list goes in at once and the
-        scheduler packs it. The shared context prefix is identical across
-        every prompt, so prefix caching prefills it once and every subsequent
-        query reuses those blocks.
+        scheduler packs it. The context prefix is identical across every
+        prompt, so it is prefilled once and reused.
         """
         from vllm import SamplingParams
 
@@ -145,29 +149,22 @@ class Student:
         if timer is not None:
             timer.__enter__()
         try:
-            outs = self.llm.generate(prompts, params,
-                                     **({"lora_request": self._lora} if self._lora else {}))
+            outs = self.llm.generate(
+                prompts, params,
+                **({"lora_request": self._lora} if self._lora else {}))
         finally:
             if timer is not None:
                 timer.__exit__(None, None, None)
 
-        # vLLM returns results keyed to the input order it was given, but the
-        # scheduler reorders internally; request_id is the safe join key.
-        by_id = {o.request_id: o for o in outs}
-        ordered = [by_id.get(str(i), outs[i]) for i in range(len(prompts))] \
-            if len(by_id) == len(prompts) and all(str(i) in by_id for i in range(len(prompts))) \
-            else list(outs)
-
         answers, generated = [], 0
-        for o in ordered:
-            text = o.outputs[0].text
+        for o in outs:
             generated += len(o.outputs[0].token_ids)
-            answers.append(_clean(text))
+            answers.append(_clean(o.outputs[0].text))
 
         seconds = 0.0
         if ledger is not None:
-            # gpu_timer charges kind "gpu_second" and puts the label in meta,
-            # so filtering on kind alone would pick up training time too.
+            # gpu_timer charges kind "gpu_second" with the label in meta, so
+            # filtering on kind alone would pick up training time too.
             recs = [r for r in ledger.records
                     if r.kind == "gpu_second"
                     and r.meta.get("label") == "student_inference"]
