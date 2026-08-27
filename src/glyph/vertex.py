@@ -63,7 +63,8 @@ _ADAPTIVE = frozenset({TEACHER, CROSS_TEACHER})
 _LADDER_THINKING_TOKENS = 4096
 
 
-def request_kwargs(model: str, max_tokens: int = 16000) -> dict[str, Any]:
+def request_kwargs(model: str, max_tokens: int = 16000,
+                   effort: str | None = None) -> dict[str, Any]:
     """The per-model half of a request, so no call site has to know the shape.
 
     Returns `model`, `max_tokens`, `thinking`, and -- on the Opus models --
@@ -77,7 +78,13 @@ def request_kwargs(model: str, max_tokens: int = 16000) -> dict[str, Any]:
             # Explicit, never omitted: omitting it means no thinking at all.
             "thinking": {"type": "adaptive"},
             # `effort` lives inside output_config, not at the top level.
-            "output_config": {"effort": EFFORT},
+            # Arms must leave this alone -- it is a controlled variable, fixed
+            # across every arm and swept only in E7. The override exists for
+            # the self-checks, which are not arms: #4 at `high` spends its
+            # whole output budget thinking and never reaches an answer, and a
+            # teacher that thinks itself out of a reply has demonstrated a
+            # token budget, not hiddenness.
+            "output_config": {"effort": effort or EFFORT},
         }
 
     # 4.5 generation: fixed thinking budget, and `effort` is rejected.

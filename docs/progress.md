@@ -1113,3 +1113,109 @@ chunk 10 still truncates, the options are a smaller chunk again, or running
 #4 at a lower effort and saying so — a hiddenness check is asking "can it
 guess", and a teacher that thinks itself out of an answer has not
 demonstrated hiddenness, it has demonstrated a token budget.
+
+---
+
+# 2026-08-27 — can the student hold the whole table?
+
+Asher asked directly: at the pi=0 end, can Qwen3-1.7B fit the *entire* hidden
+mapping of the atomic operator tables? The earlier #5 sweep did not answer
+that — it deliberately held out 1 entry in 10 because the interesting
+question then was extrapolation. `--holdout-mod 0` was added to ask the
+literal question, and six runs were spent on it.
+
+## Unary: yes, completely
+
+```
+full_unary        holdout 0   4000 steps    fit 1.000
+full_unary_long   holdout 0  12000 steps    fit 1.000
+full_unary_dw     holdout 0   4000 steps    fit 1.000   (digit-wise variant)
+```
+
+All 4913 entries trained on, nothing held back, **not one wrong**. True for
+the joint-MLP form and the digit-wise form alike. The earlier `fit 1.000` on
+4422 entries had made this near-certain; it is now measured rather than
+inferred.
+
+Capacity was never the question: the table is 47,744 parameters against the
+student's 1.7 billion — four orders of magnitude.
+
+## Binary: not yet, but it is climbing, and I predicted the wrong reason
+
+```
+                        fit     reach
+ 4000 steps (hold 10)   0.824   0.799
+12000 steps (hold 10)   0.853   0.849
+24000 steps (hold 10)   0.877   0.883
+ 4000 steps (hold  0)   0.807     n/a
+```
+
+**I said I leaned toward "it cannot learn it" on the basis of how slowly the
+loss was falling. That was wrong.** Six times the training moved reach from
+0.799 to 0.883 and it is still rising, roughly logarithmically. Nothing here
+says it has plateaued.
+
+The `holdout 0` run is what separates the two candidate explanations. Trained
+and evaluated on the same distribution with nothing held back it still only
+reaches 0.807 — barely different from the 0.824 with a held-out slice. So the
+obstacle is **not** coverage (512k samples against 24.1M pairs), it is how
+fast the function itself is learned.
+
+The most informative number is not fit at all:
+
+> At 24000 steps **reach (0.883) has caught up with fit (0.877)**.
+
+Held-out pairs do as well as trained ones. The model is learning the
+*function*, not memorising entries — which is precisely the property the pi=0
+end is built on, and a better answer to "can it hold the table" than a fit
+number would have been. Under D2 the binary map is 867 digit-wise parts plus
+a coupling term, not 24M independent facts, so "hold the whole table" was
+always the wrong shape of question for this half.
+
+D2's escape hatch — winding `binary_coupling` back — is **not** needed on this
+evidence.
+
+## A caveat on the framing
+
+These use `PRESETS["pi_low"]`, whose *measured* pi averages 0.25, not 0. So
+this is the low-pi end, not literally pi=0. No preset currently sits at pi
+near zero; reaching it would mean pushing `atomic_ratio` higher or flattening
+the skeleton further.
+
+## Self-check #4: pi_mid and pi_high do not leak; only pi_low does
+
+Re-run at `--chunk 10 --max-tokens 100000`, now scored against the measured
+null:
+
+```
+pi_mid   needs tables  2/47 = 0.043   null 0.2167   coverage 83%  INVALID
+pi_high  needs tables  4/18 = 0.222   null 0.8500   coverage 83%  INVALID
+```
+
+Both still flagged invalid — one truncated call each — but the direction is
+worth reading with one correction stated first: **missing answers only push a
+score down, so an incomplete run is biased toward "no leak"** and cannot be
+taken at face value. The bound is what settles it:
+
+- `pi_high`: even if all 10 missing answers were correct *and* table-dependent,
+  the ceiling is 14/18 = 0.78, still under the null of 0.85. **No leak,
+  safely.**
+- `pi_mid`: the same ceiling is 12/47 = 0.255 against a null of 0.217. Too
+  close to call. **Needs a clean run.**
+
+So `pi_low` remains the only confirmed leak, and it is now more interesting
+for being the only one: it is the preset whose skeleton is nearly trivial by
+construction, so its difficulty lives entirely in the table — exactly where a
+leak would matter most.
+
+## The real obstacle in #4 was effort, not chunk size
+
+The teacher burned **422k and 454k output tokens** on the two presets, 80 and
+86 minutes, and still truncated once each at chunk 10 with a 100k cap.
+
+The plan fixes `effort=high` as a controlled variable across all arms, and
+that is right — for arms. **#4 is not an arm.** A teacher that thinks past its
+output budget without answering has demonstrated a token budget, not
+hiddenness. `request_kwargs` now takes an optional effort override, documented
+as being for the self-checks only, and `hiddenness_check.py` defaults to
+`medium`. Re-running all three presets at that setting.

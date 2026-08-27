@@ -156,12 +156,17 @@ def main() -> int:
     ap.add_argument("--chunk", type=int, default=25, help="items per API call")
     ap.add_argument("--max-tokens", type=int, default=64000)
     ap.add_argument("--model", default=TEACHER)
+    ap.add_argument("--effort", default="medium",
+                    help="the arms fix this at high; #4 is not an arm, and at "
+                         "high the teacher thinks past its output budget "
+                         "without answering")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
     c = client()
     results = {}
-    print(f"self-check #4 -- hiddenness   teacher {args.model}\n")
+    print(f"self-check #4 -- hiddenness   teacher {args.model} "
+          f"effort={args.effort}\n")
 
     for name in args.presets:
         cfg = PRESETS[name].scaled(max(args.n * 3, 300))
@@ -181,7 +186,8 @@ def main() -> int:
         strc = {"hit": 0, "n": 0, "dh": 0, "dt": 0}     # skeleton only
         for s in range(0, len(items), args.chunk):
             chunk = items[s:s + args.chunk]
-            kwargs = request_kwargs(args.model, max_tokens=args.max_tokens)
+            kwargs = request_kwargs(args.model, max_tokens=args.max_tokens,
+                                    effort=args.effort)
             got, usage, stop = ask(c, inst.syntax_spec(), inst.demo_block(),
                                    cfg.n_demos, [t.expr_src for t in chunk],
                                    args.model, kwargs)
@@ -221,6 +227,7 @@ def main() -> int:
                          "skeleton_only": strc,
                          "answer_coverage": coverage, "truncated_calls": truncated,
                          "valid": valid,
+                         "effort": args.effort,
                          "input_tokens": tok_in, "output_tokens": tok_out,
                          "leaks": bool(suspicious and valid),
                          "minutes": round((time.time() - t0) / 60, 1)}
