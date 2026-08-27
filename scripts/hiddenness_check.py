@@ -4,11 +4,19 @@
 The teacher is given the syntax spec and the free demos, and nothing else:
 no queries, no budget, no oracle.  It then answers held-out expressions.
 
-The semantics are supposed to be unbuyable without querying, so its accuracy
-should sit at chance -- 1/|V| for exact match.  Meaningfully above chance
-means something leaked: an operator name that carries a prior, a demo
-distribution that gives the tables away, or a skeleton so nearly-default
-that it can be assumed rather than inferred.
+**The null is not 1/|V|.**  That was the first criterion here and it is the
+wrong question: it asks whether the teacher can guess a value uniformly, and
+nobody was ever going to.  Two things are legitimately available without
+buying anything -- the skeleton, which the design *intends* to be inferable
+from demos, and whatever table entries the demos reveal outright.  A teacher
+using both is not leaking.
+
+So the null is measured, on the same items with the same metric: an
+interpreter with the true skeleton and a table that is real where the demos
+exposed it and identity everywhere else.  On `pi_high` that null alone scores
+0.89 exact, so a 1/|V| criterion would have screamed leak at a benchmark
+behaving exactly as designed.  Scoring meaningfully *above* the null is what
+means something leaked.
 
 This is the last of the five checks that gate work on the arms, and it is
 the only one that needs a frontier model, which is why it waited for Vertex.
@@ -31,7 +39,9 @@ import re
 import time
 
 from glyph.config import PRESETS
+from glyph.grammar import parse, render_list, render_value
 from glyph.instance import generate
+from glyph.interp import Interpreter, LookupLog
 from glyph.vertex import TEACHER, client, request_kwargs
 
 PROMPT = """You are shown a small language you have never seen before.
@@ -74,6 +84,44 @@ def ask(c, spec: str, demos: str, n_demo: int, items: list[str],
             if 0 <= k < len(items):
                 got[k] = m.group(2).strip()
     return got, msg.usage, msg.stop_reason
+
+
+class _DemoTables:
+    """True where the demos revealed it, identity everywhere else."""
+
+    def __init__(self, real, log):
+        self.real, self.log = real, log
+
+    def apply_unary(self, name, i):
+        return self.real.apply_unary(name, i) if (name, i) in self.log.unary else i
+
+    def apply_binary(self, name, i, j):
+        return (self.real.apply_binary(name, i, j)
+                if (name, i, j) in self.log.binary else i)
+
+
+def demo_null(inst, items) -> dict:
+    """What a teacher is entitled to reach from the free demos alone."""
+    log = LookupLog()
+    for src, _ in inst.demos:
+        _, lg = inst.P.eval_logged(parse(src, inst.cfg))
+        log |= lg
+    interp = Interpreter(inst.cfg, inst.skeleton, _DemoTables(inst.tables, log))
+
+    hits = dh = dt = 0
+    for t in items:
+        try:
+            out = interp.eval(parse(t.expr_src, inst.cfg))
+            got = (render_value(out, inst.cfg) if isinstance(out, int)
+                   else render_list(out, inst.cfg))
+        except Exception:
+            got = ""
+        hits += (got.strip() == t.answer_src.strip())
+        h, n = digit_score(got, t.answer_src)
+        dh += h
+        dt += n
+    return {"exact": hits / max(1, len(items)), "digit": dh / max(1, dt),
+            "revealed_unary": len(log.unary), "revealed_binary": len(log.binary)}
 
 
 def binom_tail(k: int, n: int, p: float) -> float:
@@ -121,6 +169,7 @@ def main() -> int:
         inst = generate(args.seed, cfg)
         items = inst.test_set()[:args.n]
         chance = 1.0 / cfg.n_values
+        null = demo_null(inst, items)
 
         # An expression that touches no table entry is solvable from the
         # skeleton alone, and the skeleton is meant to be inferable.  Those
@@ -156,7 +205,8 @@ def main() -> int:
         # out of thirty at 1/4913 is already p ~ 0.006, so the test is a
         # binomial tail, not a hand-picked cutoff -- the previous threshold
         # (">2 hits") called a 1000x-chance result "hidden".
-        p_tab = binom_tail(tab["hit"], max(1, tab["n"]), chance)
+        # Against the measured null, not against uniform guessing.
+        p_tab = binom_tail(tab["hit"], max(1, tab["n"]), max(chance, null["exact"]))
         suspicious = tab["n"] > 0 and p_tab < 0.01
         # A run where the teacher never got its answers out measures the
         # token budget, not hiddenness, and would sail through as "at
@@ -166,6 +216,7 @@ def main() -> int:
                          "items": len(items), "exact_hits": exact,
                          "exact": acc, "chance": chance,
                          "digit": dacc, "digit_chance": 1 / cfg.base,
+                         "null": null,
                          "table_dependent": {**tab, "p_value": p_tab},
                          "skeleton_only": strc,
                          "answer_coverage": coverage, "truncated_calls": truncated,
@@ -183,9 +234,14 @@ def main() -> int:
         print(f"  {name:<8} |V|={cfg.n_values:<5} n={len(items)}")
         print(f"    overall        {exact}/{len(items)} = {acc:.4f}   "
               f"digit {dacc:.4f}")
+        print(f"    null (demos)   {null['exact']:.4f}"
+              f"{'':<6} digit {null['digit']:.4f}"
+              f"   true skeleton + {null['revealed_unary']}u/"
+              f"{null['revealed_binary']}b revealed entries")
         print(f"    needs tables   {tab['hit']}/{tab['n']}"
               f"{'':<4} digit {tab['dh'] / max(1, tab['dt']):.4f}"
-              f"   chance {chance:.5f}   p={p_tab:.2e}   <- the actual test")
+              f"   vs null {max(chance, null['exact']):.4f}"
+              f"   p={p_tab:.2e}   <- the actual test")
         print(f"    skeleton only  {strc['hit']}/{strc['n']}"
               f"{'':<4} digit {strc['dh'] / max(1, strc['dt']):.4f}"
               f"   (inferable by design; not a leak)")
