@@ -62,6 +62,23 @@ class Generation:
     prefix_caching: bool
 
 
+def _fit_memory(headroom_gb: float = 2.0, want_gb: float = 14.0) -> float:
+    """Size the engine to what is actually free, not to the whole card.
+
+    These GPUs are shared. A fixed fraction of *total* memory asks for space
+    another job already holds and vLLM refuses to start -- which is a run
+    lost to an argument about a number, not to anything about the experiment.
+    """
+    try:
+        import torch
+        free, total = torch.cuda.mem_get_info()
+    except Exception:
+        return 0.85
+    gb = 1024 ** 3
+    usable = max(0.0, free / gb - headroom_gb)
+    return max(0.06, min(0.85, min(usable, want_gb) * gb / total))
+
+
 def _engine(base_model: str, max_model_len: int, gpu_memory_utilization: float,
             max_lora_rank: int, dtype: str):
     key = (base_model, max_model_len, gpu_memory_utilization, max_lora_rank, dtype)
@@ -97,7 +114,7 @@ class Student:
 
     def __init__(self, base_model: str, *, adapter_path: str | None = None,
                  context: str | None = None, max_new_tokens: int = 24,
-                 max_model_len: int = 8192, gpu_memory_utilization: float = 0.85,
+                 max_model_len: int = 8192, gpu_memory_utilization: float | None = None,
                  max_lora_rank: int = 64, dtype: str = "bfloat16"):
         from transformers import AutoTokenizer
 
@@ -105,7 +122,9 @@ class Student:
         self.context = context
         self.adapter_path = adapter_path
         self.max_new_tokens = max_new_tokens
-        self.llm = _engine(base_model, max_model_len, gpu_memory_utilization,
+        self.llm = _engine(base_model, max_model_len,
+                           gpu_memory_utilization if gpu_memory_utilization
+                           is not None else _fit_memory(),
                            max_lora_rank, dtype)
 
         self._lora = None

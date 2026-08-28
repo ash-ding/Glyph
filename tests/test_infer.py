@@ -27,8 +27,8 @@ def student():
     if not torch.cuda.is_available():
         pytest.skip("needs a GPU")
     from glyph.train import Student
-    s = Student(BASE, context=CONTEXT, max_new_tokens=16,
-                gpu_memory_utilization=0.55)
+    # No fixed fraction: these GPUs are shared and the engine sizes itself.
+    s = Student(BASE, context=CONTEXT, max_new_tokens=16)
     yield s
     s.close()
 

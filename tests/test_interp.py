@@ -37,20 +37,41 @@ def test_tables_are_deterministic():
 
 
 def test_digit_neighbours_are_correlated():
-    """The tables must be *structured*, not random: perturbing one digit has
-    to leave the output far more often unchanged than chance would."""
+    """The tables must be *structured*, not random: two values differing in
+    one digit have to map to outputs that are nearer each other than two
+    unrelated values do. That correlation is the only reason anything
+    extrapolates to unqueried entries.
+
+    This used to assert that perturbing a digit left the output *identical*
+    more often than chance. That test passed for the wrong reason: it was
+    measuring the output collapse (4913 values landing on 222 outputs), so it
+    was a symptom of the decode bug rather than a check against it. Agreement
+    on digit positions, neighbour against unrelated, is the property the
+    design actually rests on.
+    """
     import numpy as np
     from glyph.grammar import digits
     inst = generate(5, FAST["pi_mid"])
     cfg, rng = inst.cfg, np.random.default_rng(0)
-    hits = 0
-    for _ in range(300):
+
+    def agree(a, b):
+        return sum(x == y for x, y in zip(digits(a, cfg), digits(b, cfg))) / cfg.n_digits
+
+    near = far = 0.0
+    trials = 300
+    for _ in range(trials):
         i = int(rng.integers(cfg.n_values))
         d = list(digits(i, cfg))
-        d[0] = (d[0] + 1) % cfg.base
-        j = sum(x * cfg.base ** k for k, x in enumerate(d))
-        hits += inst.tables.apply_unary("u0", i) == inst.tables.apply_unary("u0", j)
-    assert hits / 300 > 20 * (1 / cfg.n_values)
+        k = int(rng.integers(cfg.n_digits))
+        d[k] = (d[k] + 1) % cfg.base
+        j = sum(x * cfg.base ** m for m, x in enumerate(d))
+        r = int(rng.integers(cfg.n_values))
+        u = inst.tables.apply_unary
+        near += agree(u("u0", i), u("u0", j))
+        far += agree(u("u0", i), u("u0", r))
+    near, far = near / trials, far / trials
+    assert near > far + 0.10, f"no structure: neighbours {near:.3f} vs random {far:.3f}"
+    assert near > 1.5 * far, f"structure too weak: {near:.3f} vs {far:.3f}"
 
 
 def test_trivial_skeleton_still_uses_the_table():

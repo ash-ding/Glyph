@@ -102,6 +102,15 @@ class Tables:
         ]
         self._u = {o.name: o for o in self.unary}
         self._b = {o.name: o for o in self.binary}
+        self._e_mu = self.all_emb.mean(axis=0)
+        self._e_sd = self.all_emb.std(axis=0) + 1e-8
+        self._y_mu = np.zeros(cfg.d_total)
+        self._y_sd = np.ones(cfg.d_total)
+        self._assign: dict[str, np.ndarray] = {}
+        if cfg.decode == "whiten":
+            self._fit_output_scale()
+        elif cfg.decode == "assign":
+            self._build_assignments()
         self._cache_u: dict[tuple[str, int], int] = {}
         self._cache_b: dict[tuple[str, int, int], int] = {}
 
@@ -119,7 +128,43 @@ class Tables:
             alpha=cfg.unary_coupling,
         )
 
-    # -- embedding -----------------------------------------------------
+    def _raw(self, op, i: int) -> np.ndarray:
+        if op.per_digit is None:
+            return op.mlp(self.embed(i))
+        di = digits(i, self.cfg)
+        y = np.concatenate([op.per_digit[k](self.digit_emb[k][di[k]])
+                            for k in range(self.cfg.n_digits)])
+        return y + op.alpha * op.mix(self.embed(i)) if op.alpha else y
+
+    def _fit_output_scale(self) -> None:
+        """Per-dimension mean and spread of what the MLPs actually emit."""
+        sample = [self._raw(self.unary[0], i)
+                  for i in range(0, self.cfg.n_values,
+                                 max(1, self.cfg.n_values // 800))]
+        arr = np.stack(sample)
+        self._y_mu = arr.mean(axis=0)
+        self._y_sd = arr.std(axis=0) + 1e-8
+
+    def _build_assignments(self) -> None:
+        """Greedy nearest-unclaimed matching: every value gets its own image.
+
+        Unary only. Binary would need 24 million outputs materialised, which
+        is the thing the table exists not to do.
+        """
+        n = self.cfg.n_values
+        for op in self.unary:
+            ys = np.stack([self._raw(op, i) for i in range(n)])
+            d = ((ys[:, None, :] - self.all_emb[None, :, :]) ** 2).sum(axis=2)
+            out = np.full(n, -1, dtype=np.int64)
+            taken = np.zeros(n, dtype=bool)
+            # Settle the confident ones first: an input whose best match is
+            # far better than its second is the one that should get it.
+            order = np.argsort(np.partition(d, 1, axis=1)[:, 1] - d.min(axis=1))[::-1]
+            for i in order:
+                row = np.where(taken, np.inf, d[i])
+                j = int(np.argmin(row))
+                out[i], taken[j] = j, True
+            self._assign[op.name] = out
     def _embed(self, idx: int) -> np.ndarray:
         ds = digits(idx, self.cfg)
         return np.concatenate([self.digit_emb[k][d] for k, d in enumerate(ds)])
@@ -128,8 +173,39 @@ class Tables:
         return self.all_emb[idx]
 
     def _decode(self, y: np.ndarray) -> int:
-        # nearest neighbour in embedding space -> back to a legal symbol
-        return int(np.argmin(((self.all_emb - y) ** 2).sum(axis=1)))
+        mode = self.cfg.decode
+        if mode == "nearest":
+            # The original. Collapses: see GlyphConfig.decode.
+            return int(np.argmin(((self.all_emb - y) ** 2).sum(axis=1)))
+
+        if mode == "whiten":
+            # Put the MLP output on the embeddings' own scale before asking
+            # which one is nearest. Removes the part of the collapse caused by
+            # tanh squashing outputs into a smaller region than the
+            # embeddings occupy; does nothing about hubness itself.
+            z = (y - self._y_mu) / self._y_sd * self._e_sd + self._e_mu
+            return int(np.argmin(((self.all_emb - z) ** 2).sum(axis=1)))
+
+        if mode == "per_digit":
+            # Decode each digit against its own 17 candidates instead of the
+            # whole space against 4913. Hubness is a high-dimensional,
+            # many-candidate effect and mostly disappears at this size, and it
+            # is the decode the digit-structure argument implies: the digits
+            # are the parts, so the parts are what should be rounded.
+            ds = []
+            for k in range(self.cfg.n_digits):
+                seg = y[k * self.cfg.d_digit:(k + 1) * self.cfg.d_digit]
+                bank = self.digit_emb[k]
+                ds.append(int(np.argmin(((bank - seg) ** 2).sum(axis=1))))
+            return int(sum(d * self.cfg.base ** k for k, d in enumerate(ds)))
+
+        if mode == "assign":
+            # A true bijection, built once per unary operator by giving each
+            # input its nearest still-unclaimed embedding. Exact by
+            # construction, and impossible for binary: it needs every output
+            # materialised, and the binary table has 24 million of them.
+            raise RuntimeError("assign decodes through the precomputed map")
+        raise ValueError(f"unknown decode {mode!r}")
 
     # -- application (memoised; the table is computed on demand) --------
     def apply_unary(self, name: str, i: int) -> int:
@@ -138,15 +214,10 @@ class Tables:
         if hit is not None:
             return hit
         op = self._u[name]
-        if op.per_digit is None:
-            y = op.mlp(self.embed(i))
+        if self.cfg.decode == "assign":
+            hit = int(self._assign[name][i])
         else:
-            di = digits(i, self.cfg)
-            y = np.concatenate([op.per_digit[k](self.digit_emb[k][di[k]])
-                                for k in range(self.cfg.n_digits)])
-            if op.alpha:
-                y = y + op.alpha * op.mix(self.embed(i))
-        hit = self._decode(y)
+            hit = self._decode(self._raw(op, i))
         self._cache_u[key] = hit
         return hit
 
@@ -165,7 +236,14 @@ class Tables:
         y = np.concatenate(parts)
         if op.alpha:
             y = y + op.alpha * op.mix(np.concatenate([self.embed(i), self.embed(j)]))
-        hit = self._decode(y)
+        if self.cfg.decode == "assign":
+            # Deliberate: a bijection over 24 million pairs cannot be built
+            # without materialising the table. Binary keeps `nearest`, which
+            # means `assign` is not a whole-benchmark answer -- only a bound
+            # on what a bijective unary decode would look like.
+            hit = int(np.argmin(((self.all_emb - y) ** 2).sum(axis=1)))
+        else:
+            hit = self._decode(y)
         self._cache_b[key] = hit
         return hit
 

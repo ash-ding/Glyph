@@ -49,6 +49,29 @@ class GlyphConfig:
     # halves can be compared.  None keeps the original joint MLP.
     unary_coupling: float | None = None
 
+    # How an MLP's real-valued output becomes a legal symbol again.
+    #
+    # `nearest` was the original and it collapses. tanh holds outputs near the
+    # centre of the space while the embeddings are Gaussian, so the few
+    # embeddings nearest the centroid win almost every argmin: on pi_low, 4913
+    # inputs land on 222 distinct outputs with one taking 18.7%. That makes
+    # |V| a fiction, and "the table cannot be bought outright" goes with it.
+    #
+    # `whiten` puts the MLP output on the embeddings' own per-dimension scale
+    # before asking which is nearest. Across pi_low and pi_mid, two seeds
+    # each: distinct outputs 160-224 -> 1132-1265, top output 15-30% -> 0.8-2%,
+    # and the neighbour-vs-random structure contrast roughly doubles (1.4x ->
+    # 3.0x). It works for binary as well, which is what settles it.
+    #
+    # `per_digit` is kept only to be refuted: with concatenated embeddings and
+    # every digit combination legal, squared distance decomposes and global
+    # argmin *is* per-digit argmin. It is the same function, and measured
+    # identical to `nearest` on every preset, seed and operator.
+    #
+    # `assign` gives a true bijection but cannot exist for binary -- it needs
+    # all 24M outputs materialised -- so it is a bound, not an option.
+    decode: str = "whiten"       # whiten | nearest | per_digit | assign
+
     # ---- expression sampling ----------------------------------------
     atomic_ratio: float = 0.5   # primary continuous knob for sweeping pi
     binary_freq: float = 0.35   # how often value-producing (fold) ops are chosen
