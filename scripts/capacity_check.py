@@ -59,7 +59,7 @@ import torch
 from torch.utils.data import DataLoader, IterableDataset
 
 from glyph.config import PRESETS
-from glyph.grammar import render_value
+from glyph.grammar import digits, render_value
 from glyph.tables import Tables
 
 # The pi=0 end is the only place this question is interesting: it is where
@@ -67,6 +67,35 @@ from glyph.tables import Tables
 CFG = PRESETS["pi_low"]
 HOLDOUT_MOD = 10          # 1 in 10 entries is never trained on; 0 = none
 SEED = 20260827
+
+
+def mode_baseline(tables, task: str, n: int = 4000, seed: int = 11) -> dict:
+    """What "always answer the most common output" scores.
+
+    Uniform chance is the wrong reference when the table's image is skewed:
+    a student that has learned only the output distribution already beats it.
+    Under the old `nearest` decode this baseline reached 0.187 exact and
+    0.582 digit on pi_low -- more than a third of what the trained model got
+    -- so a reach number without it beside it overstates what was learned.
+    """
+    import collections
+
+    cfg = tables.cfg
+    rng = np.random.default_rng(seed)
+    outs = []
+    for _ in range(n):
+        i = int(rng.integers(cfg.n_values))
+        outs.append(tables.apply_unary("u0", i) if task == "unary"
+                    else tables.apply_binary("b0", i, int(rng.integers(cfg.n_values))))
+    mode, hits = collections.Counter(outs).most_common(1)[0]
+    md = digits(mode, cfg)
+    dh = dt = 0
+    for o in outs:
+        for a, b in zip(digits(o, cfg), md):
+            dt += 1
+            dh += (a == b)
+    return {"exact": hits / len(outs), "digit": dh / max(1, dt),
+            "distinct": len(set(outs))}
 
 
 def build_tables(coupling: float, base: int, n_digits: int,
@@ -280,16 +309,23 @@ def main() -> int:
              else eval_split(model, tok, tables, args.task, True, args.eval_n,
                              args.eval_batch, device))
     chance = 1.0 / tables.cfg.n_values
+    mode_ref = mode_baseline(tables, args.task)
 
     print(f"\n    fit    exact {fit['exact']:.3f}   digit {fit['digit']:.3f}")
     print(f"    reach  exact {reach['exact']:.3f}   digit {reach['digit']:.3f}")
+    print(f"    mode   exact {mode_ref['exact']:.3f}   digit {mode_ref['digit']:.3f}"
+          f"   ({mode_ref['distinct']} distinct outputs seen)")
     print(f"    chance exact {chance:.5f}   digit {1 / tables.cfg.base:.3f}")
     if HOLDOUT_MOD == 0:
         verdict = ("HOLDS THE WHOLE TABLE" if fit["exact"] > 0.99
                    else f"cannot hold the whole table: fit {fit['exact']:.3f}")
     else:
+        # Beating uniform chance is not enough: the output distribution is
+        # free information. What matters is clearing the mode baseline.
         verdict = ("LEARNABLE"
-                   if reach["exact"] > 10 * chance and reach["digit"] > 2 / tables.cfg.base
+                   if (reach["exact"] > 10 * chance
+                       and reach["exact"] > 1.5 * mode_ref["exact"]
+                       and reach["digit"] > mode_ref["digit"])
                    else "NOT REACHED -- design decision required")
     print(f"    verdict: {verdict}\n", flush=True)
 
@@ -299,7 +335,9 @@ def main() -> int:
               "model": args.model,
               "steps": args.steps, "batch": args.batch, "lr": args.lr,
               "holdout_mod": HOLDOUT_MOD,
-              "fit": fit, "reach": reach, "chance": chance, "verdict": verdict,
+              "fit": fit, "reach": reach, "chance": chance,
+              "mode_baseline": mode_ref, "decode": tables.cfg.decode,
+              "verdict": verdict,
               "minutes": round((time.time() - t0) / 60, 1)}
     if args.out:
         with open(args.out, "w") as fh:
