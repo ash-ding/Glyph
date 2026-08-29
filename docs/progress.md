@@ -1626,3 +1626,147 @@ reported `final_loss 0.0` and then `dev_accuracy 0.0` on 13 items. Loss at
 zero with dev at zero is not a resource problem and will not fix itself on a
 re-run — either the evaluation path is wrong or the agent's synthetic data
 does not match the test distribution. To be read from the trace.
+
+---
+
+# 2026-08-28 — the LoRA comparison settled, and a look back at what the experiment is for
+
+## LoRA versus full fine-tuning: settled, and my explanation was wrong twice over
+
+The 2x2 closes:
+
+| binary c=0.25, 4000 steps | lr 1e-5 | lr 1e-4 |
+|---|---|---|
+| full fine-tune | 0.562 | **0.797** |
+| LoRA r=32 | 0.556 | 0.715 |
+
+| unary digit-wise, 4000 steps | lr 1e-5 | lr 1e-4 |
+|---|---|---|
+| full fine-tune | 0.583 | **0.697** |
+| LoRA r=32 | 0.562 | 0.655 |
+
+At a matched learning rate full fine-tuning wins on both tasks, and LoRA at
+1e-5 (0.556) sits on top of full at 1e-5 (0.562). **Rank has no effect worth
+measuring here; the apparent LoRA advantage was entirely the 10x learning
+rate in my own defaults.**
+
+So: the first reading ("low-rank acts as a regulariser") was wrong, and it was
+wrong in a way its own data contradicted — regularisation shows as lower fit
+and higher reach, and LoRA was higher on both. The second reading (that this
+retired the "full-FT is an upper bound A6 may not reach" caveat) was wrong
+too, and the caveat stands.
+
+**A consequence that affects every number in this file.** All full fine-tune
+capacity runs were done at 1e-5, which the sweep now shows is well short of
+the best setting. The capacity results **understate** what the student can
+learn — by about 0.24 on binary (0.562 against 0.797) and 0.11 on unary
+digit-wise. Directional conclusions hold; absolute levels are a floor, not a
+measurement.
+
+## Stepping back: what is this experiment actually for?
+
+Asher asked to stop patching the budget mechanism and re-examine the research
+question first. That was the right call and this section is the result.
+
+### The question, in its two halves
+
+> Given a verifiable task the frontier cannot solve alone and a fixed compute
+> budget: when does putting capability into a small model's weights beat
+> putting it into context or into code? And when the agent chooses for
+> itself, how good is that choice?
+
+Two questions: **Q1, the economics** — when is it worth it — and **Q2, the
+choice** — does the agent know. Q2 depends on Q1: if the three paths are
+interchangeable, "chose well" means nothing.
+
+### The scenario, and the ratio it implicitly requires
+
+The scenario is purchase and amortisation: the teacher does not hold the
+knowledge, buys it during prepare, seals, and the student is better at
+*deploying* it. **Amortisation carries a ratio requirement — serving has to
+be expensive enough that the up-front cost is worth paying.**
+
+Measured, at the full 10^4 test set, against a prepare phase of 3053 H100-s:
+
+| container | deployment cost | vs prepare |
+|---|---|---|
+| A6, trained student, no prompt | 25.8 | 0.008x |
+| A4, program in a sandbox | 4.3 | 0.001x |
+| A2, student + prompt (110 facts, as actually bought) | 82.7 | 0.03x |
+| A2, student + prompt (2000 facts, as the design assumes) | 1059 | 0.3x |
+| A0', frontier re-reads all 2000 facts per query | **752,252** | **246x** |
+
+**Preparing costs about a hundred times more than serving.** In that regime
+the rational choice is always "don't train, just answer" — there is nothing
+to amortise.
+
+### This is Glyph's task shape, not a bug in the harness
+
+A Glyph item is a short expression mapping to a short answer; a 1.7B model
+answers one in milliseconds. **Deployment is cheap by construction.**
+
+The original framing listed four gaps that could make delegation necessary.
+The first was throughput amortisation — tasks needing 10^4-10^6 evaluations,
+where deployment is expensive *by construction*. Glyph instantiates the
+second, the informational gap. It was never the task that carries the
+amortisation story, and **T2, which is, does not exist yet — not a line of
+code**.
+
+### Where the economics does live
+
+A0' costs 29,000x what A6 costs to serve. That is a real economic story, and
+it is already in the design — but its mechanism is **who runs the inference**
+(frontier re-reading evidence per query, versus a small model trained once),
+not **which container holds the capability**.
+
+A2 sits awkwardly in between: cheap (83) but capacity-limited. The plan casts
+it as the expensive context container; the expensive way to use context is
+A0'.
+
+## Decision: Glyph carries capacity, T2 carries economics (tentative)
+
+Asher's call, recorded as tentative.
+
+**A — Glyph's question is capacity, and the paper says so.** Glyph measures,
+cleanly, which container can hold this knowledge at all. The evidence is
+already in hand: on the same tables, gradient descent reaches 0.56-0.58 and
+in-context reaches 0.000 against its null. The main figure becomes a (pi, Q)
+phase diagram — where does each container succeed — rather than a crossover
+curve. H1 is reworded from "a budget threshold B* exists" to "there is a
+region where only weights succeeds".
+
+**B — T2 carries amortisation.** Search tasks are throughput-bound, so
+deployment is expensive by construction and the money plot is real there.
+
+The point of the split: **each task carries one argument, instead of Glyph
+carrying two and failing at one of them.**
+
+### What this changes in the near-term work
+
+**The budget-axis problem drops in urgency.** B is no longer the main
+figure's x-axis, so "98% of B is the agent talking" no longer ruins Fig 1.
+
+**A hard cap on Q goes from optional to required.** The new axes are Q
+(information bought) and pi. Q has to be a set variable, not a by-product of
+how many turns the agent felt like taking — it currently drifts between 103
+and 472 across runs, and that drift would become noise on the phase diagram.
+
+**A0' is promoted from a side-check to the load-bearing arm.** Under this
+framing the claim *is* "gradient descent reaches what in-context does not",
+and A0' is the strongest form of in-context: unlimited context, unlimited
+thinking, the whole purchased record. Self-check #4 already gives 0.000, but
+from 30 demos; A0' with 2000 bought facts is the real test.
+
+**E1 (budget sweep, 210 runs) is deferred; E2 (the pi phase diagram) is
+promoted to the main figure.**
+
+**T2 moves into view earlier than W5**, since it now carries half the paper.
+The plan's discipline still holds — nothing on T2 until the minimum loop
+closes — so E0 comes first.
+
+### Not done, deliberately
+
+The Phase 1 artifact still states H1 as a budget threshold and organises E1
+around a B sweep. It is the source of truth for three documents, so it stays
+unchanged until the decision firms up. This entry is the record in the
+meantime.
