@@ -1905,3 +1905,132 @@ work — whether making the tables more learnable lets the agent enumerate the
 structure into code, which is what rules out `binary_coupling = 0` — can only
 be answered by looking at what A4 actually wrote. The source is in its trace,
 under `write_code`. Not yet examined.
+
+---
+
+# 2026-08-29 — why B was the wrong axis: the derivation behind the A+B decision
+
+The decision is two entries above; this is the reasoning that produced it,
+which was recorded only as a conclusion. Worth writing down properly, because
+in three months "we decided Glyph carries capacity" reads like a retreat from
+an obstacle unless the argument is beside it.
+
+## The story, and the money plot it implies
+
+> An agent faces a task it cannot solve, with a fixed compute budget. It can
+> put the material into a prompt, write a program, or train a small model.
+> **How large the budget is decides which wins.** Below a threshold B*,
+> prompting or coding; above it, only weights keeps growing. And the agent
+> does not know where B* is.
+
+Main figure: x = budget, y = sealed test score, three curves, one crossing.
+
+## Two mechanisms are hiding in that sentence
+
+Any container's total cost splits the same way:
+
+```
+total = fixed cost (paid once, in prepare) + N x marginal cost (per test query)
+```
+
+**Mechanism 1 — marginal cost differs.**
+
+| container | fixed | marginal per query |
+|---|---|---|
+| context | low | **high** — the prompt is re-read every query |
+| code | medium | ~0 |
+| weights | **high** | ~0 |
+
+Context is cheap early and expensive late; weights is the reverse. For large
+enough `N`, weights must overtake. This is ordinary amortisation.
+
+**Mechanism 2 — the ceiling differs.**
+
+| container | holds | capped by |
+|---|---|---|
+| context | a few facts and examples | context window, attention dilution |
+| code | exact discrete rules | what the agent can infer and write correctly |
+| weights | large statistical regularities | model capacity and data |
+
+With little information all three suffice. Past some volume, context cannot
+hold it and code cannot express it, while weights keeps absorbing.
+
+**Both mechanisms draw a crossing curve. They are different claims and need
+different experiments.** The plan states both in the same section — the
+container table in §01 lists per-query cost and capacity ceiling side by side
+— and a single axis `B` then carries both.
+
+## Which one Glyph actually has
+
+**The ceiling mechanism is real, and extreme:**
+
+```
+same tables, same information
+  gradient descent (weights)   reach 0.56-0.58
+  in-context                   reach 0.000   (not one point above its null)
+```
+
+Not "weights is somewhat better" — in-context does not reach this at all.
+
+**The marginal-cost mechanism is absent:**
+
+```
+prepare                          3053 H100-s
+deploying the full 10^4 items:
+  A2 (context)                      83     <- the "expensive" one
+  A6 (weights)                      26
+  A4 (code)                          4
+```
+
+A2 costs 57 H100-seconds more than A6, against a preparation of 3053.
+Amortisation needs a large up-front cost recovered over many cheap queries;
+here the whole deployment is worth tens of seconds. There is nothing to
+amortise.
+
+This follows from Glyph's task shape — a short expression mapping to a short
+answer, answered by a 1.7B model in milliseconds. **Deployment is cheap by
+construction, not by an implementation error.**
+
+## Therefore the axis was wrong
+
+| mechanism | correct x-axis | why |
+|---|---|---|
+| marginal cost | **N** (test queries), or the compute budget B | the crossing happens in how many times you pay |
+| ceiling | **Q** (information bought) | whether you hit a ceiling depends on how much there is to hold, not on how long you deliberated |
+
+**Glyph has the ceiling mechanism, so its axis is Q, not B.**
+
+And B is broken a second time over in the implementation: 98% of it goes to
+the agent talking to Opus, training takes 0.2-35%, buying information 0.06%.
+Sweeping B sweeps *how many turns the agent took* — so it cannot carry the
+cost story either, because it does not measure container cost, it measures
+deliberation.
+
+## What A+B does, in these terms
+
+**A — Glyph carries the ceiling story, on a Q axis.** The main figure becomes
+a (pi, Q) phase diagram: pi sets whether the difficulty lives in the skeleton
+or the table, Q sets how much was bought, and the figure marks which
+container succeeds where. H1 becomes "there is a region only weights
+reaches", which the existing data already supports.
+
+**B — T2 carries the cost story.** Search tasks are throughput-bound;
+deployment is expensive by construction, and amortisation is real there.
+
+Each task carries one argument rather than Glyph carrying two and failing at
+one.
+
+## The consequences follow from the derivation, not from convenience
+
+**Q must become a set variable.** As the main figure's x-axis it cannot be a
+by-product of the agent's inclination to query — it currently drifts between
+103 and 472 across runs, and that drift would appear as noise on the phase
+diagram rather than as signal.
+
+**A0' becomes load-bearing.** Once the claim is "gradient descent reaches
+what in-context does not", A0' is the strongest counter-example available:
+unlimited context, unlimited thinking, the entire purchased record. The claim
+stands only if A0' loses.
+
+**T2 must actually be built.** It was the credibility source — proof this is
+not a toy. It now carries half the paper, and it does not exist.
