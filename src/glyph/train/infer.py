@@ -60,6 +60,7 @@ class Generation:
     generated_tokens: int
     seconds: float
     prefix_caching: bool
+    truncated: int = 0
 
 
 def _fit_memory(headroom_gb: float = 2.0, want_gb: float = 14.0) -> float:
@@ -113,7 +114,7 @@ class Student:
     """The small model, optionally with a context prefix and/or an adapter."""
 
     def __init__(self, base_model: str, *, adapter_path: str | None = None,
-                 context: str | None = None, max_new_tokens: int = 24,
+                 context: str | None = None, max_new_tokens: int = 96,
                  max_model_len: int = 8192, gpu_memory_utilization: float | None = None,
                  max_lora_rank: int = 64, dtype: str = "bfloat16"):
         from transformers import AutoTokenizer
@@ -175,10 +176,17 @@ class Student:
             if timer is not None:
                 timer.__exit__(None, None, None)
 
-        answers, generated = [], 0
+        answers, generated, truncated = [], 0, 0
         for o in outs:
             generated += len(o.outputs[0].token_ids)
+            if o.outputs[0].finish_reason == "length":
+                truncated += 1
             answers.append(_clean(o.outputs[0].text))
+        if truncated:
+            # Loud on purpose: a truncated answer is scored wrong, and a run
+            # whose answers were cut short is measuring max_new_tokens.
+            print(f"    [student] {truncated}/{len(outs)} answers hit the "
+                  f"{self.max_new_tokens}-token generation cap", flush=True)
 
         seconds = 0.0
         if ledger is not None:
@@ -188,10 +196,12 @@ class Student:
                     if r.kind == "gpu_second"
                     and r.meta.get("label") == "student_inference"]
             seconds = recs[-1].n if recs else 0.0
-        return Generation(answers, self.prefix_tokens, generated, seconds, True)
+        return Generation(answers, self.prefix_tokens, generated, seconds, True,
+                          truncated)
 
 
-_ANSWER = re.compile(r"(\[[^\]]*\]|v(?:_[0-9a-z]+)+|v\d+)")
+_LIST = re.compile(r"\[[^\]]*\]")
+_VALUE = re.compile(r"v(?:_[0-9a-z]+)+|v\d+")
 
 
 def _clean(text: str) -> str:
@@ -200,6 +210,21 @@ def _clean(text: str) -> str:
     A trained student emits a bare answer; the untrained one in the A8 arm
     will happily add prose. Taking the first value-shaped thing is the same
     leniency for every arm, which is the part that matters.
+
+    The order here is load-bearing. A list answer that was cut off mid-way --
+    `[v_1_2_3, v_4_5` with no closing bracket -- must not fall through to the
+    value pattern and come back as `v_1_2_3`, because that turns a truncation
+    into something indistinguishable from a wrong answer. It scores as wrong
+    either way, but silently: the arm looks incapable when the generation
+    budget was short. That is what `max_new_tokens=24` was doing to every
+    multi-element list, and it cost A2 and A6 real points before it was
+    found. An unterminated list is returned as-is so it fails loudly and
+    looks like what it is.
     """
-    m = _ANSWER.search(text)
-    return m.group(1) if m else text.strip()
+    m = _LIST.search(text)
+    if m:
+        return m.group(0)
+    if "[" in text and "]" not in text:
+        return text.strip()          # truncated list: wrong, and visibly so
+    m = _VALUE.search(text)
+    return m.group(0) if m else text.strip()
