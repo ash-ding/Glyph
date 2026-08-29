@@ -24,6 +24,10 @@ def run(rc: RunConfig) -> ScoreReport:
                     max_turns=rc.max_turns)
 
     from ..train.infer import Student
+    # box.sealed is guaranteed non-None: the harness seals if the agent
+    # does not. It may however be empty -- training that all failed leaves a
+    # base student with nothing attached, which scores badly and is exactly
+    # the comparable data point the grid needs.
     student = Student(rc.base_model, context=box.sealed.context)
 
     def answer(exprs):

@@ -179,7 +179,9 @@ def run_agent(inst: GlyphInstance, ledger: Ledger, trace: TraceWriter,
         box.dispatch("seal", {"entry": entry,
                               "checkpoint_id": next(iter(box.checkpoints), ""),
                               "summary": "(sealed by the harness: the agent "
-                                         "did not seal in time)"})
+                                         "did not seal in time)",
+                              "forced": True})
+        assert box.sealed is not None, "the harness seal must not be refusable"
         trace.emit("harness_seal", arm=arm, had_program=bool(box.program),
                    had_checkpoint=bool(box.checkpoints),
                    had_context=bool(box.context))

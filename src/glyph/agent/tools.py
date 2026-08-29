@@ -207,12 +207,26 @@ class ToolBox:
         return {"stored": True, "chars": len(text)}
 
     # -- sealing --------------------------------------------------------
-    def _t_seal(self, entry: str, checkpoint_id: str, summary: str) -> dict:
+    def _t_seal(self, entry: str, checkpoint_id: str, summary: str,
+                forced: bool = False) -> dict:
+        """Freeze whatever exists.
+
+        `forced` is the harness sealing on the agent's behalf, and it must
+        always succeed. An agent whose training all failed still has to
+        produce a comparable data point -- the base student answering with
+        no adapter and no prompt is a legitimate, and very bad, artifact.
+        Refusing to seal it turns a poor result into a missing one, and the
+        arms most likely to hit that are the ones whose preparation costs
+        most, which is exactly what the comparison is measuring.
+        """
         adapter = self.checkpoints.get(checkpoint_id) if checkpoint_id else None
-        if entry == "model" and adapter is None and self.context is None:
-            return {"error": "sealing a model entry needs a checkpoint or a context"}
-        if entry == "program" and not self.program:
-            return {"error": "sealing a program entry needs write_code first"}
+        if not forced:
+            if entry == "model" and adapter is None and self.context is None:
+                return {"error": "sealing a model entry needs a checkpoint or a context"}
+            if entry == "program" and not self.program:
+                return {"error": "sealing a program entry needs write_code first"}
+        if forced and entry == "program" and not self.program:
+            entry = "model"          # nothing to run; fall back to the student
         self.summary = summary
         self.sealed = SealedArtifact(
             arm=self.arm, entry=entry, context=self.context,
@@ -221,7 +235,9 @@ class ToolBox:
             notes={"role": self.role.value if self.role else None,
                    "summary": summary, "queries": len(self.queried)},
         )
-        self.trace.emit("seal", arm=self.arm, entry=entry,
+        self.trace.emit("seal", arm=self.arm, entry=entry, forced=forced,
+                        empty=adapter is None and self.context is None
+                        and self.program is None,
                         role=self.role.value if self.role else None,
                         queries=len(self.queried),
                         ledger=self.ledger.summary())

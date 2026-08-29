@@ -58,6 +58,19 @@ class Ledger:
         self.sealed = False
 
     # -- core ----------------------------------------------------------
+    def sealed_mode(self):
+        """Record without enforcing, for the test phase.
+
+        The protocol gives the agent a budget for the prepare phase and then
+        seals. Test-phase inference still has to be *recorded* -- the plan
+        requires it, and A2's per-query cost is the whole point -- but it
+        cannot be *capped* by the prepare budget: the agent is gone, so there
+        is nothing left to cut short, and refusing to score a run that spent
+        its budget turns a bad-but-comparable data point into a hole in the
+        grid.
+        """
+        return _Sealed(self)
+
     def charge(self, kind: str, n: float = 1.0, usd: float | None = None,
                **meta) -> Record:
         if usd is None:
@@ -66,7 +79,8 @@ class Ledger:
         self.records.append(rec)
         self.spent_usd += usd
         self.spent_h100s += rec.h100s
-        if self.total is not None and self.spent_h100s > self.total:
+        if (self.total is not None and not self.sealed
+                and self.spent_h100s > self.total):
             raise BudgetExhausted(
                 f"{self.spent_h100s:.1f} / {self.total:.1f} H100-s after {kind}")
         return rec
@@ -107,6 +121,22 @@ class Ledger:
             "n_records": len(self.records),
             "by_kind": {k: round(v, 4) for k, v in self.breakdown().items()},
         }
+
+
+class _Sealed:
+    """Context manager flipping the ledger to record-only."""
+
+    def __init__(self, ledger: "Ledger"):
+        self.ledger = ledger
+
+    def __enter__(self):
+        self._was = self.ledger.sealed
+        self.ledger.sealed = True
+        return self.ledger
+
+    def __exit__(self, *exc):
+        self.ledger.sealed = self._was
+        return False
 
 
 class _GpuTimer:

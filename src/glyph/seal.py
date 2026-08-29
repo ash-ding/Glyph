@@ -119,7 +119,11 @@ def evaluate(inst: GlyphInstance, artifact: SealedArtifact, ledger: Ledger, *,
     strategy was.
     """
     items = items if items is not None else inst.test_set()
-    answers = answer_fn([t.expr_src for t in items])
+    # Everything from here on is the test phase. It is billed to the same
+    # ledger -- the deployment cost of each container is a result, not an
+    # overhead -- but the prepare budget no longer gates it.
+    with ledger.sealed_mode():
+        answers = answer_fn([t.expr_src for t in items])
     overall, by_split = score_answers(items, answers)
 
     # `tail` comes from this run's own query log: the items whose table
