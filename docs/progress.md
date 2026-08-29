@@ -2034,3 +2034,122 @@ stands only if A0' loses.
 
 **T2 must actually be built.** It was the credibility source — proof this is
 not a toy. It now carries half the paper, and it does not exist.
+
+---
+
+# 2026-08-29 — E0: the four arms, on fixed tables, same instance
+
+All four ran on `pi_mid`, `instance_seed=1001`, the same 200 sealed items,
+the same `whiten` tables. A6 took six attempts to get here; the failures are
+recorded above and only two were product bugs.
+
+| arm | overall | iid | comp | depth | **tail** | prepare (H100-s) | artifact |
+|---|---|---|---|---|---|---|---|
+| A2 context | 0.010 | 0.008 | 0.022 | 0.000 | **0.000** | 3061 | 1937-char prompt |
+| A4 code | **0.255** | 0.331 | 0.087 | 0.167 | **0.000** | 6159 | 4325-byte program |
+| A6 weights | 0.055 | 0.077 | 0.000 | 0.042 | **0.000** | 15446 | 81 MB LoRA |
+| A0' saturated frontier | **0.255** | 0.331 | 0.087 | 0.167 | **0.000** | 4324 | — |
+
+## A4 and A0' are identical to three decimals, and that is a result
+
+Not a bug — the same numbers on all four splits, from different artifacts
+with different digests.
+
+Both were given the **same 215 purchased facts**. Both inferred the same
+skeleton. Both could then answer exactly the items reachable from "skeleton
+plus the facts already bought" — and that set is deterministic, so both land
+on the same score.
+
+One expressed it as 4 KB of Python, the other as in-context reasoning inside
+Opus with unlimited context and unlimited thinking. **Different form,
+identical ceiling**, because the same thing limits them: neither extrapolates
+the table.
+
+**A0', the information-saturated frontier, does not beat a program the agent
+wrote.** That is the arm the plan built to decide H1's claim strength, and on
+this instance it ties with code rather than winning.
+
+## What A4 actually wrote
+
+From its trace — this answers the question left open when `binary_coupling`
+was being chosen:
+
+```python
+# ---- Structural positional permutations, confirmed from oracle ----
+PERMS = {('s2',2):[1,0], ('s2',3):[0,1,2], ('s3',1,4):[3,2,1], ...}
+
+# ---- Unary memo mined from training examples + inversions ----
+UMEMO = {('u0',(7,5,10)):(1,3,9), ('u0',(6,9,16)):(15,12,1), ...}
+
+# b0 diagonal partial tables, componentwise g(x)=(p[a],q[b],r[c])
+P0 = {0:13, 1:8, 2:1, 3:13, ...}
+```
+
+Exactly the shape the plan predicted for the code container: **the skeleton
+becomes rules** (a compact permutation table) and **the table becomes a
+lookup** (entries listed one by one).
+
+And it tried to extrapolate: `P0` with the comment `componentwise
+g(x)=(p[a],q[b],r[c])` is the agent finding the digit structure on its own
+and attempting to exploit it. It did not work — `tail` is 0.000 — but the
+attempt is there in the source. **The concern that a more learnable table
+would let the agent enumerate the structure into code is real enough that it
+already tries.**
+
+## tail is 0.000 for every arm
+
+The column the design cares most about is zero across the board. For A4 that
+is the predicted weakness — precise on what was bought, nothing beyond it.
+For A6 it is a problem, because extrapolating past what was bought is the
+weights arm's entire reason to exist.
+
+## A6 is the worst arm, and the reason is information, not capacity
+
+`overall 0.055` sits against self-check #5, which measured `reach` at
+0.56-0.58 on these same tables. The gap is not capacity:
+
+```
+#5   512,000 training samples drawn fresh from the table
+A6   187 facts bought; synthesised 3000-9000 examples from 131-159 of them
+```
+
+A6's five `synthesize_data` calls drew from **131 to 159 distinct facts** and
+inflated them to 3000-9000 examples by repetition — `tools.py` repeats rather
+than invents, deliberately, because an agent cannot manufacture labels it has
+not bought. So it trained seven times on a few hundred facts seen thousands
+of times each. That is the `fit 1.000 / reach 0.09` regime from #5:
+memorisation with nothing generalisable underneath.
+
+**The weights arm is starved, not incapable.** The design's asymmetry —
+`Q ~ 2000` against `|V| = 4913` — assumed a query budget an order of
+magnitude larger than what the agent actually bought.
+
+This is the query-cap question arriving as a result rather than as an
+argument: with Q unconstrained the agent buys ~200 facts, and at ~200 facts
+the weights container cannot do the one thing it is there for.
+
+## A6 also overspent
+
+`prepare 15446` against a budget of 15000. The new `sealed_mode` let the run
+finish and be scored rather than dying — which is what it is for — but the
+overspend itself is worth noting: the test phase is recorded, so a run can
+close above its budget. Comparisons at a fixed budget should use the prepare
+figure, not the total.
+
+## What this says about E0's gate
+
+M1 asks whether a crossover exists. On this single instance, at this single
+budget:
+
+* code and the saturated frontier tie at 0.255
+* weights reaches 0.055
+* context reaches 0.010
+
+There is no crossover here, and under the A+B framing there was not supposed
+to be one on this axis — the interesting comparison is not "which arm wins at
+budget B" but "which container can hold the knowledge as Q grows". This run
+is one point, at Q ~ 200, where the answer is: **none of them can, and the
+two that share the same information reach exactly the same ceiling.**
+
+That is a coherent point on a (pi, Q) diagram rather than a failed crossover.
+But it is one instance and one seed, so it is a data point, not a finding.
