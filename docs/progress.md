@@ -1770,3 +1770,138 @@ The Phase 1 artifact still states H1 as a budget threshold and organises E1
 around a B sweep. It is the source of truth for three documents, so it stays
 unchanged until the decision firms up. This entry is the record in the
 meantime.
+
+---
+
+# 2026-08-29 — two bugs in the seal seam, and the operational facts worth writing down
+
+## A run must always end with something scoreable
+
+Two failures in the same seam, both found by A6, and both with a direction
+that matters.
+
+**The test phase was capped by the prepare budget.** Scoring a sealed
+artifact charges the ledger, and a run whose deployment pushed it past `B`
+died with `BudgetExhausted` instead of producing a report:
+
+```
+BudgetExhausted: 15039.3 / 15000.0 H100-s after gpu_second
+  in seal.py evaluate() -> a6_weights answer() -> the gpu_timer's charge
+```
+
+The protocol gives the agent a budget for *preparation* and then seals.
+Test-phase cost must be **recorded** — A2's per-query cost is the entire
+mechanism the comparison is about — but it cannot be **capped** by a budget
+the agent can no longer respond to. `Ledger.sealed_mode()` records without
+enforcing; `evaluate()` runs inside it.
+
+**The harness's fallback seal could itself be refused.** When every training
+attempt OOMed there was no checkpoint, so the harness seal hit the same
+validation an agent seal does, returned `{"error": ...}`, and left
+`box.sealed` as `None` — which the arm then dereferenced:
+
+```
+AttributeError: 'NoneType' object has no attribute 'adapter_path'
+```
+
+The fallback existed precisely so that every run yields a comparable data
+point, and it had no fallback of its own. A forced seal now always succeeds,
+and a forced `program` seal with no program falls back to the student.
+
+**Both bugs delete data preferentially from the arms whose preparation or
+deployment costs most** — which are exactly the arms the comparison exists to
+measure. An agent whose training all failed should score badly, not vanish: a
+base student with nothing attached is a legitimate and very poor artifact,
+and the paired design needs the cell filled.
+
+Six tests: the prepare budget still bites before sealing, the test phase
+records without being capped, enforcement returns afterwards, an ordinary
+seal still needs something to seal, a forced seal cannot be refused, a forced
+program seal falls back.
+
+## A6's runtime is set by the agent, not by the task
+
+Same instance, same budget, same preset:
+
+| run | tool calls | GPU s | tool time | shape |
+|---|---|---|---|---|
+| cli | 11 | 48 | 1.6m | query x5, synth, train x2, eval, seal |
+| cli2 | 11 | 31 | 1.6m | one pass, sealed |
+| grid_whiten2 | 33 | 1170 | 22.2m | six synth/train/eval cycles |
+| pilot | 47 | 1029 | 83.9m | twenty-one query rounds, four seals attempted |
+| grid_whiten3 | 43 | 4.6 | 2.9m | **31 train calls, all OOM, retried** |
+
+**Wall clock ranges from about 10 minutes to over 90**, and the spread is
+behavioural: an agent that converges in one pass costs a tenth of one that
+iterates. `grid_whiten3` is the pathological case — 31 of its 43 calls were
+`train`, each failing instantly on OOM, the agent retrying.
+
+`gpu_second` across completed A6 runs spans **4.6 to 1170** — so "training is
+1.5% of the budget" was true of one run, not of the arm. It is 0.2%-35%
+depending on what the agent chooses.
+
+**This has a consequence for E1.** `worker.py`'s grid timeout defaults to 5400
+seconds, and the iterating runs sit right against it. At 210 runs a timeout
+that clips the long tail would silently bias the sample toward agents that
+converge quickly — the ones doing *less* of what the experiment is about.
+Either raise it well above the observed tail or record how many runs it cut.
+
+## Prompt caching was specified and never implemented
+
+The plan §6.3 asks for it explicitly: *"账本的 token 折算跟随真实计费，缓存读
+0.1×、缓存写 1.25×，这样 orchestrator 用 prompt caching 省下的钱在账本里也是
+真省的"*.
+
+`_charge_usage` reads `cache_read_input_tokens` and
+`cache_creation_input_tokens` and prices them correctly. **But the
+orchestrator never sets a `cache_control` breakpoint**, so nothing is ever
+cached. Across eight completed runs the ledger shows zero cache hits, and
+every turn re-sends the whole history at full price.
+
+This is why cost tracks turn count rather than work done: `declare_target`,
+which selects one value from a seven-item enum, cost **311 H100-s** — within
+15% of the `train` call in the same run.
+
+Not fixed yet. It is ~20 lines and would cut `frontier_in` by roughly 10x;
+output tokens are not cacheable, so the total falls by about half rather than
+by ten.
+
+## The machines: no single host has both halves
+
+| host | GPUs | Vertex |
+|---|---|---|
+| `lumen-1`, `lumen-2` | 8 x 80GB, free | same project as lumen-3 |
+| `lumen-3` | shared, 4-80GB free depending on the hour | works |
+| `node1` (`rh-h100-01`) | 8 x 80GB, free | **403** — ADC lacks `aiplatform.endpoints.predict` |
+| `rh-h100-09` | 6 x 80GB free | untested, same project as node1 |
+| `rh-h100-10` | connection refused | — |
+| `rh-h100-02/03/06/07/08` | no key for this account | — |
+
+The arms need **both** — Vertex for the agent loop, a GPU for the student —
+so they can only run where both are present. The capacity checks need only a
+GPU and ran on `node1`.
+
+`lumen-3`'s GPUs are shared with someone else's job and have gone from 81GB
+free to 4.7GB free and back within a single session; two A6 failures trace to
+that. `lumen-1` and `lumen-2` are the right home for arm runs: full cards and
+a working Vertex project.
+
+Worth noting for later: pointing node1 at lumen-3's project did **not** help,
+so it is the credential rather than the configuration. Getting Vertex access
+on node1 would double the hosts able to run arms, which E1's 210 runs will
+want.
+
+## Still open, and not from lack of resources
+
+**`dev_accuracy 0.0` after `final_loss 0.0`.** Flagged two entries ago and
+still unexplained. A6 trained to zero loss on 120,000 synthesised examples and
+then scored zero on 13 dev items. Loss at zero with dev at zero is not a
+resource problem: either the evaluation path is wrong, or what the agent
+synthesised does not match what it is evaluated on. It survives every re-run
+because nothing about it has been fixed.
+
+**A4's solver source has not been read.** The open question from the decode
+work — whether making the tables more learnable lets the agent enumerate the
+structure into code, which is what rules out `binary_coupling = 0` — can only
+be answered by looking at what A4 actually wrote. The source is in its trace,
+under `write_code`. Not yet examined.
