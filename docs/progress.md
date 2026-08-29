@@ -1321,3 +1321,308 @@ valid #4 result remains `pi_low`.
 Running a proper one-variable-at-a-time diagnostic rather than guessing
 again: effort and `max_tokens` and chunk size varied separately on 2–5 items,
 reporting `stop_reason` and how many characters of text come back.
+
+---
+
+# 2026-08-28 — the decode bug, and everything that had to be re-run because of it
+
+The biggest entry so far, because the finding sits under everything measured
+before it.
+
+## The tables were not what the design says they are
+
+`Tables._decode` mapped an MLP output back to a symbol by `argmin` over all
+`|V|` embeddings. That collapses. `tanh` holds the output near the centre of
+the space while the embeddings are Gaussian, so the few embeddings nearest
+the centroid win almost every argmin — the hubness effect in high-dimensional
+nearest-neighbour search.
+
+Measured, `seed=1001`:
+
+| preset | operator | distinct outputs | entropy | most common output |
+|---|---|---|---|---|
+| pi_low | unary u0 | **222** / 4913 | 5.30 / 12.26 | 18.7% |
+| pi_low | binary b0 | 339 / 4913 | 6.30 | 8.9% |
+| pi_mid | unary u0 | 160 / 4913 | 4.97 | 19.3% |
+| pi_mid seed 1002 | unary u0 | 193 / 4913 | 4.58 | **30.1%** |
+| pi_high seed 1002 | binary b0 | 3 / 8 | 0.72 | **85.8%** |
+
+`|V| = 4913` was a fiction: the image was ~200 values. "The table cannot be
+bought outright" — the reason the weights arm exists — rests on the size of
+that image, not on the size of the domain.
+
+### How it surfaced, and the wrong conclusion I drew first
+
+Self-check #4 reported a leak on pi_low: the teacher scoring 0.117 exact and
+0.781 digit from 30 demos and no queries, against a measured null of 0.000.
+I wrote that up as in-context learning extrapolating the table — **risk R3 in
+the Glyph spec, the finding that would have weakened H1's claim to the
+economic half only.**
+
+It was not that. Always answering the single most common output scores
+**0.187 exact and 0.582 digit** on the broken pi_low tables — above the
+teacher's exact and comparable on digits. The teacher was reading the output
+distribution off the demos, which is free information, and not extrapolating
+anything.
+
+The check was right to fire. My reading of why was wrong, and it was wrong in
+the direction of the more interesting story.
+
+## Three candidate fixes, measured
+
+Implemented behind `GlyphConfig.decode`, defaults untouched during the
+comparison. Three things had to hold at once — a fix that buys one by losing
+another is not a fix:
+
+* **spread** — the image must not collapse, or `|V|` stays a fiction
+* **structure** — digit-neighbours must still map near each other, because
+  that correlation is the only reason anything extrapolates
+* **pi** — the measurement has to survive
+
+pi_low, seed 1001, unary u0:
+
+| decode | distinct | entropy | top-1 | nbr-agree | far-agree | contrast | pi |
+|---|---|---|---|---|---|---|---|
+| `nearest` | 222 | 5.30 | 18.7% | 0.608 | 0.433 | 1.40x | 0.347 |
+| `whiten` | **1222** | 9.46 | 0.8% | 0.361 | 0.109 | **3.31x** | 0.377 |
+| `per_digit` | 222 | 5.30 | 18.7% | 0.608 | 0.433 | 1.40x | 0.347 |
+| `assign` | 4913 | 12.26 | 0.0% | 0.152 | 0.059 | 2.58x | 0.352 |
+
+**`per_digit` is refuted, not rejected.** I had recommended it as the fix. It
+is the same function as `nearest`: with concatenated embeddings and every
+digit combination legal, squared distance decomposes and global argmin *is*
+per-digit argmin. Identical on every preset, seed and operator — six
+configurations, every number the same. That also corrects the diagnosis: the
+collapse is not "too many candidates", since 17 candidates per digit collapse
+just as hard. It is `tanh` pushing every segment toward its digit bank's
+centroid.
+
+**`assign`** builds a true bijection but cannot exist for binary — it needs
+all 24M outputs materialised, which is the thing the table exists not to do.
+A bound, not an option.
+
+**`whiten`** — putting the MLP output on the embeddings' own per-dimension
+scale before the argmin — is now the default. Across pi_low and pi_mid, two
+seeds each: distinct outputs 160-224 to 1132-1265, top output 15-30% to
+0.8-2%, and the neighbour-versus-random contrast roughly doubles. It works
+for binary, which is what settles it.
+
+Confirmed from the other side: the mode baseline falls **0.224 to 0.011**.
+
+### One caveat recorded rather than fixed
+
+On `pi_high`, `n_digits = 1`, and no decode preserves neighbour structure
+because there is none to preserve — `whiten` and `assign` both drive
+neighbour agreement to or below the random level. That end of the phase
+diagram has no extrapolable table at all. The spec should say so: at pi -> 1
+the weights arm is not extrapolating poorly, it has nothing to extrapolate
+from.
+
+### A test that was passing because of the bug
+
+`test_digit_neighbours_are_correlated` asserted that perturbing a digit left
+the output *identical* more often than chance — 28% against 0.02%. That was
+measuring the collapse, not checking against it: the test the design relies
+on was being satisfied by the defect it should have caught. It now compares
+digit agreement for neighbours against unrelated values.
+
+## Self-check #5, re-run on fixed tables
+
+Everything below is `whiten`. The old column is the same run on broken
+tables, kept because the size of the shift is the point.
+
+| run | steps | adapter | old reach | **new reach** | mode |
+|---|---|---|---|---|---|
+| unary, joint MLP | 4000 | full | 0.464 | **0.091** | 0.011 |
+| unary, joint MLP | 12000 | full | — | 0.137 | 0.011 |
+| unary, joint MLP | 24000 | full | — | 0.158 | 0.011 |
+| unary, digit-wise 0.25 | 4000 | full | 0.853 | **0.583** | 0.014 |
+| unary, digit-wise 0.25 | 12000 | full | — | 0.597 | 0.014 |
+| binary c=0 | 4000 | full | 1.000 | 1.000 | 0.015 |
+| binary c=0.25 | 4000 | full | 0.799 | **0.562** | 0.013 |
+| binary c=0.25 | 12000 | full | 0.849 | 0.675 | 0.013 |
+| binary c=0.25 | 24000 | full | 0.883 | 0.734 | 0.013 |
+| binary c=0.5 | 4000 | full | 0.622 | 0.379 | 0.011 |
+| binary c=1.0 | 4000 | full | 0.402 | 0.221 | 0.008 |
+
+Every number fell, because part of every old number was the output
+distribution. The mode baseline fell twenty-fold and the reach numbers
+followed.
+
+### The unary table has no extrapolable structure, and that is now measured
+
+```
+joint MLP     4000 -> 0.091   12000 -> 0.137   24000 -> 0.158    fit 1.000 throughout
+digit-wise    4000 -> 0.583   12000 -> 0.597                     fit 1.000
+```
+
+Six times the training moves the joint MLP by 0.067. There are only 4,421
+trainable unary entries, so at 24000 steps each has been seen **695 times** —
+this is not undertraining. `fit 1.000` with `reach 0.158` is memorisation
+with nothing generalisable underneath.
+
+I had asserted this earlier from the shape of the loss curve. It needed
+measuring, because I had already been wrong once in the same way (predicting
+binary would plateau when it was still climbing), and this time the
+measurement agreed.
+
+The digit-wise variant converges by 4000 steps at 0.58-0.60. **The gap is not
+training, it is whether the structure exists.** D2 gave the binary operators a
+per-digit factorisation; the unary operators never got one, and with the
+collapse removed that shows as 0.16 against 0.60.
+
+### Binary is still climbing
+
+```
+4000 -> 0.562    12000 -> 0.675    24000 -> 0.734
+```
+
+and `fit ~= reach` throughout (0.740 / 0.734 at 24000): it is learning the
+function, not the entries. 24000 steps covers 14% of the 21.7M trainable
+pairs, so there is no reason to expect a plateau yet.
+
+## Self-check #4, re-run: all three presets pass
+
+```
+verdict: no preset beats chance -- semantics are hidden
+
+pi_low    table-dependent  0/60    null 0.0000    digit 0.419 vs 0.390
+pi_mid    table-dependent  0/47    null 0.2167    digit 0.056 vs 0.240
+pi_high   table-dependent  2/18    null 0.8833    digit 0.182 vs 0.879
+60/60 answers parsed on every preset, no truncation
+```
+
+**The pi_low leak is gone.** It was the collapse, exactly as the mode-baseline
+arithmetic predicted.
+
+pi_high is the clearest demonstration that the design's separation works: the
+teacher scores **20/42 on skeleton-only items** — the skeleton is meant to be
+inferable, and it infers it — while scoring **2/18 on table-dependent items**,
+far below the null. Skeleton buyable by reasoning, table not buyable at all.
+
+### And the two numbers together are the evidence H1 wanted
+
+On the same tables, at pi_low:
+
+* **student, gradient descent**: 0.562-0.583, forty times the mode baseline
+* **teacher, in-context**: 0.000, not one point above the null
+
+"Some structure gradient descent reaches and in-context learning does not" is
+now a measured pair rather than an assumption — and a clean one, because the
+collapse used to inflate both sides at once.
+
+### What fixed #4 in the end was `max_tokens`, not chunk size or effort
+
+Two wrong diagnoses before the right one, both extrapolated from a single
+observation:
+
+1. "The chunks are too big" — smaller chunks did not help.
+2. "The obstacle is effort" — lowering effort made it *worse*
+   (out 192000 to 256000, truncations 3 to 4, answers 0/60 either way).
+
+A one-variable-at-a-time scan settled it in 25 minutes:
+
+```
+effort=low     max_tok=64000   5 items   end_turn      out=43416   574 chars
+effort=medium  max_tok=128000  5 items   end_turn      out=55612   809 chars
+effort=low     max_tok=32000   2 items   max_tokens    out=32000     0 chars
+```
+
+**The reasoning cost is per call, not per item.** Two items burn the same cap
+as five. So chunks should be *larger*, to amortise it, and the binding
+constraint is `max_tokens` clearing the fixed cost (~55k at medium, ~43k at
+low). At `chunk 30 / max_tokens 128000` every preset came back complete, and
+total token spend on pi_high *fell* from 256k to 165k.
+
+The two hours lost to guessing were worth less than the 25 minutes of scan.
+
+## LoRA versus full fine-tuning: my first comparison was confounded
+
+The plan calls for this ablation at the pi=0 end specifically. First results:
+
+| | fit | reach |
+|---|---|---|
+| binary c=0.25, full | 0.578 | 0.562 |
+| binary c=0.25, LoRA r=8 | 0.708 | 0.691 |
+| binary c=0.25, LoRA r=32 | 0.744 | **0.715** |
+
+I explained this as the low-rank constraint acting as a regulariser. **That
+explanation does not fit its own data**: regularisation shows up as *lower*
+fit and higher reach, and LoRA was higher on both.
+
+The actual cause was in my own defaults:
+
+```python
+lr = args.lr if args.lr is not None else (1e-4 if args.lora_rank else 1e-5)
+```
+
+Full fine-tuning ran at 1e-5 and LoRA at 1e-4 — conventional defaults for
+each, and a confound the moment they are compared. The comparison varied two
+things at once and could not support any conclusion about rank.
+
+Closing the 2x2 settles it:
+
+| binary c=0.25, 4000 steps | lr 1e-5 | lr 1e-4 |
+|---|---|---|
+| full | 0.562 | **0.797** |
+| LoRA r=32 | *running* | 0.715 |
+
+| unary digit-wise, 4000 steps | lr 1e-5 | lr 1e-4 |
+|---|---|---|
+| full | 0.583 | **0.697** |
+| LoRA r=32 | *running* | 0.655 |
+
+**At a matched learning rate, full fine-tuning beats LoRA on both tasks.** The
+apparent LoRA advantage was the 10x learning rate, and the intermediate rate
+confirms the trend (binary full at 3e-5: 0.720, between 0.562 and 0.797).
+
+Two things follow. The claim that "#5's full-FT numbers are an upper bound
+A6 may not reach with LoRA r=32" is back on — I had briefly retracted it on
+the strength of the confounded comparison. And every full fine-tune number in
+this entry was produced at 1e-5, which the sweep now shows is well below the
+best setting: **the capacity results understate what the student can learn**,
+by roughly 0.2 on binary.
+
+## The query budget does not constrain anything
+
+Asked directly, and worth recording because it bears on the budget axis.
+Queries *are* charged (`ledger.charge("oracle_query", ...)`, 1e-5 USD each),
+but there is no cap, and across eight completed runs:
+
+| arm | queries | query cost | total spent | share |
+|---|---|---|---|---|
+| a4 | 472 | 4.25 | 6905.5 | 0.062% |
+| a6 | 230 | 2.08 | 3257.3 | 0.064% |
+| a4 | 215 | 1.96 | 6159.2 | 0.032% |
+| a6 | 158 | 1.42 | 3031.1 | 0.047% |
+| a2 | 110 | 0.99 | 3060.1 | 0.032% |
+| a2 | 103 | 0.93 | 2160.8 | 0.043% |
+
+**No run bought more than 500 queries** against the plan's assumed
+`Q ~ 2000`, and query spend never exceeded 0.064% of the budget. The
+asymmetry the design rests on — Q against |V| — is currently maintained by
+the agent's disinclination to query rather than by the protocol. A different
+prompt or a different teacher would move it, and Fig. 1's x-axis would move
+with it invisibly.
+
+Still open, still not decided unilaterally.
+
+## The arms, on fixed tables
+
+A2 and A4 completed paired — same instance, same budget, same test set, which
+is the first genuinely comparable pair. A6 **failed on OOM**: the agent chose
+`lora_rank=64` and trained on 120,000 examples while another job held 59 GB
+of the card. Not a bug; the machine was full.
+
+`worker.py` did its job and refused to report the group:
+
+```
+1 instance(s) have a failed arm and must be excluded or re-run as a group: [1001]
+2/3 ok in 90.0m
+```
+
+Re-running A6 on a free card. **Not yet explained**: its first training run
+reported `final_loss 0.0` and then `dev_accuracy 0.0` on 13 items. Loss at
+zero with dev at zero is not a resource problem and will not fix itself on a
+re-run — either the evaluation path is wrong or the agent's synthetic data
+does not match the test distribution. To be read from the trace.
