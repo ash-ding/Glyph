@@ -2153,3 +2153,137 @@ two that share the same information reach exactly the same ceiling.**
 
 That is a coherent point on a (pi, Q) diagram rather than a failed crossover.
 But it is one instance and one seed, so it is a data point, not a finding.
+
+---
+
+# 2026-08-29 — the truncation bug, and what it was hiding underneath
+
+## `dev_accuracy 0.0`, explained at last
+
+Flagged as unexplained across four entries. The cause was
+`Student.max_new_tokens = 24`, against real answers that run to 42 tokens:
+
+| preset | longest answer | truncated at cap 24 |
+|---|---|---|
+| pi_low | 42 tok | **49.7%** |
+| pi_mid | 40 tok | **40.3%** |
+| pi_high | 17 tok | 0% |
+
+**Four tenths of the pi_mid test set was unanswerable regardless of what the
+model had learned.**
+
+It hid for so long because the cleaning rule disguised it. A list cut off
+mid-way — `[v_1_2_3, v_4_5` with no closing bracket — failed the list
+pattern, fell through to the value pattern, and came back as `v_1_2_3`:
+indistinguishable from a wrong single value. Every observation said "the
+model answered wrongly"; none said "the answer was cut off".
+
+Found by asking a trained adapter about data it had **trained on**. It failed
+there too, which ruled out the adapter not loading and pointed at the output
+path. The raw generations then showed the first two values of a three-element
+answer correct and the third half-written.
+
+Fixed: cap raised to 96 (twice the longest real answer, zero truncation on
+all presets); an unterminated list is returned as-is so it fails visibly;
+`Generation` carries a `truncated` count and warns when the cap is hit.
+
+## What the bug cost, isolated
+
+Same sealed artifact, same instance, same items — only the cap differs:
+
+```
+A2's original 1937-char prompt
+  cap= 24   overall 0.005   iid 0.000
+  cap= 96   overall 0.020   iid 0.023
+```
+
+**Four times the score, from the same artifact.** A4 (sandbox) and A0'
+(API) never went through this path, so the E0 spread of 0.255 against 0.055
+and 0.010 was part container and part generation cap.
+
+## The bug had corrupted the agent's behaviour, not just its score
+
+This is the part worth keeping.
+
+`evaluate` runs through the same truncated path, so dev accuracy came back at
+or near zero no matter what the agent did. The agent therefore never received
+the signal "buying more data helps".
+
+With the cap fixed, the same arm on the same instance:
+
+```
+before   187 facts bought, 5 query calls
+after    565 facts bought, 11 query calls, dev 0.051 -> 0.400 across two trainings
+```
+
+**An output-layer bug reached back through the dev signal and changed what
+the agent chose to buy.** Which invalidates a claim recorded two entries ago:
+"the weights arm is starved, not incapable", with the agent's ~200 purchases
+offered as evidence that a query cap is needed. That evidence does not stand.
+The cap may still be needed, but this observation cannot be the argument for
+it.
+
+## And underneath the bug, a worse problem: dev does not estimate test
+
+A6's rerun scored **0.035** — *lower* than the 0.055 it managed before the
+fix, despite buying three times as much and reaching dev 0.400.
+
+`dev 0.400` against `test 0.035` is a factor of eleven. The reason:
+
+| | nesting depth | single-level expressions |
+|---|---|---|
+| what the agent bought | median 1, max 2 | **92%** |
+| the test set | median 2, max 4 | **0%** |
+
+The agent probes with diagnostic one-level expressions — `s0(u0, [v_1_1_1])`
+to isolate a single table entry — because that is how you *learn a mapping*.
+The test set contains no such expressions at all. So dev measures accuracy on
+**the agent's own probe distribution**, which is disjoint from the test
+distribution in the property that matters.
+
+**This is a direct consequence of a design decision recorded earlier**: dev is
+carved from what the agent purchased, because handing over a free labelled dev
+set would quietly refund part of the query budget. That reasoning still holds.
+The cost was not anticipated: the agent's only feedback signal does not point
+where it thinks it points.
+
+And it explains the direction of the rerun. A clearer dev signal made the
+agent **optimise harder in the wrong direction** — buy more simple probes,
+train on simple probes, watch dev rise, continue. Better feedback, faster
+divergence.
+
+Whether that is a flaw or a finding is a real question. It is realistic — an
+agent that probes narrowly *should* get a misleading estimate, and "does the
+agent's own estimate track reality" is worth measuring. But right now it is
+neither controlled nor reported, it is just happening.
+
+## Open: `declare_target` is declarative only
+
+This run chose `world_model`, with the rationale *"The student must emulate
+the hidden interpreter"*. Checking what that changes:
+
+```
+_t_synthesize_data uses role:  no
+_t_train uses role:            only to check one was declared, and to trace it
+```
+
+The role is recorded and never acted on. **All seven roles produce identical
+training** — deliberately, per the plan's "one generative formulation, one
+loss", which is what keeps the arms comparable.
+
+But the consequence is that "the agent chose `world_model`" is a fact about
+how it described itself, not about what it built. On this task R1 (answer
+policy) and R6 (world model) are the same function — `expr -> result` — and
+the sealed test has no search loop for a world model to be called inside, so
+the distinction that gives R6 its meaning elsewhere has nowhere to appear.
+
+That bears on H3 and Fig. 4. If the seven roles are operationally identical on
+T1, the target distribution measures the agent's **choice of words**, not its
+engineering judgement. Making the roles real would mean giving them different
+consequences in the harness — R4 through the weighted loss `sft.py` already
+supports but nothing triggers, R5 emitting scores instead of answers, R6 placed
+inside an actual search loop — and whether T1's task shape can support those
+differences is the same kind of question as "Glyph carries capacity, T2 carries
+economics".
+
+**Added to the open list, not decided.**
