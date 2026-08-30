@@ -124,10 +124,36 @@ def _preset(atomic_ratio: float, **kw) -> GlyphConfig:
 
 
 PRESETS: dict[str, GlyphConfig] = {
-    # pi -> 1 : difficulty lives in the skeleton.  Small value space (the
-    # tables are almost free), many structural ops, deep nesting, guards.
+    # pi -> 1 : difficulty lives in the skeleton.  Many structural ops, deep
+    # nesting, guards, and expressions that rarely reach for the table.
+    #
+    # The value space is 17**3, the same as the other two presets. It used to
+    # be 8**1 = 8 values, on the reasoning that pi -> 1 needs the tables to be
+    # nearly free. That reasoning was wrong: what keeps `L_table` small is
+    # `atomic_ratio`, which decides how often an expression touches the table
+    # at all, not how many entries the table has. Measured at 17**3 with the
+    # same skeleton knobs, median pi is 0.723 against 0.716 at 8**1 -- the same
+    # -- with 0.67 table lookups per item against 0.69. Dropping atomic_ratio
+    # to 0.02 reaches pi 0.92, higher than the old preset ever did.
+    #
+    # A small value space was not free. It moved four things that have nothing
+    # to do with pi, all of them confounded with the axis:
+    #
+    #   mode-answer baseline   0.099-0.134  ->  0.002   (an arm scoring 0.035
+    #                                                    was below chance)
+    #   distinct answers              262   ->  ~7500
+    #   surface form of a value      `v_3`  ->  `v_1_2_3`  (3x the tokens, so
+    #                                                    A2's per-query cost and
+    #                                                    the truncation risk
+    #                                                    differed by preset)
+    #   unary entries the test set needs 24 ->  ~4000-8000
+    #
+    # The last one changes what the region above the skeleton ceiling means: at
+    # 24 entries the whole table is buyable in a few queries, so that region
+    # tested whether the agent bothered. At 17**3 it tests generalisation,
+    # which is the question.
     "pi_high": _preset(
-        atomic_ratio=0.15, base=8, n_digits=1, d_digit=24,
+        atomic_ratio=0.15, base=17, n_digits=3,
         n_structural=8, max_transform_depth=3, guard_prob=0.9,
         max_expr_depth=5, demo_max_depth=3,
     ),
@@ -135,11 +161,32 @@ PRESETS: dict[str, GlyphConfig] = {
         atomic_ratio=0.5, base=17, n_digits=3,
         n_structural=5, max_transform_depth=2, guard_prob=0.5,
     ),
-    # pi -> 0 : difficulty lives in the tables.  Large value space, two
+    # pi -> 0 : difficulty lives in the tables.  Large value space,
     # near-trivial structural ops, no guards, no composition.
+    #
+    # `n_structural` is 3 rather than 2, and the reason is generation rather
+    # than difficulty.  The `comp` split requires a held-out (outer, inner)
+    # operator pair to appear and the `depth` split forbids every held-out
+    # pair, so both are spent from the same small vocabulary.  With two
+    # operators there are four Cartesian pairs but only two the grammar can
+    # actually build -- s1 returns VAL and nothing accepts a VAL argument, so
+    # any pair with s1 inside is a phantom -- and `n_hold` takes one of the
+    # four at random.  Half the time it takes a phantom and `comp` can never
+    # be filled; a quarter of the time it takes (s0, s0), which is the only
+    # route to depth 3, and `depth` can never be filled.
+    #
+    # Measured: 13 of 20 seeds could not generate, and the seven that did all
+    # held out the same pair, so they were not a sample of anything. Enumerating
+    # the choices gives 75% unfillable at two operators, 1.2% at three, 0% at
+    # four or more. Three seeds 20/20 here.
+    #
+    # The cost is that pi's low end rises -- median measured pi goes from about
+    # 0.15 to about 0.33, because three operators are more skeleton to not
+    # know. That is the trade: 0.18 of pi range against a 65% generation
+    # failure rate and a survivorship-biased sample.
     "pi_low": _preset(
         atomic_ratio=0.85, base=17, n_digits=3,
-        n_structural=2, max_transform_depth=0, guard_prob=0.0,
+        n_structural=3, max_transform_depth=0, guard_prob=0.0,
         max_expr_depth=3, demo_max_depth=2,
     ),
     # tiny config for fast tests
