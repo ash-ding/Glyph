@@ -30,6 +30,12 @@ Read `README.md` first; it carries the design rationale.
 that passed or failed, decisions that moved, and problems found -- including
 the ones still open. Append to it **as the work happens**, not at the end.
 
+Its companion is `docs/open_questions.md`, which is the opposite kind of file:
+edited in place rather than appended to, so it always shows what is currently
+undecided and unrun, with the measurement each item rests on. The progress log
+says what happened; the open list says what has not. One GitHub issue per item
+(#1-#29) carries the discussion.
+
 Every entry carries what was actually run, not only what was concluded: the
 command, the config, the numbers it produced, and where it ran. A conclusion
 without its evidence has to be re-run before anyone can trust it, and that is
