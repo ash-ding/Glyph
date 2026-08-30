@@ -198,6 +198,16 @@ item is single-level**.
 
 **Recommendation: 0.15.** Measured, not implemented.
 
+**`stop_prob` is not a config field.** It exists only inside
+`scripts/depth_sampling_probe.py`, which copies `_sample`, adds the early stop,
+and monkeypatches `glyph.instance._sample` for the duration of the run before
+restoring it. Nothing in `src/` knows about it — deliberately, since the point
+was to measure what changing the sampler would do before changing it.
+
+Adopting this means three things: a field on `GlyphConfig` (say
+`depth_stop_prob: float = 0.15`), one line in `_sample`'s `go()`, and
+regenerating every instance.
+
 ### [#7](https://github.com/ash-ding/Glyph/issues/7) — `value_form`
 
 | form | example | student tokens/value |
