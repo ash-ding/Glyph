@@ -25,6 +25,7 @@ correction is in `progress.md` under the entry that contains it.
 | held-out pairs drawn from realizable pairs, a fixed share per shape class | `8253c9a` |
 | the skeleton-only and table-only ceilings ship with every score, plus `headroom` | `8253c9a` |
 | `value_form = letter_sep` — four tokens per value, fixed width | `553abe5`, closes [#7](https://github.com/ash-ding/Glyph/issues/7) |
+| digit layout stays `17³` | closes [#10](https://github.com/ash-ding/Glyph/issues/10) |
 
 ---
 
@@ -283,34 +284,29 @@ and an SE of 0.027 against a ceiling of 0.144.
 **Recommendation:** generate 10⁴; score A2/A4/A6 on all of it; score A0' on a
 fixed paired subset of 500–1000 from the same items.
 
-### [#10](https://github.com/ash-ding/Glyph/issues/10) — digit layout
+### ~~[#10](https://github.com/ash-ding/Glyph/issues/10) — digit layout~~ · settled
 
-Open since the original plan's D3. Coupled to #8: more digit positions means
-more lookups per item, and exact match compounds them.
+`17³` stays. Both first-order constraints hold comfortably and nothing else
+improved either without a cost elsewhere:
 
-| preset | lookups/item | item ceiling at reach 0.6 / 0.8 / 0.9 |
+| | 17³ *(kept)* | 8¹ *(replaced)* |
 |---|---|---|
-| pi_low | 4.21 | 0.17 / 0.42 / 0.65 |
-| pi_mid | 3.08 | 0.39 / 0.58 / 0.75 |
-| pi_high | 0.69 | 0.82 / 0.89 / 0.94 |
+| distinct unary entries the test set needs | **11,387** | 24 |
+| mode-answer baseline | 0.003 | 0.099 – 0.134 |
+| lookups per item | 2.98 | 0.69 |
+| largest share of random decode queries | 0.009 | 0.480 |
 
-Decide together with #8; #7 is settled and its `base ≤ 26` constraint applies.
+The table is not buyable, guessing the most common answer is worth nothing, and
+decode does not pile onto a handful of values. `letter_sep` also needs
+`base ≤ 26`, which 17 satisfies.
 
-A third axis this entry used to omit: `base / d_digit` sets how well separated
-the digit embeddings are. Nearest-neighbour distance over mean pairwise
-distance — 17 points in 16 dims scores 0.707 with its worst point at 0.493,
-against 0.814 / 0.705 for the old 8-in-24, and 0.784 / 0.709 if `d_digit` goes
-to 32. So the current layout is tighter than the one it replaced.
-
-That is second-order, and the first-order effect runs the other way: decode
-behaviour is set by the *number of candidates*. Probing with random vectors at
-the embeddings' own scale, one value absorbed **48%** of queries under 8¹,
-against 0.9% for the largest under 17³ — consistent with the old binary table
-producing 7 distinct outputs over 2000 calls. The old preset was roomier per
-digit and far more degenerate at decode, and it was replaced for the second
-reason. Score any candidate layout on both, candidate count first.
-
----
+**Residue, and it moved rather than closed.** Digit-embedding separation is set
+by `base / d_digit`: 17 points in 16 dimensions scores 0.707 nearest-over-mean
+with its worst digit at 0.493, against 0.814 / 0.705 for the 8-in-24 layout it
+replaced; `d_digit = 32` recovers it (0.784 / 0.709). Second-order — decode is
+dominated by candidate count, where 17³ wins by a wide margin — but real, and it
+is now a question about `d_digit`, not about the layout. Not tracked as its own
+issue yet.
 
 ## Protocol
 
