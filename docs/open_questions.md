@@ -294,7 +294,21 @@ more lookups per item, and exact match compounds them.
 | pi_mid | 3.08 | 0.39 / 0.58 / 0.75 |
 | pi_high | 0.69 | 0.82 / 0.89 / 0.94 |
 
-Decide together with #7 and #8; all three move the same quantity.
+Decide together with #8; #7 is settled and its `base ≤ 26` constraint applies.
+
+A third axis this entry used to omit: `base / d_digit` sets how well separated
+the digit embeddings are. Nearest-neighbour distance over mean pairwise
+distance — 17 points in 16 dims scores 0.707 with its worst point at 0.493,
+against 0.814 / 0.705 for the old 8-in-24, and 0.784 / 0.709 if `d_digit` goes
+to 32. So the current layout is tighter than the one it replaced.
+
+That is second-order, and the first-order effect runs the other way: decode
+behaviour is set by the *number of candidates*. Probing with random vectors at
+the embeddings' own scale, one value absorbed **48%** of queries under 8¹,
+against 0.9% for the largest under 17³ — consistent with the old binary table
+producing 7 distinct outputs over 2000 calls. The old preset was roomier per
+digit and far more degenerate at decode, and it was replaced for the second
+reason. Score any candidate layout on both, candidate count first.
 
 ---
 
