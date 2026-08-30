@@ -24,6 +24,7 @@ correction is in `progress.md` under the entry that contains it.
 | generation raises with a diagnosis rather than returning a short test set | `5fe521e` |
 | held-out pairs drawn from realizable pairs, a fixed share per shape class | `8253c9a` |
 | the skeleton-only and table-only ceilings ship with every score, plus `headroom` | `8253c9a` |
+| `value_form = letter_sep` — four tokens per value, fixed width | `553abe5`, closes [#7](https://github.com/ash-ding/Glyph/issues/7) |
 
 ---
 
@@ -208,38 +209,21 @@ Adopting this means three things: a field on `GlyphConfig` (say
 `depth_stop_prob: float = 0.15`), one line in `_sample`'s `go()`, and
 regenerating every instance.
 
-### [#7](https://github.com/ash-ding/Glyph/issues/7) — `value_form`
+### ~~[#7](https://github.com/ash-ding/Glyph/issues/7) — `value_form`~~ · settled
 
-All four forms, |V| = 17³, Qwen3-1.7B tokenizer, 700 values sampled evenly:
+`letter_sep` (`v_k_e_e`), shipped in `553abe5`. Fixed at four tokens per value
+against `underscore`'s 8.24 with a max of 10 — and the fixed width, not the
+count, was the argument: base 17 has two-character digits 10–16, so a value's
+token length used to correlate with its digit values.
 
-| form | example (idx=1234) | tokens/value | longest | fixed width | straddles a digit field | round-trips |
-|---|---|---|---|---|---|---|
-| `underscore` (current) | `v_10_4_4` | **8.24** | 10 | no | none | yes |
-| `bracket` | `v[10,4,4]` | 9.24 | 11 | no | none | yes |
-| `flat` | `v1234` | 4.77 | 5 | no | none | yes |
-| `letter_sep` | `v_k_e_e` | **4.00** | 4 | **yes** | none | yes |
+Measured end to end after the switch, **smaller than the per-value ratio
+implied** because operator and bracket scaffolding does not shrink: a 30-fact
+prompt block 1650 → 1063 tokens (−36%), mean answer length 18.92 → 10.70
+(−43%). So A2's deployment cost falls by about a third rather than half; the
+"halves what the context arm pays" written here earlier was the per-value ratio
+read as a per-query one.
 
-`flat` is out on design grounds, not cost: D8 settled that a value spells out
-its digits so the structure survives tokenisation, and that structure is the
-only reason an unqueried entry can be extrapolated. `v1234` erases it.
-
-`letter_sep` is the only fixed-width form — every value is exactly four tokens.
-`underscore` runs 8.24 with a max of 10 because base 17 has two-character
-digits 10–16, so **a value's token length correlates with its digit values**: a
-weak leak, and an unpredictable output length, which is the soil the truncation
-bug grew in.
-
-The argument is not really about cost. Much of `underscore`'s 8.24 is a
-tokenizer accident; `letter_sep`'s 4.00 tracks the information content. A2
-paying double because we chose underscores is a measurement artifact, not a
-property of capability held in context. **But it is not neutral** — A2's and
-A0''s costs are token-driven and both roughly halve while A4's and A6's do not
-move, so the switch shifts the context side of the diagram left.
-
-Constraint: `letter_sep` needs `base ≤ 26`, which narrows #10.
-
-**Recommendation: `letter_sep`**, for the neutrality and the fixed width rather
-than the token count.
+Constraint taken on: `base ≤ 26`, which narrows #10.
 
 ### [#8](https://github.com/ash-ding/Glyph/issues/8) — `unary_coupling` · P1
 
