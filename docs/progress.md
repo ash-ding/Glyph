@@ -2287,3 +2287,447 @@ differences is the same kind of question as "Glyph carries capacity, T2 carries
 economics".
 
 **Added to the open list, not decided.**
+
+---
+
+# 2026-08-30 — freezing the data layer, and five things it was not doing
+
+Asher's call: settle the interpreter and the generator before touching arm
+settings again, because every arm comparison rests on them and re-deciding
+later means redoing the work. What follows is that pass. Most of it is
+measurement; the code changes at the end follow from it.
+
+Three commits: `5fe521e` (generation fails loudly), `4aa6c1f` (presets share a
+value space), `8253c9a` (held-out pairs drawn from pairs that exist).
+
+## The tool surface, before the data layer
+
+Two findings from reading the agent's tools, both bearing on results already
+recorded here.
+
+**`synthesize_data` does not synthesise.** It takes the purchased
+`(expr, answer)` rows and repeats them cyclically until it reaches `n`:
+
+```python
+examples = [Example(f"{e} =", f" {a}") for e, a in rows][:n]
+while len(examples) < n and examples:
+    examples.append(examples[len(examples) % len(rows)])
+```
+
+The comment gives the reason and the reason is right — the agent cannot
+manufacture labels it has not bought, and pretending otherwise would be
+leakage. But it means the A6 rerun's "50,000 training examples" were **511
+distinct rows repeated about 98 times each**:
+
+| dataset | n | drawn from | repetition |
+|---|---|---|---|
+| ds1 | 30000 | 511 | 59x |
+| ds3 | 40000 | 511 | 78x |
+| ds5 | 50000 | 511 | 98x |
+
+`n` is epochs wearing a costume. It also explains `final_loss 0.0`: a few
+hundred rows seen a hundred times.
+
+**Three of the five parameters are dead.** `description`, `emphasis`
+(`uniform | tail | operator-focused`) and `include_reasoning` are accepted by
+the schema, recorded in the trace, and **never read**. Only `n` and `source`
+do anything. The agent filled `emphasis: "operator-focused"` on all three
+calls and wrote increasingly detailed descriptions — by the third it had
+derived s2/s3/s4's permutation rules explicitly — believing it was designing a
+curriculum. It got the same 511 rows at three lengths.
+
+This is worse than `declare_target` being declarative. There the agent
+describes itself; here it is **operating a control that is not connected**.
+And `filter_data`, which the plan's §6.2 API lists, does not exist among the
+nine tools. So H3 — "the biggest lever is data curation, not target or
+hyperparameters" — currently has no lever to measure on T1.
+
+**The arms do not have comparable tool surfaces.** `evaluate` and
+`inspect_failures` sit inside `if Container.WEIGHTS in allowed:`, so:
+
+| | A2 | A4 | A6 |
+|---|---|---|---|
+| tools | 3 | 3 | 7 |
+| self-evaluation | **none** | `write_code(check_on=...)` | full evaluate / inspect / retrain loop |
+| what it actually did | query x5, set_context, seal | — | query x11, synth x3, train x3, evaluate x2, inspect x2, seal |
+
+A2 writes its prompt blind and seals. Given what the previous entry
+established — that the dev signal strongly shapes what the agent buys, 187
+facts becoming 565 once dev stopped reading zero — **A2's 0.055 and A6's 0.035
+were not produced under equal feedback**. Whether an arm can score itself is a
+harness choice, not a property of the container, so it is a confound in the
+comparison. Not changed; it is a protocol decision.
+
+## The generation bug: a short test set, silently
+
+`_make_test` tolerated 8000 stalled samples per split and then walked away
+with whatever it had. `pi_low` seed 1002 produced **8800 items with no `depth`
+split at all and no binary operators anywhere**, and was compared against
+10000-item instances as though the two were the same measurement. The report
+shows only the total.
+
+`GenerationFailed` now carries which split, how many were made, and a
+diagnosis sampled under the same constraints, so the failure names its own
+cause instead of leaving the reader between "too deep", "held-out pair
+unreachable" and "the grammar builds nothing at this shape". The assembled set
+is checked against the config, not just the loops. And `_make_demos` had **no
+stall counter at all** — a config whose demo constraints cannot be met looped
+forever with no output.
+
+Self-check #3 was passing partly because of this bug: it averaged the short
+instance's pi in like any other. It now excludes and counts unfillable
+instances.
+
+## E-1: what the presets actually produce
+
+3 presets x 20 seeds, full 10^4 items each. Nobody had scanned seeds before,
+so "the preset sets pi" had never been checked.
+
+```
+pi_low   generated  7/20   unfillable = {comp: 10, depth: 3}
+pi_mid   generated 20/20
+pi_high  generated 20/20
+```
+
+**Thirteen of twenty `pi_low` seeds could not be generated**, and the failures
+are not bad luck — 300 of 300 diagnostic samples rejected, every time, for one
+of two reasons. The cause is three layers deep:
+
+`pi_low` had two structural operators, so four Cartesian `(outer, inner)`
+pairs. But **only two of the four exist**: `s1`'s shape is `LB`, returning
+VAL, and no shape has a VAL argument slot, so s1 can never sit inside
+anything. `n_hold = max(1, 4 // 3) = 1` takes one of the four at random:
+
+| drawn | probability | consequence |
+|---|---|---|
+| `(s0,s1)` or `(s1,s1)` — phantoms | 50% | `comp` requires something that cannot occur -> empty |
+| `(s0,s0)` | 25% | the only route to depth 3 -> `depth` empty |
+| `(s1,s0)` | 25% | both survive |
+
+75% predicted, 65% observed on 20 seeds. And **the seven survivors had all
+drawn the same pair**, so they were a sample of nothing, not a small sample.
+
+The held fraction is fixed at 1/3, but the number of options left shrinks with
+n^2. At n=5, 14 of 20 real pairs survive; at n=2, one of two.
+
+**The presets do not partition pi.** Measured, stratified:
+
+```
+pi_low   [0.11 0.12 0.17 0.18 | 0.38 0.41 0.44]
+pi_mid   [0.36 ... 0.58 | 0.61 0.63 0.65 0.66 0.66 0.68 0.72 0.76]
+pi_high                    [0.62 0.65 0.66 ... 0.84]
+```
+
+Seven of twenty `pi_mid` seeds fall inside `pi_high`'s range. Given an
+instance at pi = 0.70 you cannot say which preset made it. `config.py`'s
+stance already handles this — the axis uses measured pi, never the name — but
+it means the paper cannot describe three settings, only a continuous axis.
+
+**pi does not characterise an instance on its own.** Correlation with the
+skeleton ceiling is r = 0.890 on pi_mid, which is strong, and yet:
+
+```
+seed 1011  pi=0.610  ceiling=0.421  lookups=1.96
+seed 1014  pi=0.635  ceiling=0.366  lookups=3.44
+seed 1016  pi=0.650  ceiling=0.394  lookups=0.97
+seed 1002  pi=0.658  ceiling=0.535  lookups=1.75
+```
+
+At the same pi the starting line moves by 0.17 and table demand by 3.5x. On a
+phase diagram that is vertical scatter that looks like arm variance.
+
+## E-2: the ceiling, and what it says about the arms already run
+
+pi_mid/1001, full test set, exact match:
+
+| split | n | needs no table | true skeleton + identity table |
+|---|---|---|---|
+| iid | 6500 | 0.269 | **0.269** |
+| comp | 2300 | 0.172 | **0.172** |
+| depth | 1200 | 0.065 | **0.065** |
+| all | 10000 | 0.222 | **0.222** |
+
+The two columns are **equal**, and not approximately: a true skeleton with an
+identity table answers the items needing no table lookup and only those. So
+0.222 is what "every structural rule, not one table entry" is worth.
+
+Against it, on 200 items (SE about 0.03):
+
+```
+ceiling  0.222
+A0'      0.255    +1.1 SE -- indistinguishable
+A4       0.255    the same
+A2       0.055    far below
+A6       0.035    far below
+```
+
+Two readings, and neither was available before:
+
+**A0', with unlimited context, unlimited thinking and the entire purchased
+record, extracted essentially no table knowledge.** That is the direction H1
+wants, arrived at independently of self-check #4. My earlier note that "A4 and
+A0' are limited by the same ceiling" was right without knowing what the
+ceiling was.
+
+**A2 and A6 have not learned the skeleton either.** Every arm comparison so
+far has happened inside `[0, 0.222]`, where nobody has the structure. The band
+above 0.222, where table knowledge would show, has never been reached.
+
+Across 20 seeds per preset:
+
+```
+          iid ceiling  comp   depth   table-only ceiling  lookups  mode baseline
+pi_low       0.000     0.000  0.000        0.770           5.63       0.003
+pi_mid       0.285     0.407  0.144        0.136           2.44       0.003
+pi_high      0.707     0.732  0.629        0.230           0.78       0.099
+```
+
+`pi_low` is a pure table task and, at 5.63 lookups per item against a measured
+per-entry reach of 0.16-0.80, its item-level ceiling is between 0 and 0.27 —
+**it is currently unmeasurable**. `pi_high` is 70% skeleton already, with a
+mode-answer baseline of 0.099, so an arm scoring 0.035 there is below chance.
+`pi_mid` is the only preset with a wide usable band, which is why E0 reads at
+all.
+
+`comp`'s ceiling is **higher** than `iid`'s on pi_mid — 0.407 against 0.285 —
+so the split meant to be the harder compositional test is the one where
+knowing no table entry gets you furthest.
+
+## E-5: depth is written into the split, not sampled
+
+`_sample`'s recursion stops only when the budget runs out, so depth *equals*
+budget and `min_depth` is nearly a no-op. pi_mid's test set is two points:
+
+```
+stop=0.00   iid {2:1300}          comp {2:460}   depth {4:240}       ceiling 0.228
+stop=0.15   iid {1:269, 2:1031}   comp {2:460}   depth {3:41,4:199}  ceiling 0.235
+stop=0.30   iid {1:513, 2:787}    comp {2:460}   depth {3:82,4:158}  ceiling 0.259
+stop=0.50   iid {1:803, 2:497}    comp {2:460}   depth {3:136,4:104} ceiling 0.293
+```
+
+Nothing at depth 3, zero variance inside iid, and the `depth` split is a jump
+across a gap rather than extrapolation along a distribution. It also explains
+the previous entry's dev/test mismatch from the other side: the agent buys
+single-level probes because that is how you read a table, and **no test item
+is single-level**.
+
+An early-stopping rule costs 0.007 of ceiling at stop=0.15 and does not slow
+generation. `comp` stays pinned at depth 2 on pi_mid, since a held-out pair
+needs two levels. **Measured, not implemented** — it changes the sampler.
+
+## E-6: how many items an arm comparison needs
+
+Synthetic arms, correlated the way real ones are: draw a set of known table
+entries, an item is right when every entry it needs is known. Assuming
+independent per-item flips would be too optimistic.
+
+```
+   n     single arm SE   independent   paired   paired+stratified
+ 100        0.0476         0.0625      0.0312        0.0306
+ 200        0.0334         0.0448      0.0221        0.0220
+ 500        0.0205         0.0274      0.0135        0.0136
+1000        0.0142         0.0191      0.0095        0.0093
+2000        0.0095         0.0128      0.0063        0.0063
+```
+
+At n = 200 a single arm's SE is **0.033**. A6 at 0.035 and A2 at 0.055 are
+7/200 and 11/200: there was never a difference there. Every arm comparison in
+this file at n = 200 has to be read that way.
+
+Pairing halves the SE on a difference, and helps about **4.5x** when the arms
+nearly agree, which is our case — the shared variance from items both arms get
+right or wrong cancels. Stratifying adds nothing on top of pairing.
+
+Generating 10^4 is free (1.5-11 s); evaluating it is free for A2, A4 and A6
+(4-83 H100-s) and impossible for A0' (752,252). So test-set size and
+evaluation size are two decisions, and conflating them is what made 10^4 look
+expensive. The reason to keep 10^4 is **per-split resolution**: at 1000 total,
+`depth` gets 120 items and an SE of 0.027 against a ceiling of 0.144.
+
+## Rebuilding the presets
+
+**`pi_high`'s small value space was doing nothing for pi.** The reasoning was
+that pi -> 1 needs cheap tables. Wrong: what keeps `L_table` small is
+`atomic_ratio` — how often an expression touches the table at all.
+
+```
+                 pi median   skeleton ceiling   lookups   unary entries needed   mode
+pi_high  8^1       0.716          0.723          0.69            24             0.099
+same at 17^3       0.723          0.682          0.67          4000-8000        0.002
+at atomic 0.02     0.920          0.929          0.12           600-1900        0.001
+```
+
+Identical pi, and dropping `atomic_ratio` to 0.02 reaches 0.92, higher than
+the old preset ever did. What the small space did do, all of it confounded
+with the axis: a mode baseline of 0.099-0.134 rather than 0.002, so an arm at
+0.035 was below chance and nobody had noticed; 262 distinct answers rather
+than ~7500; values rendered `v_3` rather than `v_1_2_3`, three times the
+tokens, so A2's per-query cost and the truncation risk differed by preset; 24
+unary entries, making the whole table buyable, so the region above the
+skeleton ceiling tested whether the agent bothered rather than whether it
+generalised; `d_total` 24 against 48, half the MLP; and a binary operator
+producing **7 distinct outputs over 2000 calls with one taking 33%**, so
+guessing was worth a third.
+
+`d_digit = 24` was never a choice about pi — with `n_digits = 1` the default
+would have given `d_total = 16` against pi_mid's 48, and 24 was compensating.
+
+**`pi_low` moved to three operators**, for generation rather than difficulty:
+75% unfillable at two, 1.2% at three, 0% at four or more, by enumeration.
+Rescanned 20/20. The cost is pi's low end rising from about 0.15 to 0.35.
+
+Checked that the wider value space does not reinstate the decode collapse:
+1163 distinct unary outputs over 4913 inputs, top at 2.1%, inside the range
+`whiten` was verified at.
+
+All three presets now differ only in `n_structural` (3/5/8) and
+`atomic_ratio` (0.85/0.50/0.15) plus skeleton complexity; the table half is
+constructed identically. 60/60 generate. Medians order 0.35 < 0.56 < 0.72.
+
+**One knob is enough for most of the axis.** Holding everything else at
+pi_mid's settings and moving only `atomic_ratio`, over 6 seeds each:
+
+```
+atomic_ratio   generated   pi median   skeleton ceiling   lookups   mode
+    0.02          6/6        0.765          0.787          0.36     0.0019
+    0.15          6/6        0.641          0.588          1.04     0.0019
+    0.35          6/6        0.519          0.372          1.93     0.0027
+    0.50          6/6        0.454          0.252          2.59     0.0030
+    0.70          6/6        0.400          0.131          3.41     0.0034
+    0.85          6/6        0.372          0.058          3.95     0.0039
+    0.95          6/6        0.358          0.017          4.35     0.0035
+```
+
+42/42 generate, pi and ceiling both monotone, mode baseline steady. The low
+end stops at 0.358 — five operators with transform depth 2 and guards are too
+much skeleton to not know, whatever the expressions do.
+
+## Held-out pairs: drawn from pairs that exist, a fixed share of each kind
+
+Two problems, one root: the draw was uniform over the Cartesian product of
+operator names, with no control over what it did to the splits.
+
+**Phantom pairs** — fixed by drawing only from realizable pairs (inner returns
+LIST). The held share becomes exact, 30-33%, where it drifted between 17% and
+50% by seed depending on how much quota the phantoms ate.
+
+**`comp` was uncontrolled, not systematically easy.** My first hypothesis —
+that held pairs with fewer table-consuming operators make comp easy —
+**is refuted**: correlations of +0.254, -0.237, -0.302, inconsistent in sign.
+What is happening is that `comp` is sampled by rejection until a held pair
+appears, and that conditioning moves its operator mix off the one
+`atomic_ratio` defines. Measured on pi_mid, per item:
+
+```
+seed 1001   iid 2.74  comp 2.63    even
+seed 1002   iid 1.80  comp 0.98    comp far easier
+seed 1003   iid 2.27  comp 3.03    comp harder
+seed 1004   iid 2.44  comp 3.12    comp harder
+seed 1005   iid 2.51  comp 0.83    comp far easier
+```
+
+comp swings 0.83-3.12 while iid holds 1.80-2.74. "comp is easier than iid" was
+the median of that swing, not a property. Allocating the quota proportionally
+across `(outer shape, inner shape)` classes fixes the type composition.
+Largest-remainder, not a floor of one per class: pi_mid has 12 classes over 20
+realizable pairs, so a floor would hold out 60% of the language.
+
+Result, spread of comp's ceiling relative to iid's over 20 seeds:
+
+```
+pi_low   sd 0.150 -> 0.068  (-55%)
+pi_mid   sd 0.255 -> 0.117  (-54%)
+pi_high  sd 0.140 -> 0.050  (-64%)
+```
+
+The medians barely move (+0.10 -> +0.11 on pi_mid). **comp is still
+systematically easier than iid and this does not fix that** — matching comp's
+table demand to iid's would, and would also redefine what comp measures, which
+is the least settled part of the data layer.
+
+### The over-shoot, found afterwards
+
+Enumerating the stratified draw's whole value space:
+
+```
+n   realizable   n_hold   possible held sets   unfillable
+2        2          1              1               0
+3        6          2              1               0     <- pi_low is here
+4       12          4              1               0
+5       20          6            128               0     <- pi_mid
+6       30         10          16384               0
+8       48         16       84934656               0     <- pi_high
+```
+
+**At n <= 4 the draw is deterministic.** `STRUCT_SHAPES` is
+`(UL, LB, L, KL, L, UL, KL, LB)` — the first four shapes are pairwise
+distinct, so every `(outer shape, inner shape)` class holds exactly one pair
+and stratifying leaves nothing to choose. All 20 `pi_low` instances hold out
+the same `{(s1,s2), (s1,s0)}`.
+
+So the -96% spread reduction reported for pi_low's comp ceiling is real and
+its mechanism is degenerate: not a more even draw, but **only one draw**.
+Survivorship bias has been replaced by no variation at all, and `comp` at the
+low end is a fixed probe rather than a sample of compositions — you cannot
+separate "this instance's comp is hard" from "this composition is hard". The
+skeleton's *semantics* still vary per seed, so it is not nothing, but the
+identity of the held pairs does not.
+
+This is inherent, not a bug in the allocation: **when a class has one member,
+fixing the type composition and fixing the choice are the same act.** B1's
+guarantee only has content once shapes repeat, which is n >= 5.
+
+It also means the incidental observation that two operators now generate is
+one lucky value, not a general result: n=2 has exactly one possible held set,
+and it is the safe one only because the tie between two equal remainders
+breaks toward `('LB','UL')` by name. Renaming an operator could undo it.
+
+### Reporting: a score against its own ceiling
+
+`ScoreReport` now carries the skeleton-only and table-only ceilings computed
+**on the items actually scored**, and `headroom` places the score between the
+skeleton ceiling and perfect. Negative is kept, not clipped: an arm below the
+ceiling has not learned the skeleton either, which is a different finding from
+having learned it and no table entries.
+
+Also fixed in the same seam: `tail` selected items by matching `derive_tail`'s
+indices — positions in the full test set — against positions in whatever
+subset was scored. Every current caller passes the full set so it never bit,
+and scoring on a paired subsample is the next thing on the list.
+
+## Corrections to earlier entries
+
+- **"A4 and A0' are limited by the same ceiling"** — right, and the ceiling is
+  now measured: 0.222 on pi_mid/1001, equal to the fraction of items needing
+  no table lookup.
+- **"pi is wildly unstable across seeds"** (first reading of E-1) — half of
+  that was corrupted instances being averaged in. Excluding them, pi orders
+  cleanly on medians and overlaps only at the edges.
+- **"pi is measured on iid only, and comp and depth are where the skeleton
+  carries weight"** — over-stated. The difference is 0.017-0.018 on pi_mid and
+  pi_high. It is real only on pi_low, median 0.059 and up to 0.166, and
+  survives the move to three operators.
+- **"the small value space is what makes pi_high possible"** — wrong;
+  `atomic_ratio` does that work.
+- **"comp is easier than iid"** — the median is, but the per-seed swing was
+  larger than the effect. It is now mostly a level rather than a swing.
+- **"held pairs with fewer table-consuming operators make comp easy"** —
+  refuted by measurement before it was acted on.
+- **"A+B1 also fixes two operators"** — one lucky value, see above.
+
+## Open, and not from lack of measurement
+
+**Decisions.** Whether `preset` is a condition or a sampler, and the paper's
+wording follows. Whether the ceiling ships as a second covariate or scores are
+normalised by it. Whether `pi`'s sample stays iid-only. Whether
+`n_structural` for `pi_low` goes to 5 so that `comp` varies across seeds at
+all — being measured now at 3/4/5 on the real config. Whether `emphasis` gets
+a real implementation or leaves the schema. Whether `evaluate` moves out of
+the weights gate so all three arms can score themselves. Whether the depth
+sampler stops early. The query cap Q, still, and now on better grounds than
+the contaminated observation the last entry retracted.
+
+**Work.** Self-check #4 and part of #5 need rerunning on the new presets; #4
+costs teacher calls. E0's four arms are invalidated by the held-pair change,
+pi_mid included — that was the point of doing all of it in one pass. Prompt
+caching is still unimplemented. T2 is still zero lines.
