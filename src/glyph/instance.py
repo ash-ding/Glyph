@@ -152,6 +152,60 @@ def _diagnose(rng, cfg, budget, forbid, require, min_depth,
             "malformed": malformed}
 
 
+def _draw_held_pairs(cfg: GlyphConfig, rng) -> set[tuple[str, str]]:
+    """The (outer, inner) operator pairs kept out of the demo distribution.
+
+    Two things this does that a uniform draw over the Cartesian product did
+    not, and both were costing measurable damage.
+
+    **Only pairs the grammar can build.** No shape has a VAL argument slot, so
+    an operator whose shape returns VAL can never sit inside another one and
+    the pair is a phantom. A Cartesian draw spent part of the quota on those,
+    and `comp` requires a held-out pair to *appear*: 13 of 20 `pi_low` seeds
+    could not be generated at all this way, and the seven that survived had all
+    drawn the same pair, so they were a sample of nothing. Filtering also makes
+    the held share exact -- 30-33% -- where it used to drift between 17% and
+    50% depending on how many phantoms the draw happened to waste.
+
+    **A fixed share of each pair type.** `comp` is sampled by rejection until a
+    held pair appears, and that conditioning pulls its operator mix away from
+    the one `atomic_ratio` defines. How far, and in which direction, depended
+    on which pairs the draw took: measured across 20 `pi_mid` seeds, comp's
+    table lookups per item swung between 0.83 and 3.12 while `iid` stayed
+    between 1.80 and 2.74 -- sometimes far easier than iid, sometimes harder,
+    with the median only happening to land above it. Allocating the quota
+    proportionally across (outer shape, inner shape) classes fixes the *type*
+    composition across seeds and leaves only which pair within a class to
+    chance, which is the variation we want.
+
+    Largest-remainder allocation, so the classes get proportional shares and
+    the total is still exactly `len(realizable) // 3`. A `max(1, ...)` per class
+    would look fairer and is not: `pi_mid` has 12 classes over 20 realizable
+    pairs, so a floor of one each holds out 60% of the language.
+    """
+    ops = enabled_ops(cfg)
+    shape = dict(ops)
+    realizable = sorted((a, b) for a, _ in ops for b, _ in ops
+                        if SHAPE_RESULT[shape[b]] == "LIST")
+    by_kind: dict[tuple[str, str], list] = {}
+    for pair in realizable:
+        by_kind.setdefault((shape[pair[0]], shape[pair[1]]), []).append(pair)
+
+    target = max(1, len(realizable) // 3)
+    kinds = sorted(by_kind)
+    exact = {k: len(by_kind[k]) * target / len(realizable) for k in kinds}
+    quota = {k: int(exact[k]) for k in kinds}
+    short = target - sum(quota.values())
+    for k in sorted(kinds, key=lambda k: (-(exact[k] - quota[k]), k))[:short]:
+        quota[k] += 1
+
+    held: set[tuple[str, str]] = set()
+    for k in kinds:
+        group = by_kind[k]
+        held |= {group[i] for i in rng.permutation(len(group))[:quota[k]]}
+    return held
+
+
 # ---------------------------------------------------------------------
 # Instance
 # ---------------------------------------------------------------------
@@ -164,17 +218,15 @@ class GlyphInstance:
         self.tables = Tables(cfg, rng)
         self.P = Interpreter(cfg, self.skeleton, self.tables)
 
-        # held-out operator pairs -> the `comp` split
-        all_pairs = {(a, b) for a, _ in enabled_ops(cfg) for b, _ in enabled_ops(cfg)}
-        n_hold = max(1, len(all_pairs) // 3)
-        pool = sorted(all_pairs)
-        self.held_pairs = {pool[i] for i in
-                           rng.permutation(len(pool))[:n_hold]}
+        self.held_pairs = _draw_held_pairs(cfg, rng)
 
         self.demos = self._make_demos(rng)
         self.test = self._make_test(rng)
         self.query_count = 0
         self.query_log = LookupLog()
+        self._skel_interp: Interpreter | None = None
+        self._tab_interp: Interpreter | None = None
+        self._ceil_cache: dict[tuple, str] = {}
 
     # -- agent-visible, free ------------------------------------------
     def syntax_spec(self) -> str:
@@ -214,6 +266,73 @@ class GlyphInstance:
     def measured_pi(self) -> dict[str, float]:
         from .measure import measure_pi
         return measure_pi(self)
+
+    def is_tail(self, t: TestItem) -> bool:
+        """Did this run never buy a table entry this item needs?
+
+        Asked of the item rather than of its index: `derive_tail` returns
+        positions in `self.test`, which stop meaning anything the moment a run
+        is scored on a subset -- and scoring on a paired subsample is where
+        this is going.
+        """
+        return bool((t.needs_u - self.query_log.unary)
+                    or (t.needs_b - self.query_log.binary))
+
+    def ceilings(self, items: list[TestItem] | None = None) -> dict[str, dict]:
+        """What perfect structural knowledge alone is worth, per split.
+
+        Two oracles, both exact-match, both on the same items an arm was
+        scored on:
+
+          `skeleton`  true skeleton, identity tables -- every structural rule,
+                      not one table entry
+          `table`     trivial skeleton, true tables -- the mirror image
+
+        The first is the line every arm score has to be read against. On
+        pi_mid/1001 it is 0.222, and it equals the fraction of items needing no
+        table lookup *exactly*, because a true skeleton with an identity table
+        answers those and only those. A0' and A4 both scored 0.255 on 200
+        items, which is one standard error above it -- so "the frontier
+        extracted essentially no table knowledge" and "the frontier did well"
+        are the same number until this line is drawn. A2 at 0.055 and A6 at
+        0.035 are far *below* it, which says something different again: they
+        have not learned the skeleton either.
+        """
+        items = self.test if items is None else items
+        out: dict[str, dict] = {}
+        for name, interp in (("skeleton", self._skeleton_only()),
+                             ("table", self._table_only())):
+            hits: dict[str, list[int]] = {}
+            for t in items:
+                ok = self._exact(interp, t)
+                h, n = hits.setdefault(t.split, [0, 0])
+                hits[t.split] = [h + ok, n + 1]
+            out[name] = {k: h / n for k, (h, n) in hits.items()}
+            out[name]["overall"] = (sum(h for h, _ in hits.values())
+                                    / max(1, len(items)))
+        return out
+
+    def _skeleton_only(self) -> Interpreter:
+        if self._skel_interp is None:
+            self._skel_interp = Interpreter(self.cfg, self.skeleton, IdentityTables())
+        return self._skel_interp
+
+    def _table_only(self) -> Interpreter:
+        if self._tab_interp is None:
+            self._tab_interp = Interpreter(self.cfg, trivial_skeleton(self.cfg),
+                                           self.tables)
+        return self._tab_interp
+
+    def _exact(self, interp: Interpreter, t: TestItem) -> bool:
+        key = (id(interp), t.expr_src)
+        got = self._ceil_cache.get(key)
+        if got is None:
+            try:
+                got = self._render_out(interp.eval(parse(t.expr_src, self.cfg)))
+            except Exception:
+                got = ""
+            self._ceil_cache[key] = got
+        return got == t.answer_src
 
     # -- internals -----------------------------------------------------
     def _render_out(self, out) -> str:

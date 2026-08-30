@@ -84,10 +84,38 @@ class ScoreReport:
     sizes: dict[str, int]
     ledger: dict
     digest: str
+    # What perfect structural knowledge alone scores on these same items, and
+    # where the arm sits between that and perfect. See `headroom`.
+    ceiling: dict = field(default_factory=dict)
+    headroom: dict = field(default_factory=dict)
     failures: list[str] = field(default_factory=list)
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=2, sort_keys=True)
+
+
+def headroom(score: float, ceiling: float) -> float | None:
+    """Where a score sits between the skeleton-only ceiling and perfect.
+
+    A raw score is not comparable across splits or instances, because the
+    ceilings are not. On pi_mid the true skeleton with an identity table scores
+    0.285 on `iid`, 0.407 on `comp` and 0.144 on `depth` -- so the same raw
+    number means three different things, and `comp`, which is supposed to be
+    the harder compositional split, is the one where knowing no table entry
+    gets you furthest. Across instances the spread is wider still: the overall
+    skeleton ceiling ranges 0.168-0.743 over 20 pi_mid seeds, which is more
+    than the gap between any two arms.
+
+    0.0 means "no better than knowing every structural rule and no table
+    entry"; 1.0 means perfect. Negative is meaningful and not clipped -- an
+    arm below the ceiling has not learned the skeleton either, which is a
+    different finding from having learned it and no table.
+
+    None when the ceiling is already 1.0: there is nothing left to measure.
+    """
+    if ceiling >= 1.0:
+        return None
+    return (score - ceiling) / (1.0 - ceiling)
 
 
 def score_answers(items: list[TestItem], answers: list[str]) -> tuple[float, dict[str, float]]:
@@ -130,14 +158,24 @@ def evaluate(inst: GlyphInstance, artifact: SealedArtifact, ledger: Ledger, *,
     # entries this agent never bought. It cannot be fixed at generation time
     # because it depends on what the agent chose to ask, and it doubles as a
     # read on how good that choice was.
+    # Asked of each item rather than by position: `derive_tail` returns indices
+    # into `inst.test`, which mean nothing once a run is scored on a subset,
+    # and scoring on a paired subsample is where this is going.
     tail = None
-    idx = set(inst.derive_tail())
-    picked = [(t, a) for k, (t, a) in enumerate(zip(items, answers)) if k in idx]
+    picked = [(t, a) for t, a in zip(items, answers) if inst.is_tail(t)]
     if picked:
         tail = sum(a.strip() == t.answer_src.strip() for t, a in picked) / len(picked)
+
+    # The ceilings are computed on the items that were actually scored, not on
+    # the full test set: a ceiling from a different sample is not the line this
+    # score should be read against.
+    ceiling = inst.ceilings(items)
+    skel = ceiling["skeleton"]
+    head = {k: headroom(v, skel[k]) for k, v in by_split.items() if k in skel}
+    head["overall"] = headroom(overall, skel["overall"])
 
     return ScoreReport(
         arm=artifact.arm, overall=overall, by_split=by_split, tail=tail,
         n=len(items), sizes=artifact.sizes(), ledger=ledger.summary(),
-        digest=artifact.digest(),
+        digest=artifact.digest(), ceiling=ceiling, headroom=head,
     )

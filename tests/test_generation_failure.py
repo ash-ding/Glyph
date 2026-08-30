@@ -10,6 +10,7 @@ import pytest
 
 from glyph import instance as inst_mod
 from glyph.config import PRESETS
+from glyph.grammar import SHAPE_RESULT, enabled_ops
 from glyph.instance import GenerationFailed, generate
 
 FAST = PRESETS["pi_mid"].with_(n_iid=300, n_comp=120, n_depth=80)
@@ -22,46 +23,76 @@ def test_healthy_config_still_generates_exactly_what_it_asked_for():
     assert by_split == {"iid": 300, "comp": 120, "depth": 80}
 
 
-# Two structural operators is the shape that cannot work, and it is built here
-# rather than read from a preset: `pi_low` used to have it and no longer does,
-# and a regression test that depends on a preset staying broken tests the
-# preset instead of the mechanism.
+# The ways a split can be left unfillable, constructed directly.
 #
-# With two operators the grammar offers four Cartesian (outer, inner) pairs but
-# can only build two of them -- s1 returns VAL and nothing takes a VAL argument
-# -- and `n_hold` removes one of the four at random. Half the time it removes a
-# pair that cannot occur, so `comp`, which requires it, is empty; a quarter of
-# the time it removes (s0, s0), the only route to depth 3, so `depth` is empty.
-UNFILLABLE = PRESETS["pi_low"].with_(n_structural=2, n_iid=40, n_comp=20,
-                                     n_depth=20)
+# These used to be built from `pi_low` with two structural operators, which was
+# genuinely broken at the time. It no longer is: drawing held-out pairs only
+# from realizable ones, a fixed share per shape class, removes both original
+# failure modes from every config we ship -- even the two-operator one, though
+# that is a side effect of how the class quotas break ties and not a guarantee
+# anyone should lean on. So the situation has to be made rather than found, or
+# the test quietly stops exercising anything.
+#
+# The mechanism is still worth pinning: it guards against a future change to
+# how pairs are drawn, to the grammar's shapes, or to a preset's depths
+# silently going back to returning a short test set.
+TINY = PRESETS["pi_mid"].with_(n_iid=40, n_comp=20, n_depth=20, n_demos=30)
 
 
-def test_an_unfillable_split_raises_instead_of_returning_a_short_set(monkeypatch):
+def _realizable(cfg):
+    shape = dict(enabled_ops(cfg))
+    return {(a, b) for a, _ in enabled_ops(cfg) for b, _ in enabled_ops(cfg)
+            if SHAPE_RESULT[shape[b]] == "LIST"}
+
+
+def test_holding_out_every_pair_empties_the_demo_distribution(monkeypatch):
+    """Held-out pairs are defined as the ones kept out of the demos, and the
+    demos are built first, so holding all of them stops the instance there --
+    before `iid` and `depth`, which forbid them too."""
     monkeypatch.setattr(inst_mod, "_STALL_LIMIT", 40)
+    monkeypatch.setattr(inst_mod, "_draw_held_pairs",
+                        lambda cfg, rng: _realizable(cfg))
     with pytest.raises(GenerationFailed) as e:
-        generate(1002, UNFILLABLE)          # holds out (s0, s0) -> no depth 3
-    assert e.value.split == "depth"
+        generate(1001, TINY)
+    assert e.value.split == "demos"
     assert e.value.made < e.value.want
+
+
+def test_holding_out_nothing_empties_comp(monkeypatch):
+    """`comp` requires a held-out pair to appear, so an empty held set leaves
+    it with nothing to ask for."""
+    monkeypatch.setattr(inst_mod, "_STALL_LIMIT", 40)
+    monkeypatch.setattr(inst_mod, "_draw_held_pairs", lambda cfg, rng: set())
+    with pytest.raises(GenerationFailed) as e:
+        generate(1001, TINY)
+    assert e.value.split == "comp"
+    assert e.value.diag["missing_required_pair"] == e.value.diag["sampled"]
+
+
+def test_a_depth_budget_that_cannot_exceed_the_demos_fails(monkeypatch):
+    """The `depth` split asks for expressions deeper than the demos, drawn at a
+    budget of `max_expr_depth`. A config where that budget does not exceed
+    `demo_max_depth` asks for something the sampler cannot produce -- a plain
+    misconfiguration, and one that used to yield a test set missing a third of
+    its splits rather than an error."""
+    monkeypatch.setattr(inst_mod, "_STALL_LIMIT", 40)
+    cfg = TINY.with_(max_expr_depth=TINY.demo_max_depth)
+    with pytest.raises(GenerationFailed) as e:
+        generate(1001, cfg)
+    assert e.value.split == "depth"
+    assert e.value.diag["reached_min_depth"] == 0
 
 
 def test_the_failure_names_its_own_cause(monkeypatch):
     monkeypatch.setattr(inst_mod, "_STALL_LIMIT", 40)
+    monkeypatch.setattr(inst_mod, "_draw_held_pairs",
+                        lambda cfg, rng: _realizable(cfg))
     with pytest.raises(GenerationFailed) as e:
-        generate(1002, UNFILLABLE)
+        generate(1001, TINY)
     diag = e.value.diag
-    # the depth was reachable; the held-out-pair constraint is what rejected
+    # nothing was too shallow; the held-out-pair constraint is what rejected
     assert diag["reached_min_depth"] == diag["sampled"]
     assert diag["hit_forbidden_pair"] == diag["sampled"]
-
-
-def test_a_phantom_held_out_pair_empties_comp(monkeypatch):
-    # The other failure mode: the held-out pair is one the grammar cannot
-    # build, so `comp`, which requires it to appear, can never be filled.
-    monkeypatch.setattr(inst_mod, "_STALL_LIMIT", 40)
-    with pytest.raises(GenerationFailed) as e:
-        generate(1004, UNFILLABLE)
-    assert e.value.split == "comp"
-    assert e.value.diag["missing_required_pair"] == e.value.diag["sampled"]
 
 
 @pytest.mark.parametrize("preset", ["pi_low", "pi_mid", "pi_high"])

@@ -73,6 +73,7 @@ def run(rc: RunConfig, *, purchased: list[tuple[str, str]],
     report = evaluate(p.inst, artifact, p.ledger, answer_fn=answer, items=items)
     (p.work_dir / "report.json").write_text(report.to_json())
     p.trace.emit("report", arm="a0p", overall=report.overall,
-                 by_split=report.by_split, tail=report.tail)
+                 by_split=report.by_split, tail=report.tail,
+                 ceiling=report.ceiling, headroom=report.headroom)
     p.trace.close()
     return report
