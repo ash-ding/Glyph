@@ -210,15 +210,36 @@ regenerating every instance.
 
 ### [#7](https://github.com/ash-ding/Glyph/issues/7) — `value_form`
 
-| form | example | student tokens/value |
-|---|---|---|
-| `underscore` (current) | `v_1_2_3` | 8.24 |
-| `letter_sep` | `v_d_n_c` | **4.00** |
+All four forms, |V| = 17³, Qwen3-1.7B tokenizer, 700 values sampled evenly:
 
-No learning penalty found. Still open because it is not an optimisation: it
-**halves what the context arm pays per query**, and A2's cost is its context
-re-paid on all 10⁴ test items. Also halves output length, where the truncation
-bug lived.
+| form | example (idx=1234) | tokens/value | longest | fixed width | straddles a digit field | round-trips |
+|---|---|---|---|---|---|---|
+| `underscore` (current) | `v_10_4_4` | **8.24** | 10 | no | none | yes |
+| `bracket` | `v[10,4,4]` | 9.24 | 11 | no | none | yes |
+| `flat` | `v1234` | 4.77 | 5 | no | none | yes |
+| `letter_sep` | `v_k_e_e` | **4.00** | 4 | **yes** | none | yes |
+
+`flat` is out on design grounds, not cost: D8 settled that a value spells out
+its digits so the structure survives tokenisation, and that structure is the
+only reason an unqueried entry can be extrapolated. `v1234` erases it.
+
+`letter_sep` is the only fixed-width form — every value is exactly four tokens.
+`underscore` runs 8.24 with a max of 10 because base 17 has two-character
+digits 10–16, so **a value's token length correlates with its digit values**: a
+weak leak, and an unpredictable output length, which is the soil the truncation
+bug grew in.
+
+The argument is not really about cost. Much of `underscore`'s 8.24 is a
+tokenizer accident; `letter_sep`'s 4.00 tracks the information content. A2
+paying double because we chose underscores is a measurement artifact, not a
+property of capability held in context. **But it is not neutral** — A2's and
+A0''s costs are token-driven and both roughly halve while A4's and A6's do not
+move, so the switch shifts the context side of the diagram left.
+
+Constraint: `letter_sep` needs `base ≤ 26`, which narrows #10.
+
+**Recommendation: `letter_sep`**, for the neutrality and the fixed width rather
+than the token count.
 
 ### [#8](https://github.com/ash-ding/Glyph/issues/8) — `unary_coupling` · P1
 
