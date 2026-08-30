@@ -10,14 +10,32 @@ from dataclasses import dataclass, replace
 
 
 # --- D8 (settled, option A): the surface form of a value spells out its
-# digits, so the digit structure survives tokenisation.  The exact notation
-# is a sub-decision resolved by self-check #6 (scripts/probe_tokenizer.py);
-# until that runs, `underscore` is the placeholder default.
-# `letter_sep` writes each digit as a letter (v_d_n_c).  Self-check #6
-# measures it at 4.00 student tokens per value against `underscore`'s 8.24,
-# fixed-width and one token per digit.  Available but NOT the default: the
-# switch halves what the context arm pays per query, so it moves the
-# experiment's economics and is a decision, not an optimisation.
+# digits, so the digit structure survives tokenisation.  The notation is
+# `letter_sep` -- each digit as a letter, `v_k_e_e` -- and the reason is
+# neutrality rather than cost.
+#
+# Measured on the student's tokenizer over 700 values at 17**3:
+#
+#     underscore  v_10_4_4   8.24 tokens   max 10   variable width
+#     bracket     v[10,4,4]  9.24          max 11   variable
+#     flat        v1234      4.77          max  5   variable, erases the digits
+#     letter_sep  v_k_e_e    4.00          max  4   FIXED
+#
+# `flat` is out on design grounds: it erases the digit structure that is the
+# only reason an unqueried table entry can be extrapolated.  Between the other
+# three, much of `underscore`'s 8.24 is a tokenizer accident -- base 17 has
+# two-character digits 10..16 -- so a value's token length correlates with its
+# digit values, which is a weak leak and an unpredictable output length, and
+# output length is the soil the truncation bug grew in.  `letter_sep` tracks
+# the information content instead: three digits, three tokens, plus a prefix.
+#
+# The switch is not neutral between arms and was made knowing that. A2's and
+# A0''s costs are token-driven and both roughly halve; A4's and A6's do not
+# move.  The argument for taking it anyway is that an arm paying double
+# because we chose underscores is a measurement artifact rather than a
+# property of holding capability in context.
+#
+# Constraint: `letter_sep` needs base <= 26 (grammar._need_letters).
 VALUE_FORMS = ("underscore", "bracket", "flat", "letter_sep")
 
 
@@ -27,7 +45,7 @@ class GlyphConfig:
     base: int = 17              # digits per position
     n_digits: int = 3           # 17**3 = 4913 values
     d_digit: int = 16           # embedding dims per digit position
-    value_form: str = "underscore"
+    value_form: str = "letter_sep"   # see the note above VALUE_FORMS
 
     # ---- skeleton (structural operator semantics) --------------------
     n_structural: int = 5       # how many of s0..s7 are enabled

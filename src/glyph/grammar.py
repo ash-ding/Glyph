@@ -121,13 +121,13 @@ def parse_value(tok: str, cfg: GlyphConfig) -> int:
 # ---------------------------------------------------------------------
 @dataclass(frozen=True)
 class Val:
-    """A bare value, e.g. v_3_13_2."""
+    """A bare value, e.g. v_d_n_c."""
     idx: int
 
 
 @dataclass(frozen=True)
 class Lit:
-    """A list literal, e.g. [v_0_1_0, v_3_13_2]."""
+    """A list literal, e.g. [v_a_b_a, v_d_n_c]."""
     items: tuple[int, ...]
 
 
