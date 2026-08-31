@@ -75,16 +75,26 @@ def test_a_class_is_never_held_out_entirely():
 
 
 # -- the ceiling ------------------------------------------------------
-def test_the_skeleton_ceiling_is_exactly_the_items_needing_no_table():
-    """A true skeleton with an identity table answers the items that need no
-    table lookup, and only those.  If these ever diverge, one of the two is
-    measuring something other than what it claims."""
-    inst = generate(1001, PRESETS["pi_mid"].scaled(600))
+@pytest.mark.parametrize("seed", [1001, 1002, 1003, 1004, 1005])
+def test_the_skeleton_ceiling_is_at_least_the_items_needing_no_table(seed):
+    """A true skeleton with an identity table answers every item that needs no
+    lookup -- and sometimes more.
+
+    `needs_u` / `needs_b` record entries *touched*, not entries the answer
+    *depends on*: `eval_logged` logs every table call, including calls whose
+    result a later transform discards. On seed 1002, `s0` is
+    `map_skip(j=1) -> dedup -> rotate(1)` and the outer `s3` keeps only the
+    element the map skipped, so two lookups happen and neither matters.
+
+    Equality held on 3 of these 5 seeds and the ceiling exceeded the free
+    fraction by 7% and 9% on the other two. An earlier note called the two
+    "equal, and not approximately"; that was seed 1001, not a property."""
+    inst = generate(seed, PRESETS["pi_mid"].scaled(600))
     ceil = inst.ceilings()
     for split in ("iid", "comp", "depth"):
         group = inst.test_set(split)
         free = sum(1 for t in group if not t.needs_u and not t.needs_b)
-        assert ceil["skeleton"][split] == pytest.approx(free / len(group))
+        assert ceil["skeleton"][split] >= free / len(group) - 1e-9
 
 
 def test_ceilings_follow_the_items_they_are_asked_about():

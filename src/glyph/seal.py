@@ -177,6 +177,26 @@ def evaluate(inst: GlyphInstance, artifact: SealedArtifact, ledger: Ledger, *,
     skel = ceiling["skeleton"]
     head = {k: headroom(v, skel[k]) for k, v in by_split.items() if k in skel}
     head["overall"] = headroom(overall, skel["overall"])
+    # `tail` gets its own line. It is a different subset from any split -- the
+    # items whose table entries this agent never bought -- so no split's
+    # ceiling applies to it, and without one it was the only number in the
+    # report with nothing to read it against.
+    #
+    # Its ceiling is near zero, which is what makes `tail` the cleanest read on
+    # table knowledge: almost nothing there is free.
+    #
+    # Near, not exactly, and the gap says something. `needs_u`/`needs_b` record
+    # entries *touched*, not entries the answer *depends on* -- `eval_logged`
+    # logs every table call, including calls a later transform discards. On
+    # pi_mid seed 1002, `s0` is `map_skip(j=1) -> dedup -> rotate(1)` and the
+    # outer `s3` keeps only the element the map skipped: two lookups happen and
+    # neither matters. So `tail` is over-inclusive, and this ceiling measures
+    # exactly how much.
+    if picked:
+        tc = inst.ceilings([t for t, _ in picked])
+        ceiling["skeleton"]["tail"] = tc["skeleton"]["overall"]
+        ceiling["table"]["tail"] = tc["table"]["overall"]
+        head["tail"] = headroom(tail, tc["skeleton"]["overall"])
 
     return ScoreReport(
         arm=artifact.arm, overall=overall, by_split=by_split, tail=tail,

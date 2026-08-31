@@ -45,16 +45,20 @@ def _realizable(cfg):
             if SHAPE_RESULT[shape[b]] == "LIST"}
 
 
-def test_holding_out_every_pair_empties_the_demo_distribution(monkeypatch):
-    """Held-out pairs are defined as the ones kept out of the demos, and the
-    demos are built first, so holding all of them stops the instance there --
-    before `iid` and `depth`, which forbid them too."""
+def test_holding_out_every_pair_empties_depth_but_not_the_demos(monkeypatch):
+    """With every pair held out, only the splits that need nesting die.
+
+    Depth-1 expressions -- one operator over a literal list -- contain no
+    adjacent operator pair at all, so they are structurally exempt from the
+    held-pair constraint. Since `depth_stop_prob` made those reachable, the
+    demos and `iid` can still be filled from them; `depth`, which requires
+    nesting past `demo_max_depth`, cannot."""
     monkeypatch.setattr(inst_mod, "_STALL_LIMIT", 40)
     monkeypatch.setattr(inst_mod, "_draw_held_pairs",
                         lambda cfg, rng: _realizable(cfg))
     with pytest.raises(GenerationFailed) as e:
         generate(1001, TINY)
-    assert e.value.split == "demos"
+    assert e.value.split == "depth"
     assert e.value.made < e.value.want
 
 
@@ -84,15 +88,20 @@ def test_a_depth_budget_that_cannot_exceed_the_demos_fails(monkeypatch):
 
 
 def test_the_failure_names_its_own_cause(monkeypatch):
+    """The diagnosis has to separate "too shallow" from "hit a held-out pair",
+    because with early stopping both are now happening at once."""
     monkeypatch.setattr(inst_mod, "_STALL_LIMIT", 40)
     monkeypatch.setattr(inst_mod, "_draw_held_pairs",
                         lambda cfg, rng: _realizable(cfg))
     with pytest.raises(GenerationFailed) as e:
         generate(1001, TINY)
     diag = e.value.diag
-    # nothing was too shallow; the held-out-pair constraint is what rejected
-    assert diag["reached_min_depth"] == diag["sampled"]
-    assert diag["hit_forbidden_pair"] == diag["sampled"]
+    # Every sample that contains any pair at all hits a forbidden one; the
+    # remainder are the depth-1 samples, which contain no pair to forbid.
+    pairless = diag["depth_hist"].get(1, 0)
+    assert diag["hit_forbidden_pair"] == diag["sampled"] - pairless
+    # and depth was reachable, so shallowness is not what emptied the split
+    assert diag["reached_min_depth"] > 0
 
 
 @pytest.mark.parametrize("preset", ["pi_low", "pi_mid", "pi_high"])
@@ -120,3 +129,20 @@ def test_demo_sampling_terminates_rather_than_spinning(monkeypatch):
     with pytest.raises(GenerationFailed) as e:
         generate(7, FAST)
     assert e.value.split == "demos"
+
+
+def test_depth_one_expressions_carry_no_operator_pair():
+    """The exemption the two tests above turn on, stated directly.
+
+    `op_pairs` reports adjacent (outer, inner) structural operators, so an
+    expression with a single operator has none -- and every constraint built on
+    held-out pairs, in either direction, passes over it silently. Before
+    `depth_stop_prob` these did not exist: depth equalled the split's budget,
+    which is at least 2 everywhere."""
+    from glyph.grammar import depth, op_pairs, parse
+    inst = generate(1001, PRESETS["pi_mid"].scaled(2000))
+    shallow = [t for t in inst.test
+               if depth(parse(t.expr_src, inst.cfg)) == 1]
+    assert shallow, "early stopping should produce depth-1 items"
+    for t in shallow:
+        assert not op_pairs(parse(t.expr_src, inst.cfg))

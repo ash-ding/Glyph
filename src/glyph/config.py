@@ -127,6 +127,25 @@ class GlyphConfig:
     binary_freq: float = 0.35   # how often value-producing (fold) ops are chosen
     max_expr_depth: int = 4
     demo_max_depth: int = 2     # demos (and iid/comp) stay at or below this
+    # Chance that a recursion level stops early instead of spending its whole
+    # budget.  At 0 an expression's depth *equals* its budget and `min_depth` is
+    # nearly a no-op: pi_mid's test set was two points, 8800 items at depth 2
+    # and 1200 at depth 4 with nothing between, and zero depth variance inside
+    # `iid`.  That also explains half of the dev/test mismatch -- the agent buys
+    # single-level probes because that is how you read a table, and no test item
+    # was single-level.
+    #
+    # Measured on pi_mid, 2000 items, 3 seeds.  Depth diversity is bought with
+    # discriminative range, and 0.15 is where the trade is cheapest:
+    #
+    #   stop   iid depths            depth-split depths   skeleton ceiling
+    #   0.00   {2: 1300}             {4: 240}                  0.228
+    #   0.15   {1: 269, 2: 1031}     {3: 41, 4: 199}           0.235
+    #   0.30   {1: 513, 2: 787}      {3: 82, 4: 158}           0.259
+    #   0.50   {1: 803, 2: 497}      {3: 136, 4: 104}          0.293
+    #
+    # The root never stops: a stopped root is a bare literal, not an expression.
+    depth_stop_prob: float = 0.15
     list_len_range: tuple[int, int] = (2, 4)
 
     # ---- dataset sizes ----------------------------------------------

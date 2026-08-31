@@ -74,9 +74,13 @@ def _sample(rng: np.random.Generator, cfg: GlyphConfig, want: str,
         n = int(rng.integers(lo, hi + 1))
         return Lit(tuple(int(rng.integers(cfg.n_values)) for _ in range(n)))
 
-    def go(ttype: str, b: int) -> Expr:
+    def go(ttype: str, b: int, root: bool = False) -> Expr:
         cands = [(o, s) for o, s in ops if SHAPE_RESULT[s] == ttype]
-        if b <= 0 or not cands:
+        # Stopping early is what makes depth a distribution rather than a
+        # restatement of the budget. The root is exempt: a stopped root is a
+        # bare literal, which is not an expression.
+        stopped = (not root) and rng.random() < cfg.depth_stop_prob
+        if b <= 0 or not cands or stopped:
             return leaf_list() if ttype == "LIST" else Val(int(rng.integers(cfg.n_values)))
         # atomic_ratio biases toward operators that consume atomic operators
         atomic = [c for c in cands if c[1] in ("UL", "LB")]
@@ -97,7 +101,7 @@ def _sample(rng: np.random.Generator, cfg: GlyphConfig, want: str,
                 args.append(go("LIST", b - 1))
         return App(op, tuple(args))
 
-    return go(want, budget)
+    return go(want, budget, root=True)
 
 
 def _sample_constrained(rng, cfg, budget, forbid: set, require: set | None,
