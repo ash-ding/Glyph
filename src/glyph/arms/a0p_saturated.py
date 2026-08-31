@@ -30,16 +30,26 @@ CHUNK = 25
 
 
 def run(rc: RunConfig, *, purchased: list[tuple[str, str]],
-        max_tokens: int = 64000) -> ScoreReport:
-    """`purchased` is another arm's query log -- A0' does not buy its own.
+        max_tokens: int = 64000, items=None) -> ScoreReport:
+    """`purchased` is the evidence A0' reads; it does not buy its own.
 
-    Reusing the same evidence is the point: it holds the information constant
-    and varies only who is reading it.
+    The original design fed it another arm's query log, so that the information
+    was held constant and only the reader varied. Under the capacity framing
+    that pairing is no longer the point: A0' is now the control for "can
+    in-context learning extract this table at all", and the sharper form of that
+    question hands it **more** evidence than any arm could buy. If it still
+    cannot, the claim does not depend on how much a particular agent happened to
+    purchase. Either shape is passed in here; the caller decides which.
+
+    `items` scores a subset rather than the whole test set. A0' costs about 75
+    H100-s per item against A6's 0.003, so the full 10^4 is not reachable for it
+    at any sensible budget -- and by #9 a paired subset resolves a difference
+    better than independent full runs would anyway.
     """
     p = prepare(rc)
     c = client()
     evidence = "\n".join(f"  {e} = {a}" for e, a in purchased)
-    items = p.inst.test_set()
+    items = p.inst.test_set() if items is None else items
 
     def answer(exprs):
         out: list[str] = []
@@ -69,6 +79,7 @@ def run(rc: RunConfig, *, purchased: list[tuple[str, str]],
 
     artifact = SealedArtifact(arm="a0p", entry="model",
                               notes={"purchased": len(purchased),
+                                     "n_scored": len(items),
                                      "note": "frontier answers directly"})
     report = evaluate(p.inst, artifact, p.ledger, answer_fn=answer, items=items)
     report.instance["preset"] = rc.preset      # provenance, not a condition

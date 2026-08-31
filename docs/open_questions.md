@@ -30,6 +30,7 @@ correction is in `progress.md` under the entry that contains it.
 | `depth_stop_prob = 0.15` — depth is sampled, not the split's budget restated | closes [#6](https://github.com/ash-ding/Glyph/issues/6) |
 | both ceilings ship on every scored subset; `headroom` is the primary figure | closes [#4](https://github.com/ash-ding/Glyph/issues/4) |
 | `pi_low` gets five structural operators, so `comp` is a sample not a fixed probe | closes [#1](https://github.com/ash-ding/Glyph/issues/1) |
+| `unary_coupling = 0.25` — widest arm gap on every preset, measured at the item level | closes [#8](https://github.com/ash-ding/Glyph/issues/8) |
 
 ---
 
@@ -185,47 +186,45 @@ read as a per-query one.
 
 Constraint taken on: `base ≤ 26`, which narrows #10.
 
-### [#8](https://github.com/ash-ding/Glyph/issues/8) — `unary_coupling`, which value · P1
+### ~~[#8](https://github.com/ash-ding/Glyph/issues/8) — `unary_coupling`~~ · settled
 
-**Layer 1 settled** (`3a35a2a`): unary is now built like binary, one MLP per
-digit position plus a weak global coupling term. The joint form it replaced was
-never a decision — D2 factorised *binary* because 24M entries leave no choice,
-unary has 4913 and never got the same treatment, and self-check #5 then found
-this made unary the harder half (reach 0.158 against binary's 0.734), inverting
-what the spec assumed.
+**0.25 stays** — the value that was already there, for a different reason than
+it arrived with, and against my own CPU-based recommendation.
 
-**Layer 2 open**: 0.25 is carried over from binary and probably wrong, because
-the part counts differ 16-fold — binary's parts are per-position pairs
-(3 × 17² = 867), unary's are single digits (3 × 17 = 51).
+Measured on GPU, lr 1e-4, 4000 steps, on the current tables:
 
-Swept on pi_mid. Left is a least-squares fit over the 51 parts seeing the raw
-output vector — an upper bound on a weights arm. Right is the realistic code-arm
-attack: decoded symbols only, N queries, one 17-cell table per position.
+| task | coupling | fit | reach |
+|---|---|---|---|
+| unary | **0.25** | 1.000 | **0.710** |
+| unary | 0.5 | 1.000 | 0.505 |
+| unary | 1.0 | 1.000 | 0.439 |
+| binary | 0.25 | 0.858 | 0.857 |
 
-| coupling | reach (upper bound) | N=200 | N=5000 | gap |
-|---|---|---|---|---|
-| 0.0 | 1.000 | 1.000 | 1.000 | +0.000 |
-| 0.1 | 0.922 | 0.774 | 0.774 | +0.148 |
-| **0.25** *(current)* | 0.821 | 0.473 | 0.524 | +0.297 |
-| 0.5 | 0.680 | 0.248 | 0.285 | +0.395 |
-| 1.0 | 0.524 | 0.080 | 0.111 | **+0.413** |
-| None *(old)* | 0.427 | 0.041 | 0.040 | +0.387 |
+**The 37% realisation rate was wrong** — the student realises 74–86% of the CPU
+upper bound. The old figure came from the joint-MLP setting *at lr 1e-5*, and I
+had folded the learning rate into what I read as a student-versus-bound ratio.
+Realisation is stable enough that the CPU probe is a usable predictor.
 
-At coupling 0 the table is gone in **200 queries** — ten times cheaper than
-binary's ~2000, the direct consequence of 16× fewer parts. Enumeration also
-saturates almost immediately: 51 cells fill in a couple of hundred queries and
-further buying gains nothing.
+**Reading it per-entry was the mistake.** The CPU sweep said the gap peaks near
+coupling 1.0; that was per table entry. At the level items are scored, every
+lookup has to be right, so compounding pushes both arms toward the floor at high
+coupling and the gap closes. From each preset's real lookup distribution:
 
-**Layer 3**: the widest gap is not automatically right. The left column is an
-upper bound; the student realised **37%** of it at the one point where both are
-known. Carried forward and compounded over pi_low's 4.42 lookups per item,
-neither 0.25 (≈0.006) nor 1.0 (≈0.0005) clears the bar — **the binding
-constraint is the realisation rate and the compounding, not coupling**. Coupling
-decides how the arms separate, not whether the low-π end is measurable.
+| | coupling 0.25 | 0.5 | 1.0 |
+|---|---|---|---|
+| pi_low, weights / code / gap | 0.398 / 0.219 / **+0.179** | 0.205 / 0.093 / +0.112 | 0.164 / 0.045 / +0.119 |
+| pi_mid, weights / code / gap | 0.502 / 0.370 / **+0.133** | 0.360 / 0.283 / +0.077 | 0.331 / 0.253 / +0.079 |
 
-On the gap alone 0.5 beats 0.25: +0.395 is 96% of the peak while keeping the
-upper bound at 0.680. What settles it is whether 37% holds as coupling rises —
-GPU only, added as an axis to [#22](https://github.com/ash-ding/Glyph/issues/22).
+0.25 wins on every preset by keeping the absolute level high, which after
+compounding matters more than a wide gap between two numbers near zero.
+
+**pi_low is measurable after all.** I projected an item-level ceiling of 0.006
+and called it unsolvable; measured it is **0.398** — 66× out, from the wrong
+realisation rate compounded with taking a power of the mean instead of the mean
+of the powers. It is now the preset where the weights arm leads by the most.
+
+Checkpoints kept at `~/glyph_runs/cap5/*.model` with their table config, so
+[#19](https://github.com/ash-ding/Glyph/issues/19) does not retrain.
 
 ### [#9](https://github.com/ash-ding/Glyph/issues/9) — test-set size and per-arm evaluation size · P1
 
