@@ -3023,3 +3023,140 @@ Next is P1: #19, what a trained adapter actually scores on the full test set —
 the benchmark's real ceiling, which is still unknown — and #20, A0' on a paired
 subset, which is the core evidence for H1 and currently rests on 200 items.
 Then the three P2 reruns, once, on frozen instances.
+
+---
+
+# 2026-08-31 — the band the arms actually operate in
+
+`#19` set out to put a number on the gap between "knows the structure, no table"
+and "knows everything", because every arm score so far has been read against a
+floor with nothing above it. The answer turned out to depend entirely on a
+parameter nobody had ever varied, so what follows is a curve rather than a
+number.
+
+Instance pi_mid / seed 1001, the same 500-item paired subset throughout.
+
+## The third oracle
+
+π already brackets the arms with two crippled interpreters, each the real one
+with a field swapped:
+
+```
+true skeleton + identity tables    0.248     every structural rule, no entry
+true skeleton + true tables        1.000     by construction
+```
+
+`scripts/table_ceiling.py` adds a third: **true skeleton over tables a student
+learned**. It trains Qwen3-1.7B on one instance's tables — all five atomic
+operators, as `u0 v_k_e_e =  v_p_c_a` pairs — then asks it for every entry the
+scored items need, and runs the real interpreter with that lookup in the table
+slot. The skeleton is perfect, so everything below 1.0 is the table.
+
+This needed its own training run rather than a self-check #5 checkpoint. #5
+builds its own tables from a fixed seed unrelated to any instance and trains one
+operator; a #5 checkpoint has learned a function no instance contains. Worth
+recording because I had written #19 as "take an adapter #5 already trained".
+
+## The curve
+
+`--holdout-mod` could only express "1 in N held out", so the least it could hide
+was half. The question runs the other way: an agent buys a few hundred of 4913
+entries. Replaced with `--seen-frac`, hash-based rather than modular so the
+training set is not an arithmetic progression — value indices carry digit
+structure, so every-tenth would be an easier region than a random one.
+
+| entries seen | of 4913 | unary reach | item score | iid | comp | depth |
+|---|---|---|---|---|---|---|
+| 90% | 4422 | 0.767 | **0.878** | 0.877 | 0.913 | 0.817 |
+| 50% | 2456 | 0.737 | 0.724 | 0.738 | 0.800 | 0.500 |
+| 25% | 1228 | 0.663 | 0.582 | 0.603 | 0.670 | 0.300 |
+| **10%** | 491 | 0.605 | **0.498** | 0.526 | 0.565 | 0.217 |
+| 5% | 246 | 0.531 | 0.454 | 0.471 | 0.565 | 0.150 |
+| 2% | 98 | 0.279 | 0.360 | 0.372 | 0.435 | 0.150 |
+| — | — | — | *0.248* | | | *skeleton ceiling* |
+
+**Extrapolation decays far more slowly than the supervision does.** Ninety-eight
+entries — two percent of the table — still get 27.9% of the *other* 98% right.
+Going from 10% seen to 90% seen is nine times the supervision for reach 0.605 to
+0.767.
+
+That is the digit-embedding argument working, and working harder than the design
+assumed: the table's shape is legible from very few samples, because the samples
+constrain shared parts rather than individual entries.
+
+## What it means for the arms
+
+An agent buys on the order of 10% of the table, so:
+
+```
+0.248   skeleton ceiling
+0.498   what a weights arm could reach at that volume
+```
+
+**The measurable band is [0.248, 0.498].** Not the 0.63 the single 90% point
+suggested — that setting hands over almost the whole table — but 25 points is
+wide against the 1-3 point differences #9 says arms will be separated by.
+
+And A6's 0.035 is now fully readable: **against a reachable 0.498, and below the
+0.248 that needs no table knowledge at all.** It had not learned the skeleton,
+let alone the table. That is a finding about the agent, which is what the
+experiment exists to produce — not a defect in the benchmark, which was the live
+alternative until this curve existed.
+
+## Two things in the numbers I did not expect
+
+**`fit` is 1.000 at every point, including 98 entries.** Whatever it has seen it
+retains perfectly. Capacity is never the constraint; it is generalisation, all
+the way down. Consistent with self-check #5's fit of 1.000 against reach 0.158.
+
+**Binary entry accuracy does not respond to `seen_frac` at all** — 0.719 to
+0.784 across the sweep, with no trend, and the 2% run (0.732) above the 90% run
+(0.725). The explanation is that the binary table has 24 million entries, so
+every setting is "almost nothing seen" and the model is always purely
+extrapolating. **`seen_frac` is an inert knob for binary**, which means the
+curve's shape is set by unary.
+
+Recorded separately: **binary extrapolates far better than unary under scarce
+supervision** — 0.73 against unary's 0.279 at 2% seen. The digit-wise
+construction pays off more there, presumably because a binary part is a 17×17
+combination and one observation constrains more structure per query.
+
+**`depth` collapses fastest**: 0.817 at 90% seen, 0.217 at 10%, which is nearly
+the skeleton ceiling. It has the most lookups per item, so compounding hits it
+hardest. It is the most sensitive cell on the phase diagram and the first place
+a change in table difficulty will show.
+
+## A prediction that was wrong, and why
+
+I projected the item-level ceiling at **0.502** from reach 0.710 and pi_mid's
+lookup distribution, and the 90%-seen run came back at **0.878**.
+
+The error was treating every lookup as extrapolation. At 90% seen, most lookups
+in a test item are entries the student was trained on, so the relevant per-entry
+figure is 0.974 rather than the 0.767 reach. The prediction was answering a
+question about a student that had seen nothing.
+
+At 10% seen the same projection gives 0.605^2.91 ≈ 0.23 against a measured
+0.498 — still low, and now for a different reason: lookup errors are
+**correlated**, not independent. A student that misses one entry in a region
+misses its neighbours too, so failures concentrate on fewer items than an
+independence assumption predicts, and the item-level score comes out higher.
+
+Both corrections push the same way: **the independence model is a lower bound,
+not an estimate.**
+
+## Also fixed while doing this
+
+`capacity_check.py`'s `--value-form` and `--unary-coupling` defaults were
+written out as `"underscore"` and `None`, and both had drifted from the config
+(`letter_sep`, `0.25`). A run today would have trained on a benchmark that no
+longer exists. They track `GlyphConfig` now. It also gained `--save-model`,
+because it had been reporting two numbers and discarding what produced them.
+
+A0' truncates at `max_tokens=64000`: measured output per chunk runs 40k to 78k,
+so roughly half of the calls hit the ceiling and return nothing. Unanswered
+items are filled with `""` and score as wrong, so **a truncated run reports the
+frontier failing when the harness is what failed** — the same misreading that
+cost two wrong diagnoses on self-check #4. `chunk` is now a parameter (50 rather
+than 25, which also halves how many times the evidence block is re-sent) and a
+coverage guard raises below 95% answered instead of scoring.

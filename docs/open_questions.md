@@ -412,12 +412,35 @@ for three documents and A+B is recorded as tentative.
 
 ### P1 — decides whether the benchmark is usable
 
-**[#19](https://github.com/ash-ding/Glyph/issues/19) — a trained adapter on the full test set.** Self-check #5 measures per-entry
-reach; nothing measures what that implies for whole items. Predicted item
-ceiling at reach 0.80: pi_mid 0.58, pi_low 0.42. Take an adapter #5 already
-trained and compare. ~1 GPU-hour. If measured is far below predicted, the
-compounding model is missing something and the usable band is smaller than
-believed.
+**~~[#19](https://github.com/ash-ding/Glyph/issues/19)~~ — the benchmark's real
+ceiling. Done.** The answer is a curve, not a number: it depends on how much of
+the table the student saw, which nobody had varied. pi_mid/1001, 500-item paired
+subset, `scripts/table_ceiling.py` — true skeleton over student-learned tables,
+so everything below 1.0 is the table.
+
+| entries seen | unary reach | item score |
+|---|---|---|
+| 90% | 0.767 | 0.878 |
+| 50% | 0.737 | 0.724 |
+| 25% | 0.663 | 0.582 |
+| **10%** *(agent volume)* | 0.605 | **0.498** |
+| 5% | 0.531 | 0.454 |
+| 2% | 0.279 | 0.360 |
+| skeleton ceiling | — | *0.248* |
+
+Extrapolation decays far more slowly than supervision — 98 entries still get
+27.9% of the other 98% right. **The band the arms operate in is [0.248, 0.498]**,
+25 points wide against the 1–3 point differences #9 expects. A6's 0.035 is now
+readable: below the 0.248 that needs no table at all, against a reachable 0.498.
+
+`fit` is 1.000 at every point including 98 entries — capacity is never the
+constraint. Binary is inert to `seen_frac` (24M entries, always purely
+extrapolating) so the curve's shape is unary's. `depth` collapses fastest,
+0.817 → 0.217, being the most lookup-heavy split.
+
+My projection of 0.502 was wrong twice in the same direction: it treated every
+lookup as extrapolation, and it assumed lookup errors are independent when they
+are correlated. **The independence model is a lower bound, not an estimate.**
 
 **[#20](https://github.com/ash-ding/Glyph/issues/20) — rerun A0' on a paired subset.** A0' at the ceiling is the strongest
 form of H1 and rests on 200 items. ~75 H100-s per item, so the subset size is

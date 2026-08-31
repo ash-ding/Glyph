@@ -101,7 +101,11 @@ def main() -> int:
     ap.add_argument("--n-facts", type=int, default=2000)
     ap.add_argument("--probe-frac", type=float, default=0.7)
     ap.add_argument("--n-test", type=int, default=500)
-    ap.add_argument("--max-tokens", type=int, default=64000)
+    ap.add_argument("--max-tokens", type=int, default=128000)
+    ap.add_argument("--chunk", type=int, default=50,
+                    help="items per call. Larger is cheaper -- the evidence "
+                         "block is re-sent every call -- and safer, because "
+                         "reasoning cost is per call rather than per item.")
     ap.add_argument("--out-root", default="runs")
     a = ap.parse_args()
 
@@ -126,7 +130,8 @@ def main() -> int:
     rc = RunConfig(arm="a0p", preset=a.preset, instance_seed=a.seed,
                    budget_h100s=1e9, out_root=Path(a.out_root))
     report = a0p_saturated.run(rc, purchased=purchased,
-                               max_tokens=a.max_tokens, items=items)
+                               max_tokens=a.max_tokens, items=items,
+                               chunk=a.chunk)
     print("\n" + report.to_json())
     return 0
 

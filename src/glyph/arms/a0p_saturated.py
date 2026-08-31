@@ -26,11 +26,28 @@ from ..vertex import client, request_kwargs
 from .base import RunConfig, prepare
 from ..agent.prompts import SATURATED
 
+# Items per call. Bigger is both cheaper and safer: the evidence block is
+# re-sent on every call, so halving the number of calls halves the input spend
+# -- and self-check #4 established that reasoning cost is per *call* rather than
+# per item, so a larger chunk amortises the thinking rather than compounding it.
 CHUNK = 25
 
 
+class Truncated(RuntimeError):
+    """Raised rather than scored.
+
+    Unanswered items are filled with the empty string, which scores as wrong.
+    So a run that truncates reports a *low number* rather than an error, and
+    the low number is indistinguishable from the frontier genuinely failing --
+    which is exactly how self-check #4 was misread once already. A0' is the
+    control for "can in-context learning do this at all", so a quiet
+    under-report there is the most expensive kind of bug available here.
+    """
+
+
 def run(rc: RunConfig, *, purchased: list[tuple[str, str]],
-        max_tokens: int = 64000, items=None) -> ScoreReport:
+        max_tokens: int = 64000, items=None, chunk: int = CHUNK,
+        min_coverage: float = 0.95) -> ScoreReport:
     """`purchased` is the evidence A0' reads; it does not buy its own.
 
     The original design fed it another arm's query log, so that the information
@@ -53,11 +70,12 @@ def run(rc: RunConfig, *, purchased: list[tuple[str, str]],
 
     def answer(exprs):
         out: list[str] = []
-        for s in range(0, len(exprs), CHUNK):
-            chunk = exprs[s:s + CHUNK]
-            numbered = "\n".join(f"  {i + 1}. {e}" for i, e in enumerate(chunk))
+        n_trunc = 0
+        for s in range(0, len(exprs), chunk):
+            block = exprs[s:s + chunk]
+            numbered = "\n".join(f"  {i + 1}. {e}" for i, e in enumerate(block))
             prompt = SATURATED.format(spec=p.inst.syntax_spec(),
-                                      evidence=evidence, n=len(chunk),
+                                      evidence=evidence, n=len(block),
                                       items=numbered)
             kwargs = request_kwargs(rc.teacher, max_tokens=max_tokens)
             with c.messages.stream(messages=[{"role": "user", "content": prompt}],
@@ -66,15 +84,29 @@ def run(rc: RunConfig, *, purchased: list[tuple[str, str]],
             p.ledger.charge("frontier_in", int(msg.usage.input_tokens or 0))
             p.ledger.charge("frontier_out", int(msg.usage.output_tokens or 0))
             text = "".join(b.text for b in msg.content if b.type == "text")
-            got = [""] * len(chunk)
+            got = [""] * len(block)
             for line in text.splitlines():
                 m = re.match(r"\s*(\d+)\s*[:.]\s*(.+?)\s*$", line)
-                if m and 0 <= int(m.group(1)) - 1 < len(chunk):
+                if m and 0 <= int(m.group(1)) - 1 < len(block):
                     got[int(m.group(1)) - 1] = m.group(2).strip()
-            p.trace.emit("a0p_chunk", start=s, n=len(chunk),
+            trunc = msg.stop_reason == "max_tokens"
+            n_trunc += trunc
+            p.trace.emit("a0p_chunk", start=s, n=len(block),
                          answered=sum(1 for g in got if g),
-                         truncated=msg.stop_reason == "max_tokens")
+                         out_tokens=int(msg.usage.output_tokens or 0),
+                         truncated=trunc)
+            print(f"    chunk {s:4d}  answered {sum(1 for g in got if g):3d}/{len(block)}"
+                  f"  out {int(msg.usage.output_tokens or 0):6d}"
+                  f"{'  TRUNCATED' if trunc else ''}", flush=True)
             out.extend(got)
+
+        cov = sum(1 for g in out if g) / max(1, len(out))
+        if cov < min_coverage:
+            raise Truncated(
+                f"only {cov:.1%} of items were answered ({n_trunc} truncated "
+                f"call(s) at max_tokens={max_tokens}, chunk={chunk}). Scoring "
+                f"this would report the frontier failing when the harness is "
+                f"what failed -- raise --max-tokens or raise --chunk.")
         return out
 
     artifact = SealedArtifact(arm="a0p", entry="model",
