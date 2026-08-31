@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <title>Glyph — a hidden-semantics DSL execution benchmark</title>
-<meta name="description" content="Glyph is a hidden-semantics DSL execution benchmark for research on weight-space delegation: when an agent cannot solve a task alone, does capability belong in context, in code, or in a small model's weights?">
+<meta name="description" content="A hidden-semantics DSL execution benchmark. A frontier model handed 52% of the hidden table scores at the line requiring no table knowledge at all; a 1.7B model trained on a tenth of it reaches twice as far.">
 
 <!-- Social cards. Replace the URL below with the deployed page URL, and drop
      an image at assets/img/og.png (1200x630) to enable the preview image. -->
@@ -27,10 +27,11 @@
   <div class="nav__inner">
     <a class="nav__brand" href="#top">◈ GLYPH</a>
     <div class="nav__links">
-      <a href="#instance">Instance</a>
-      <a href="#situation">Setup</a>
+      <a href="#result">Result</a>
+      <a href="#pipeline">Pipeline</a>
       <a href="#pi">π</a>
-      <a href="#results">Results</a>
+      <a href="#ceiling">Ceilings</a>
+      <a href="#arms">Arms</a>
       <a href="#start">Get started</a>
       <a class="nav__cta" href="https://github.com/ash-ding/glyph">GitHub&nbsp;↗</a>
       <button class="theme-toggle" type="button" aria-label="Toggle theme">◐</button>
@@ -46,24 +47,141 @@
   <h1>Glyph</h1>
   <p class="hero__tagline">
     A hidden-semantics DSL execution benchmark. Half of every instance can be
-    written down as code; the other half can only be fit into weights. We can
-    measure which half the difficulty sits in — and sweep it.
+    written down as code; the other half can only be fit into weights. The
+    first measurement is in: a frontier model handed <b>52% of the table</b> and
+    unlimited thinking scores at the line that requires <b>no table knowledge at
+    all</b>, while a 1.7B model trained on a tenth of it reaches twice as far.
   </p>
 
   <div class="badges">
     <span class="badge">syntax public · semantics private</span>
-    <span class="badge">Q ≈ 2000 metered queries</span>
     <span class="badge">|V| = 4913 values</span>
     <span class="badge">10,000 held-out expressions</span>
+    <span class="badge">data layer frozen · 2026-08-31</span>
   </div>
 
   <div class="actions">
     <a class="btn btn--primary" href="https://github.com/ash-ding/glyph">Code</a>
-    <!-- TODO: paper / arXiv link, once there is one. -->
+    <a class="btn" href="#result">The result</a>
+    <a class="btn" href="#pipeline">How an instance is built</a>
     <a class="btn" href="#start">Quick start</a>
-    <a class="btn" href="#cite">Cite</a>
   </div>
 </header>
+
+<div class="wrap"><hr></div>
+
+<!-- ================================================================== RESULT -->
+<section class="section wrap" id="result">
+  <h2>The task needs training, and we can now show it<span class="tag tag--done">measured</span></h2>
+
+  <p class="section__lede">
+    The design goal was a task that <em>cannot</em> be talked into a context
+    window — one where the difficulty has to be absorbed by gradient descent.
+    Three oracles on the same 500 items settle whether the generator achieved
+    that.
+  </p>
+
+  <div class="band" aria-hidden="true">
+    <div class="band__track">
+      <div class="band__fill" style="width:24.8%"></div>
+      <div class="band__mark band__mark--key" style="left:24.8%"></div>
+      <div class="band__mark" style="left:25.8%"></div>
+      <div class="band__mark band__mark--key" style="left:49.8%"></div>
+    </div>
+    <div class="band__labels">
+      <div class="band__label band__label--key" style="left:24.8%">
+        <b>0.248</b>skeleton only<br>zero table entries
+      </div>
+      <div class="band__label" style="left:25.8%; top:3.2rem">
+        <b>0.258</b>frontier, 2551 entries<br>unlimited thinking
+      </div>
+      <div class="band__label band__label--key" style="left:49.8%">
+        <b>0.498</b>1.7B weights<br>491 entries seen
+      </div>
+    </div>
+  </div>
+
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Oracle</th><th>What it knows</th>
+          <th class="num">overall</th><th class="num">tail</th><th class="num">headroom</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="mono">skeleton ceiling</td>
+          <td>every structural rule, not one table entry</td>
+          <td class="num">0.248</td><td class="num">0.000</td><td class="num">—</td>
+        </tr>
+        <tr>
+          <td class="mono">A0′</td>
+          <td>frontier model, 2551 of 4913 entries in context, unlimited thinking</td>
+          <td class="num">0.258</td><td class="num">0.016</td><td class="num">+0.013</td>
+        </tr>
+        <tr class="is-lead">
+          <td class="mono">weights</td>
+          <td>Qwen3-1.7B fine-tuned on 491 entries (10% of the table)</td>
+          <td class="num">0.498</td><td class="num">—</td><td class="num">+0.333</td>
+        </tr>
+        <tr>
+          <td class="mono">perfect</td>
+          <td>true skeleton, true tables</td>
+          <td class="num">1.000</td><td class="num">1.000</td><td class="num">+1.000</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="muted" style="font-size:.85rem">
+    pi_mid, instance seed 1001, the same stratified 500-item subset throughout.
+    <span class="mono">headroom = (score − skeleton ceiling) / (1 − skeleton ceiling)</span>.
+  </p>
+
+  <h3>What the frontier actually did</h3>
+  <p>
+    Splitting A0′'s items by whether the evidence contained the entries they
+    needed separates two capabilities that a single score hides:
+  </p>
+
+  <div class="kpis">
+    <div class="kpi">
+      <span class="kpi__n">0.976</span>
+      <span class="kpi__label">items whose needed entries <b>were</b> in the evidence</span>
+      <span class="kpi__sub">126 items</span>
+    </div>
+    <div class="kpi kpi--lead">
+      <span class="kpi__n">0.016</span>
+      <span class="kpi__label">items whose needed entries <b>were not</b></span>
+      <span class="kpi__sub">374 items</span>
+    </div>
+  </div>
+
+  <div class="callout">
+    <p>
+      <b>Retrieval saturated, extrapolation at zero.</b> The frontier uses what
+      it is told almost perfectly and infers almost nothing beyond it. That is
+      not a capability shortfall — it is the separation the benchmark was built
+      to produce. Gradient descent on a model three orders of magnitude smaller,
+      given a fifth as many entries, reaches 0.498.
+    </p>
+  </div>
+
+  <p>
+    The evidence was made deliberately generous — 2000 purchased queries
+    revealing 2551 of 4913 unary entries, 70k tokens of it — so the failure does
+    not depend on how much any particular agent happened to buy. Leakage was
+    checked rather than assumed: the 2000 purchased expressions and the 500
+    scored ones intersect in zero rows.
+  </p>
+  <p class="muted" style="font-size:.88rem">
+    One caveat, stated because it is the first thing worth checking: A0′ does
+    not choose its own queries. The evidence was drawn by the harness, where a
+    real agent probes adaptively. That does not touch the retrieval-versus-
+    extrapolation split, which is about the evidence it was given; it does leave
+    an adaptive-buyer control worth running.
+  </p>
+</section>
 
 <div class="wrap"><hr></div>
 
@@ -72,91 +190,281 @@
   <h2>Abstract</h2>
   <div class="prose">
     <p>
-      When a frontier agent faces a task it cannot solve on its own, it can put
-      the missing capability in one of three places: into <strong>context</strong>,
-      into <strong>code</strong>, or into a small model's <strong>weights</strong>.
-      Which one pays — and does the agent itself know?
+      Given a verifiable task a frontier model cannot solve alone, when does
+      putting capability into a small model's <b>weights</b> beat putting it
+      into <b>context</b> or into <b>code</b>? And when an agent chooses for
+      itself, how good is that choice?
     </p>
     <p>
-      Glyph is the instrument that makes that question measurable. It is a ruler
-      with known graduations, not a discovery in its own right. Each instance
-      draws a hidden interpreter whose syntax is published and whose semantics
-      are not, split into one half that is finitely writable and one half that
-      is not. The agent buys information about it through a metered oracle, then
-      seals an artifact that must answer 10,000 unseen expressions with no
-      further access.
+      Glyph is the instrument, not the answer. Each instance is a hidden
+      interpreter whose syntax is public and whose semantics must be bought one
+      query at a time. It splits deliberately into two halves that are different
+      in kind: a <b>skeleton</b> sampled from a finite combinator grammar, which
+      is always describable in finitely many words, and <b>tables</b> built from
+      shared digit embeddings and frozen random MLPs, which are not. A single
+      knob moves the difficulty between them, so the same generator produces
+      instances where code should win and instances where only weights can.
     </p>
   </div>
 </section>
 
-<!-- ================================================================ INSTANCE -->
-<section class="section wrap" id="instance">
-  <h2>What an instance is</h2>
-  <div class="prose">
+<div class="wrap"><hr></div>
+
+<!-- ================================================================ PIPELINE -->
+<section class="section wrap" id="pipeline">
+  <h2>How an instance is built<span class="tag tag--done">frozen</span></h2>
+
+  <p class="section__lede">
+    <code>generate(seed, cfg)</code> runs five steps in order, each consuming a
+    different part of the config from one seeded stream. Every step is a place a
+    design decision lives.
+  </p>
+
+  <ol class="pipeline">
+    <li class="pipe">
+      <div class="pipe__head">
+        <span class="pipe__n">STEP 01</span>
+        <span class="pipe__title">The value space</span>
+        <span class="pipe__src">grammar.py · tables.py</span>
+      </div>
+      <p>
+        A value is a fixed-length digit string, not an atomic symbol:
+        <span class="mono">d<sub>k</sub>(x) = ⌊x / base<sup>k</sup>⌋ mod base</span>,
+        giving 17³ = 4913 values rendered <span class="mono">v_k_e_e</span>. One
+        random Gaussian vector is stored per <em>digit position and value</em> —
+        51 vectors, not 4913 — and a value's embedding is their concatenation.
+        <b>That sharing is the only reason an unqueried entry can ever be
+        predicted.</b>
+      </p>
+      <div class="pipe__knobs">
+        <code>base = 17</code><code>n_digits = 3</code><code>d_digit = 16</code>
+        <code>value_form = letter_sep</code>
+      </div>
+    </li>
+
+    <li class="pipe">
+      <div class="pipe__head">
+        <span class="pipe__n">STEP 02</span>
+        <span class="pipe__title">The skeleton — sampled, and describable</span>
+        <span class="pipe__src">semantics.py</span>
+      </div>
+      <p>
+        Each structural operator's meaning is drawn from a <em>finite</em>
+        combinator grammar: <span class="mono">ident · reverse · rotate k ·
+        dedup · take k · drop k · map_all · map_skip j</span>, optionally under
+        a guard. Sampling from a finite grammar is what guarantees the skeleton
+        can always be written down in finitely many words — and every transform
+        rearranges structure and <b>never interprets a value</b>, which is where
+        the skeleton/table split comes from rather than being imposed.
+      </p>
+      <div class="pipe__knobs">
+        <code>n_structural = 3 / 5 / 8</code><code>max_transform_depth</code>
+        <code>guard_prob</code>
+      </div>
+    </li>
+
+    <li class="pipe">
+      <div class="pipe__head">
+        <span class="pipe__n">STEP 03</span>
+        <span class="pipe__title">The tables — learnable, not describable</span>
+        <span class="pipe__src">tables.py</span>
+      </div>
+      <p>
+        Never materialised. A table is a function: digits → shared embeddings →
+        a frozen two-layer tanh MLP → decode to the nearest legal symbol.
+        Tabulated it would be 4913 entries for unary and 24 million for binary.
+        Operators are digit-wise with a weak global coupling term: pure
+        digit-wise is enumerable into a lookup table, which hands the win to the
+        code arm; too much coupling and nobody learns it.
+      </p>
+      <div class="pipe__knobs">
+        <code>binary_coupling = 0.25</code><code>unary_coupling = 0.25</code>
+        <code>mlp_temp = 1.0</code><code>decode = whiten</code>
+      </div>
+    </li>
+
+    <li class="pipe">
+      <div class="pipe__head">
+        <span class="pipe__n">STEP 04</span>
+        <span class="pipe__title">Held-out operator pairs</span>
+        <span class="pipe__src">instance.py</span>
+      </div>
+      <p>
+        A third of the directly-nested <span class="mono">(outer, inner)</span>
+        operator pairs are kept out of the demo distribution, and the
+        <span class="mono">comp</span> split then <em>requires</em> one to
+        appear while every other split forbids all of them. Drawn only from
+        pairs the grammar can actually build — an operator returning a value can
+        never sit inside another — and a fixed share of each shape class, so the
+        split's composition does not drift by seed.
+      </p>
+      <div class="pipe__knobs"><code>n_hold = |realizable| / 3</code></div>
+    </li>
+
+    <li class="pipe">
+      <div class="pipe__head">
+        <span class="pipe__n">STEP 05</span>
+        <span class="pipe__title">Demos and the three splits</span>
+        <span class="pipe__src">instance.py</span>
+      </div>
+      <p>
+        Rejection sampling: draw an expression, test it against the split's
+        constraints, keep or discard. Depth is <em>sampled</em> rather than
+        being the split's budget restated — each recursion level may stop early,
+        so <span class="mono">iid</span> spans depths 1–2 rather than sitting at
+        a single point. A split that cannot be filled <b>raises with a
+        diagnosis</b> rather than returning a short test set, which it used to
+        do silently.
+      </p>
+      <div class="pipe__knobs">
+        <code>depth_stop_prob = 0.15</code><code>n_iid = 6500</code>
+        <code>n_comp = 2300</code><code>n_depth = 1200</code>
+      </div>
+    </li>
+  </ol>
+
+  <div class="callout">
     <p>
-      A generator draws a hidden interpreter <code>P</code>.
-      <strong>The syntax is public; the semantics are private.</strong>
+      The order matters for reproducibility: every step draws from the same
+      stream, so two configs that differ anywhere produce unrelated instances
+      even at the same seed.
     </p>
   </div>
+</section>
 
-<pre><code>expr:  s1( s3( s0(u2, [v_0_1_0, v_3_13_2, v_6_1_12]) ), b0 )
-out:   v_1_4_14</code></pre>
+<div class="wrap"><hr></div>
+
+<!-- ====================================================================== PI -->
+<section class="section wrap" id="pi">
+  <h2>π — which half is the difficulty in?</h2>
+
+  <p class="section__lede">
+    The interpreter is <span class="mono">P = skeleton ∘ tables</span>, exactly
+    two rule sets. Each crippled oracle is the real interpreter with one field
+    swapped, which is what makes π measurable at all.
+  </p>
+
+  <div class="formula">a_skel = accuracy(true skeleton + identity table)     # only the table is missing
+a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is missing
+
+π = (1 − a_tab) / ((1 − a_tab) + (1 − a_skel))       # the SKELETON's share</div>
 
   <div class="prose">
     <p>
-      Operator names are deliberately opaque — <code>s0</code>, <code>u2</code>,
-      <code>b0</code>, never <code>map</code> or <code>fold</code> — so that
-      naming priors leak nothing.
+      π is a ratio against a chosen pair of baselines, so those baselines are
+      fixed once and never changed. The <span class="mono">trivial</span>
+      skeleton is textbook defaults rather than "do nothing" — if the structural
+      operators did nothing, the atomic operators would never be invoked and the
+      baseline would silently ablate the table as well.
     </p>
     <p>
-      <code>P</code> has exactly two halves, because an expression is a tree and
-      a tree node is only ever a value, a structural operator, or an atomic
-      operator:
+      <b>A preset is a sampler, not a condition.</b> Seven of twenty
+      <span class="mono">pi_mid</span> seeds fall inside
+      <span class="mono">pi_high</span>'s measured range, so an instance at
+      π = 0.70 cannot be attributed to a preset. Every run records its own
+      measured π; figures key on that, never on the preset name.
     </p>
   </div>
 
   <div class="table-scroll">
     <table>
       <thead>
-        <tr><th>Half</th><th>What it is</th><th>Where it comes from</th><th>Can you write it down?</th></tr>
+        <tr><th>Preset</th><th class="num">n_structural</th><th class="num">atomic_ratio</th>
+            <th class="num">measured π</th><th class="num">skeleton ceiling</th></tr>
       </thead>
       <tbody>
-        <tr>
-          <td><strong>skeleton</strong></td>
-          <td>the semantics of <code>s0…s7</code></td>
-          <td>sampled from a finite combinator grammar</td>
-          <td><strong>Yes</strong> — finitely many rules, by construction</td>
-        </tr>
-        <tr>
-          <td><strong>table</strong></td>
-          <td>the semantics of <code>u*</code> / <code>b*</code></td>
-          <td>digit embeddings + frozen random MLPs</td>
-          <td><strong>No</strong> — you would be transcribing weight matrices</td>
-        </tr>
+        <tr><td class="mono">pi_low</td><td class="num">5</td><td class="num">0.85</td>
+            <td class="num">0.12 – 0.54</td><td class="num">0.07</td></tr>
+        <tr><td class="mono">pi_mid</td><td class="num">5</td><td class="num">0.50</td>
+            <td class="num">0.36 – 0.76</td><td class="num">0.31</td></tr>
+        <tr><td class="mono">pi_high</td><td class="num">8</td><td class="num">0.15</td>
+            <td class="num">0.61 – 0.82</td><td class="num">0.63</td></tr>
       </tbody>
     </table>
   </div>
+  <p class="muted" style="font-size:.85rem">
+    20 seeds per preset, full 10<sup>4</sup> test sets, 60/60 generating.
+    <code>atomic_ratio</code> is the primary knob — holding everything else
+    fixed and moving only it sweeps π from 0.36 to 0.77 monotonically.
+  </p>
+</section>
+
+<div class="wrap"><hr></div>
+
+<!-- ================================================================= CEILING -->
+<section class="section wrap" id="ceiling">
+  <h2>How far weights reach, as a function of what they saw<span class="tag tag--done">measured</span></h2>
+
+  <p class="section__lede">
+    A third oracle — true skeleton over tables a student learned — puts a top on
+    the band the arms operate in. It depends entirely on how much of the table
+    the student was allowed to see, which is the parameter that turns a number
+    into a curve.
+  </p>
+
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr><th class="num">entries seen</th><th class="num">of 4913</th>
+            <th class="num">per-entry reach</th><th class="num">item score</th>
+            <th class="num">iid</th><th class="num">comp</th><th class="num">depth</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="num">90%</td><td class="num">4422</td><td class="num">0.767</td>
+            <td class="num">0.878</td><td class="num">0.877</td><td class="num">0.913</td><td class="num">0.817</td></tr>
+        <tr><td class="num">50%</td><td class="num">2456</td><td class="num">0.737</td>
+            <td class="num">0.724</td><td class="num">0.738</td><td class="num">0.800</td><td class="num">0.500</td></tr>
+        <tr><td class="num">25%</td><td class="num">1228</td><td class="num">0.663</td>
+            <td class="num">0.582</td><td class="num">0.603</td><td class="num">0.670</td><td class="num">0.300</td></tr>
+        <tr class="is-lead"><td class="num">10%</td><td class="num">491</td><td class="num">0.605</td>
+            <td class="num">0.498</td><td class="num">0.526</td><td class="num">0.565</td><td class="num">0.217</td></tr>
+        <tr><td class="num">5%</td><td class="num">246</td><td class="num">0.531</td>
+            <td class="num">0.454</td><td class="num">0.471</td><td class="num">0.565</td><td class="num">0.150</td></tr>
+        <tr><td class="num">2%</td><td class="num">98</td><td class="num">0.279</td>
+            <td class="num">0.360</td><td class="num">0.372</td><td class="num">0.435</td><td class="num">0.150</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="muted" style="font-size:.85rem">
+    Qwen3-1.7B, full fine-tune, lr 1e-4, 6000 steps, on one instance's tables
+    across all five atomic operators. Skeleton ceiling on the same items: 0.248.
+  </p>
 
   <div class="callout">
     <p>
-      That asymmetry is the whole design. The skeleton is cheap to buy and exact
-      to write — code's home ground. The table is impossible to buy out and only
-      ever approximable — weights' home ground.
+      <b>Extrapolation decays far more slowly than supervision.</b> Ninety-eight
+      entries — two percent of the table — still get 27.9% of the <em>other</em>
+      98% right. Going from 10% seen to 90% seen is nine times the supervision
+      for a reach of 0.605 → 0.767. Samples constrain shared parts, not
+      individual entries, which is the digit-embedding argument working harder
+      than the design assumed.
+    </p>
+  </div>
+
+  <div class="prose">
+    <p>
+      An agent buys on the order of 10% of the table, so the band arms actually
+      operate in is <b>[0.248, 0.498]</b> — 25 points, wide against the 1–3
+      point differences the arms are expected to be separated by. Two other
+      readings from the same runs: fit is 1.000 at every point including at 98
+      entries, so <b>capacity is never the constraint, generalisation is</b>;
+      and <span class="mono">depth</span> collapses fastest, being the most
+      lookup-heavy split, which makes it the most sensitive cell on the phase
+      diagram.
     </p>
   </div>
 </section>
+
+<div class="wrap"><hr></div>
 
 <!-- =============================================================== SITUATION -->
 <section class="section wrap" id="situation">
   <h2>The agent's situation</h2>
   <div class="prose">
     <p>
-      The agent gets the syntax spec and 30 demos for free, then a
-      <strong>metered query oracle</strong>: it may ask <code>P</code> about any
-      well-formed expression, and every query costs budget — syntax errors
-      included, so probing the grammar is not free. At the end it seals an
-      artifact that must answer 10,000 expressions it has never seen, with no
-      further access to <code>P</code>.
+      An agent is given the syntax and 30 worked demos for free, and must buy
+      everything else. Whatever it produces is then sealed and answers the test
+      set with no further access to the oracle.
     </p>
   </div>
 
@@ -164,99 +472,132 @@ out:   v_1_4_14</code></pre>
     <div class="card">
       <span class="card__key">free</span>
       <h3>Syntax spec + 30 demos</h3>
-      <p>Enough to write well-formed expressions, not enough to evaluate them.</p>
+      <p>Operator names are opaque — <span class="mono">s0</span>,
+         <span class="mono">u2</span> — so naming priors leak nothing.</p>
     </div>
     <div class="card">
       <span class="card__key">metered</span>
       <h3>Query oracle</h3>
-      <p>Every call goes through the ledger. One bypass and the crossover figure is meaningless.</p>
+      <p>Evaluate expressions against the hidden interpreter. Malformed queries
+         cost the same as well-formed ones.</p>
     </div>
     <div class="card">
       <span class="card__key">sealed</span>
       <h3>The artifact</h3>
-      <p>Answers 10,000 unseen expressions offline. Context, code, or weights — the agent chooses.</p>
+      <p>A prompt, a program, or a checkpoint. Sealing ends the prepare phase;
+         nothing is reachable afterwards.</p>
     </div>
   </div>
 
-  <div class="prose">
-    <p>
-      <code>Q ≈ 2000</code> queries against <code>|V| = 4913</code> values means
-      the unary tables are at best half covered, and the binary tables (≈ 24 M
-      pairs) essentially not at all. That gap is why fitting can beat looking
-      things up.
-    </p>
-  </div>
-
   <h3>Splits</h3>
-  <div class="prose">
-    <p>
-      <code>iid</code>, <code>comp</code> (held-out operator pairs) and
-      <code>depth</code> (deeper than any demo) are fixed at generation time.
-      <code>tail</code> is derived per run — the items whose table entries this
-      agent never bought. It cannot be fixed in advance, because the agent may
-      query anything; and it doubles as a read on how smart its query strategy
-      was.
-    </p>
-    <p>
-      There is no <code>floor</code> split: the test set is fully solvable and
-      the ceiling is a clean 100%.
-    </p>
-  </div>
-</section>
-
-<!-- ====================================================================== PI -->
-<section class="section wrap" id="pi">
-  <h2>π — which half is the difficulty in?</h2>
-
-  <div class="formula">a_skel = accuracy(true skeleton + identity table)    # only the table is missing
-a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is missing
-
-π = (1 - a_tab) / ((1 - a_tab) + (1 - a_skel))       # the SKELETON's share</div>
-
-  <div class="prose">
-    <p>
-      π → 1 means the difficulty is programmable (code should win); π → 0 means
-      it is not (weights should win). π is <em>measured</em>, never configured —
-      phase-diagram axes use the measured value, never a preset name.
-    </p>
-  </div>
-
-  <figure>
-    <!-- TODO: replace with the real phase diagram, e.g.
-         <img src="assets/img/phase-diagram.svg" alt="Arm accuracy against measured π"> -->
-    <div class="placeholder">phase diagram — arm accuracy vs. measured π<br>(figure to be added)</div>
-    <figcaption>
-      Accuracy of each delegation arm as a function of measured π. The crossover
-      is the quantity the benchmark exists to locate.
-    </figcaption>
-  </figure>
-</section>
-
-<!-- ================================================================= RESULTS -->
-<section class="section wrap" id="results">
-  <h2>Results</h2>
-  <div class="prose">
-    <p class="muted">
-      <!-- TODO: fill in once the arm sweeps have run. Keep numbers as numbers. -->
-      Arm comparisons across the π sweep are still running. This section will
-      carry the crossover table and the per-split breakdown.
-    </p>
-  </div>
-
   <div class="table-scroll">
     <table>
-      <thead>
-        <tr><th>Arm</th><th>What it delegates to</th><th>iid</th><th>comp</th><th>depth</th><th>tail</th></tr>
-      </thead>
+      <thead><tr><th>Split</th><th class="num">n</th><th>What it tests</th></tr></thead>
       <tbody>
-        <tr><td class="mono">A0′</td><td>saturated baseline</td><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td></tr>
-        <tr><td class="mono">A2</td><td>context</td><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td></tr>
-        <tr><td class="mono">A4</td><td>code</td><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td></tr>
-        <tr><td class="mono">A6</td><td>weights</td><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td><td class="muted">—</td></tr>
+        <tr><td class="mono">iid</td><td class="num">6500</td>
+            <td>in-distribution, held-out pairs forbidden</td></tr>
+        <tr><td class="mono">comp</td><td class="num">2300</td>
+            <td>compositional generalisation: requires a held-out operator pair</td></tr>
+        <tr><td class="mono">depth</td><td class="num">1200</td>
+            <td>deeper than anything in the demos</td></tr>
+        <tr><td class="mono">tail</td><td>derived</td>
+            <td>items whose table entries <em>this run</em> never bought — derived
+                per run, because "never seen" is only knowable afterwards</td></tr>
       </tbody>
     </table>
   </div>
 </section>
+
+<div class="wrap"><hr></div>
+
+<!-- ==================================================================== ARMS -->
+<section class="section wrap" id="arms">
+  <h2>The arms<span class="tag tag--todo">in progress</span></h2>
+  <p class="section__lede">
+    Four containers for the same purchased knowledge. An arm is defined by which
+    tools it is given, enforced in the harness rather than by asking the model
+    to abstain.
+  </p>
+
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr><th>Arm</th><th>Container</th><th>What it seals</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="mono">A0′</td><td>none — frontier answers directly</td>
+            <td>nothing; one shot per chunk</td>
+            <td><span class="tag tag--done">measured</span></td></tr>
+        <tr><td class="mono">A2</td><td>context</td><td>a prompt prefix, re-paid on every query</td>
+            <td><span class="tag tag--todo">rerun pending</span></td></tr>
+        <tr><td class="mono">A4</td><td>code</td><td>a Python solver, sandboxed, no network</td>
+            <td><span class="tag tag--todo">rerun pending</span></td></tr>
+        <tr><td class="mono">A6</td><td>weights</td><td>a fine-tuned student, no prompt</td>
+            <td><span class="tag tag--todo">rerun pending</span></td></tr>
+        <tr><td class="mono">A7</td><td>agent chooses</td><td>any combination</td>
+            <td><span class="tag tag--todo">not implemented</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="placeholder">
+    <p>
+      <b>Arm results are not published yet, deliberately.</b> The earlier sweep
+      is invalidated: the data layer changed underneath it, and two harness
+      asymmetries would have contaminated the comparison — only the weights arm
+      was given self-evaluation tools, and the dev split is carved from the
+      agent's own purchases, which do not match the test distribution. Both are
+      open decisions before the arms are rerun once, on frozen instances.
+    </p>
+  </div>
+</section>
+
+<div class="wrap"><hr></div>
+
+<!-- ================================================================ PROTOCOL -->
+<section class="section wrap" id="protocol">
+  <h2>Evaluation protocol<span class="tag tag--todo">being settled</span></h2>
+  <div class="placeholder">
+    <p>
+      Scoring is exact match, one path for every arm, so a difference in the
+      harness cannot masquerade as a difference in the container. Every score
+      now ships beside the skeleton-only and table-only ceilings computed on the
+      same items, because a raw number is not comparable across splits or
+      instances — the skeleton ceiling alone ranges 0.148 to 0.744 across seeds.
+    </p>
+    <p>
+      Still to fix here: how many items each arm is scored on (pairing every arm
+      on the same subset halves the standard error on a difference), and the
+      query cap Q, which now also decides how clean the
+      <span class="mono">tail</span> split is.
+    </p>
+  </div>
+</section>
+
+<div class="wrap"><hr></div>
+
+<!-- ============================================================= EXPERIMENTS -->
+<section class="section wrap" id="experiments">
+  <h2>Experiments<span class="tag tag--todo">planned</span></h2>
+  <div class="placeholder">
+    <p>
+      The main figure is a (π, Q) phase diagram: where does each container
+      succeed, as a function of where the difficulty sits and how much of the
+      table the agent could see. Instances are sampled along a continuous π axis
+      rather than grouped into three settings, since the presets' measured
+      ranges overlap.
+    </p>
+    <p>
+      Also planned: a variance decomposition separating "some interpreters are
+      harder" from "this run got lucky" — the two seeds are kept apart in the
+      config for exactly that — and a second task where deployment is expensive
+      by construction, which is what carries the amortisation argument Glyph
+      cannot.
+    </p>
+  </div>
+</section>
+
+<div class="wrap"><hr></div>
 
 <!-- =================================================================== START -->
 <section class="section wrap" id="start">
@@ -265,8 +606,11 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
 <pre><code>pip install -e ".[dev]"
 python -m glyph.cli show --preset pi_mid --seed 1001   # one instance, end to end
 python -m glyph.cli pi --n-seeds 4                     # measure π across presets
-pytest -q                                              # self-checks #1–#3
-python scripts/probe_tokenizer.py Qwen/Qwen3-1.7B      # self-check #6</code></pre>
+pytest -q                                              # 122 tests, self-checks included
+
+python scripts/bench_scan.py --presets pi_mid --seeds 20    # π and the ceilings
+python scripts/table_ceiling.py --seen-frac 0.10            # how far weights reach
+python scripts/run_a0p.py --n-facts 2000 --n-test 500       # the saturated frontier</code></pre>
 
   <h3>Layout</h3>
 <pre><code>src/glyph/
@@ -277,10 +621,19 @@ python scripts/probe_tokenizer.py Qwen/Qwen3-1.7B      # self-check #6</code></p
 ├── interp.py      P = Interpreter(skeleton, tables); lookup logging
 ├── instance.py    generation, demos, query oracle, splits, tail derivation
 ├── measure.py     π via two crippled oracles
+├── seal.py        one scoring path for every arm; ceilings and headroom
 ├── budget.py      the ledger — the single metered entry point
-├── trace.py       JSONL trace + response cache (replay, not re-billing)
-└── cli.py</code></pre>
+└── arms/          a2_context · a4_code · a6_weights · a0p_saturated</code></pre>
+
+  <p class="muted" style="font-size:.88rem">
+    <code>docs/progress.md</code> is the append-only record of what was run and
+    what it showed, corrections included.
+    <code>docs/open_questions.md</code> is the standing list of what is still
+    undecided, edited in place, with one GitHub issue per item.
+  </p>
 </section>
+
+<div class="wrap"><hr></div>
 
 <!-- ==================================================================== CITE -->
 <section class="section wrap" id="cite">

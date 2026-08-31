@@ -329,3 +329,77 @@ tbody tr:last-child td { border-bottom: 0; }
   color: var(--fg-faint); font-size: .87rem;
 }
 .footer a { color: var(--fg-muted); }
+
+/* ---------------------------------------------------------------------------
+   Added for the first results pass: the headline band, the generation
+   pipeline, and status tags. Tokens only -- nothing here defines a colour of
+   its own, so both themes follow the palette above.
+   --------------------------------------------------------------------------- */
+
+/* --- big numbers ---------------------------------------------------------- */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+        gap: 1rem; margin: 1.75rem 0; }
+.kpi { border: 1px solid var(--rule); border-radius: 8px; padding: 1rem 1.1rem;
+       background: var(--bg-panel); }
+.kpi--lead { border-color: var(--accent); background: var(--accent-soft); }
+.kpi__n { font-family: var(--font-mono); font-size: 1.9rem; line-height: 1.1;
+          letter-spacing: -.02em; display: block; }
+.kpi__label { display: block; margin-top: .45rem; font-size: .82rem;
+              color: var(--fg-muted); line-height: 1.45; }
+.kpi__sub { display: block; margin-top: .3rem; font-size: .75rem;
+            color: var(--fg-faint); font-family: var(--font-mono); }
+
+/* --- the 0..1 band showing where each oracle sits -------------------------- */
+.band { margin: 2rem 0 2.75rem; }
+.band__track { position: relative; height: 2.6rem; border-radius: 5px;
+               background: linear-gradient(90deg, var(--bg-inset), var(--bg-code));
+               border: 1px solid var(--rule); }
+.band__fill { position: absolute; inset: 0 auto 0 0; border-radius: 4px 0 0 4px;
+              background: var(--accent-soft); }
+.band__mark { position: absolute; top: -.35rem; bottom: -.35rem; width: 2px;
+              background: var(--fg-faint); }
+.band__mark--key { background: var(--accent); width: 3px; }
+.band__labels { position: relative; height: 5.5rem; margin-top: .4rem;
+                font-size: .78rem; }
+.band__label { position: absolute; transform: translateX(-50%); text-align: center;
+               width: 9rem; line-height: 1.35; color: var(--fg-muted); }
+.band__label b { display: block; font-family: var(--font-mono); font-size: .95rem;
+                 color: var(--fg); font-weight: 600; }
+.band__label--key b { color: var(--accent); }
+@media (max-width: 720px) {
+  .band__labels { height: 8.5rem; }
+  .band__label { width: 6.5rem; font-size: .72rem; }
+}
+
+/* --- the generation pipeline ---------------------------------------------- */
+.pipeline { margin: 1.75rem 0 1rem; border-left: 2px solid var(--rule);
+            padding-left: 0; list-style: none; }
+.pipe { position: relative; padding: 0 0 1.6rem 1.75rem; }
+.pipe:last-child { padding-bottom: .25rem; }
+.pipe::before { content: ""; position: absolute; left: -7px; top: .45rem;
+                width: 12px; height: 12px; border-radius: 50%;
+                background: var(--bg); border: 2px solid var(--accent); }
+.pipe__head { display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap; }
+.pipe__n { font-family: var(--font-mono); font-size: .72rem; letter-spacing: .1em;
+           color: var(--fg-faint); }
+.pipe__title { font-weight: 600; font-size: 1.02rem; }
+.pipe__src { font-family: var(--font-mono); font-size: .74rem; color: var(--fg-faint); }
+.pipe p { margin: .45rem 0 .55rem; font-size: .93rem; max-width: 60ch; }
+.pipe__knobs { display: flex; flex-wrap: wrap; gap: .35rem; }
+.pipe__knobs code { font-size: .74rem; padding: .12rem .4rem; border-radius: 4px;
+                    background: var(--bg-code); color: var(--fg-muted); }
+
+/* --- status tags ---------------------------------------------------------- */
+.tag { display: inline-block; font-family: var(--font-mono); font-size: .68rem;
+       letter-spacing: .08em; text-transform: uppercase; padding: .16rem .45rem;
+       border-radius: 4px; border: 1px solid var(--rule-strong);
+       color: var(--fg-muted); vertical-align: middle; margin-left: .5rem; }
+.tag--done { border-color: var(--accent); color: var(--accent);
+             background: var(--accent-soft); }
+.tag--todo { border-style: dashed; }
+
+.section__lede { font-size: 1.05rem; color: var(--fg-muted);
+                 max-width: var(--measure); margin: 0 0 1.5rem; }
+table td.num, table th.num { text-align: right; font-family: var(--font-mono);
+                             font-variant-numeric: tabular-nums; }
+tr.is-lead td { background: var(--accent-soft); }
