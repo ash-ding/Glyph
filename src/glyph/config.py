@@ -58,14 +58,46 @@ class GlyphConfig:
     mlp_width: int = 64
     mlp_temp: float = 1.0       # pre-activation scale; higher = less smooth
     binary_coupling: float = 0.25   # D2: 0 = purely digit-wise, large = naive 96-dim MLP
-    # Unary operators are a single joint MLP over the whole embedding, with
-    # no per-digit factorisation -- unlike the binary operators, which D2
-    # gave one.  Self-check #5 found that this makes unary the *harder* half
-    # to extrapolate (reach 0.46 vs binary's 0.80), inverting what the spec
-    # assumes.  Setting this to a float rebuilds the unary tables the same
-    # way the binary ones are built, with this coupling weight, so the two
-    # halves can be compared.  None keeps the original joint MLP.
-    unary_coupling: float | None = None
+    # Unary operators are built the same way as binary ones: one small MLP per
+    # digit position, plus a weak global coupling term at this weight.  `None`
+    # restores the original single joint MLP over the whole embedding.
+    #
+    # The joint form was never a decision.  D2 factorised the *binary* tables
+    # because 24M entries leave no choice; unary has 4913 and simply never got
+    # the same treatment.  Self-check #5 then found that this made unary the
+    # **harder** half to extrapolate -- reach 0.158 against binary's 0.734 --
+    # inverting what the spec assumed.  So the asymmetry was an omission whose
+    # sign turned out to be backwards, not a trade-off anyone chose.
+    #
+    # Why the value matters, and why 0.25 is provisional.  Coupling sets how
+    # far the table sits from being decomposable into per-digit parts, and that
+    # one number moves both halves of the design in opposite directions:
+    #
+    #   too low   the parts can be enumerated into a lookup table, and the code
+    #             arm takes the win the weights arm was supposed to have
+    #   too high  nobody learns it, and the pi->0 end has no winner at all
+    #
+    # Measured on a least-squares fit over the parts (an upper bound: it sees
+    # the raw output vector and 8000 observations, neither of which an agent
+    # gets):
+    #
+    #     coupling   parts model R^2   unseen-entry accuracy
+    #        0.0          1.000              1.000
+    #        0.1          0.999              0.922
+    #        0.25         0.995              0.821
+    #        0.5          0.982              0.680
+    #        1.0          0.956              0.524
+    #        None         0.911              0.427   <- the joint form
+    #
+    # 0.25 is carried over from binary and is not yet justified for unary,
+    # because the two have very different part counts: binary's parts are
+    # per-position *pairs*, 3 x 17^2 = 867, while unary's are single digits,
+    # 3 x 17 = 51.  Sixteen times fewer parts means enumeration is that much
+    # cheaper, so the same coupling does not buy the same resistance.  Under a
+    # realistic threat model -- decoded symbols only, N purchased queries --
+    # binary at 0.25 saturates at 0.514 and needs ~2000 queries to get there.
+    # The unary equivalent has not been measured.
+    unary_coupling: float | None = 0.25
 
     # How an MLP's real-valued output becomes a legal symbol again.
     #
