@@ -27,6 +27,8 @@ correction is in `progress.md` under the entry that contains it.
 | `value_form = letter_sep` — four tokens per value, fixed width | `553abe5`, closes [#7](https://github.com/ash-ding/Glyph/issues/7) |
 | digit layout stays `17³` | closes [#10](https://github.com/ash-ding/Glyph/issues/10) |
 | a preset is a sampler; every report carries the instance's measured π | closes [#2](https://github.com/ash-ding/Glyph/issues/2) |
+| `depth_stop_prob = 0.15` — depth is sampled, not the split's budget restated | closes [#6](https://github.com/ash-ding/Glyph/issues/6) |
+| both ceilings ship on every scored subset; `headroom` is the primary figure | closes [#4](https://github.com/ash-ding/Glyph/issues/4) |
 
 ---
 
@@ -103,40 +105,25 @@ three operators. An earlier note overstated it as general.
 because changing them invalidates every previously measured π. Changing the
 *sample* is close to the same act.
 
-### [#4](https://github.com/ash-ding/Glyph/issues/4) — ceiling as covariate, normaliser, or both? · P1
+### ~~[#4](https://github.com/ash-ding/Glyph/issues/4) — ceiling as covariate or normaliser~~ · settled
 
-`ScoreReport` now carries both ceilings, computed on the items actually scored,
-plus `headroom = (score − ceiling) / (1 − ceiling)`. How the analysis uses them
-is open.
+**Both**, with `headroom` primary and raw scores alongside. The gap this closed
+was `tail`, the one number in the report with nothing to read it against; it now
+has its own ceiling.
 
-pi_mid/1001, full test set, exact match:
+**Correction.** This entry claimed the skeleton ceiling equals the fraction of
+items needing no lookup "and not approximately". That held at pi_mid seed 1001
+and is not general — equality on 3 of 5 seeds, exceeded by 7% and 9% on the
+others. `needs_u`/`needs_b` record entries **touched**, not entries the answer
+**depends on**: on seed 1002, `s0` is `map_skip(j=1) → dedup → rotate(1)` and
+the outer `s3` keeps only the element the map skipped, so two lookups happen and
+neither matters — the identity-table oracle answers it too.
 
-| split | n | needs no table | true skeleton + identity table |
-|---|---|---|---|
-| iid | 6500 | 0.269 | **0.269** |
-| comp | 2300 | 0.172 | **0.172** |
-| depth | 1200 | 0.065 | **0.065** |
-| all | 10000 | 0.222 | **0.222** |
-
-The columns are *equal*: a true skeleton with an identity table answers the
-items needing no lookup and only those. Against that line, on 200 items
-(SE ≈ 0.03):
-
-```
-ceiling  0.222
-A0'      0.255    +1.1 SE — indistinguishable
-A4       0.255    the same
-A2       0.055    far below
-A6       0.035    far below
-```
-
-Without the line, "the frontier extracted no table knowledge" and "the frontier
-did well" are the same number. Across 20 pi_mid seeds the overall ceiling ranges
-**0.148–0.744**, more than the gap between any two arms.
-
-`headroom` is `None` when the ceiling is 1.0, which happens — one pi_mid seed
-has a `comp` split fully solvable by skeleton alone. That split measures
-nothing and used to be averaged in silently.
+That makes **`tail` over-inclusive**: an item counts as tail when it touched an
+unbought entry, even where the answer did not depend on it, and its near-zero
+ceiling measures exactly that over-inclusion. Whether `tail` should instead mean
+"the answer changes without these entries" is a protocol question — one extra
+evaluation per item, so cheap, but load-bearing for H1 — and is **not settled**.
 
 ### [#5](https://github.com/ash-ding/Glyph/issues/5) — match `comp`'s table demand to `iid`'s?
 
@@ -173,39 +160,19 @@ reason to hold: it redefines `comp` from "compositional generalisation" to
 "compositional generalisation at matched table demand", and would invalidate
 every instance a third time.
 
-### [#6](https://github.com/ash-ding/Glyph/issues/6) — sample expression depth? · P1
+### ~~[#6](https://github.com/ash-ding/Glyph/issues/6) — sample expression depth~~ · settled
 
-`_sample` stops only when the budget runs out, so depth **equals** budget and
-`min_depth` is nearly a no-op. pi_mid's test set is two points: 8800 items at
-depth 2, 1200 at depth 4, nothing at 3, zero variance inside `iid`.
+`depth_stop_prob = 0.15`. Depth used to *equal* the split's budget, which made
+`min_depth` nearly a no-op and left pi_mid's test set as two points. Measured on
+2000 items: `iid` {2: 1300} → {1: 238, 2: 1062}, the depth split {4: 240} →
+{3: 45, 4: 195}, skeleton ceiling 0.228 → 0.235. Generation does not slow.
+`comp` stays pinned at depth 2, since a held-out pair needs two levels.
 
-`scripts/depth_sampling_probe.py`, pi_mid, 2000 items, 3 seeds:
-
-```
-stop=0.00   iid {2:1300}          depth {4:240}        ceiling 0.228  lookups 3.07
-stop=0.15   iid {1:269, 2:1031}   depth {3:41,4:199}   ceiling 0.235  lookups 2.94
-stop=0.30   iid {1:513, 2:787}    depth {3:82,4:158}   ceiling 0.259  lookups 2.76
-stop=0.50   iid {1:803, 2:497}    depth {3:136,4:104}  ceiling 0.293  lookups 2.53
-```
-
-Generation does not slow and nothing fails. Depth diversity buys down the
-discriminative range; at stop 0.15 that costs 0.007 of ceiling.
-
-This is also half the explanation of the dev/test mismatch in #14: the agent
-buys single-level probes because that is how you read a table, and **no test
-item is single-level**.
-
-**Recommendation: 0.15.** Measured, not implemented.
-
-**`stop_prob` is not a config field.** It exists only inside
-`scripts/depth_sampling_probe.py`, which copies `_sample`, adds the early stop,
-and monkeypatches `glyph.instance._sample` for the duration of the run before
-restoring it. Nothing in `src/` knows about it — deliberately, since the point
-was to measure what changing the sampler would do before changing it.
-
-Adopting this means three things: a field on `GlyphConfig` (say
-`depth_stop_prob: float = 0.15`), one line in `_sample`'s `go()`, and
-regenerating every instance.
+**Side effect worth knowing.** Depth-1 expressions are now reachable and carry
+*no adjacent operator pair at all*, so every held-pair constraint passes over
+them in both directions. Holding out every realizable pair used to empty the
+demos and now empties `depth` instead. `iid` has gained a population the
+held-pair machinery cannot touch.
 
 ### ~~[#7](https://github.com/ash-ding/Glyph/issues/7) — `value_form`~~ · settled
 
