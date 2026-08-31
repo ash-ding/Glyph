@@ -3253,3 +3253,85 @@ Fixed: `chunk` is a parameter, 50 rather than 25 — which also halves how often
 the 70k evidence block is re-sent — `max_tokens` defaults to 128000, and a
 coverage guard raises `Truncated` below 95% answered instead of scoring. The run
 above answered 500/500 with zero truncated calls.
+
+---
+
+# 2026-08-31 — how A0' was actually tested, and the one caveat that leaves
+
+Asher asked what the A0' test loop looks like mechanically. Writing it down
+because the answer contains a limitation the previous entry did not state, and
+it is the first thing a reader should want to check.
+
+## The mechanism
+
+A0' has no prepare phase and seals nothing. That is a structural difference from
+the other arms, not an omission:
+
+```
+A2 / A4 / A6   agent explores -> seals an artifact -> the artifact answers,
+                                                     with no further oracle
+A0'            the script buys evidence -> the frontier answers directly,
+                                           one shot, nothing sealed
+```
+
+Each call carries the `SATURATED` prompt: the public syntax spec, the full
+purchased record, and the expressions to answer.
+
+```
+  [syntax spec: value range, operator names, structural signatures]
+
+  Below is every query anyone has made against the hidden interpreter,
+  with its answer. This is the complete purchased record.
+
+    s0(u1, [v_a_b_d, v_a_f_b])   = [v_e_m_o, v_d_e_p]
+    s1([v_i_l_b, v_d_j_l], b0)   = v_d_j_l
+    ... 2000 rows, 70k tokens ...
+
+  Using only that, evaluate the following 50 expressions.
+
+    1. s0(u0, s0(u0, [v_k_e_q, v_p_d_a]))
+    ... 50 rows, expressions only ...
+
+  Answer with exactly 50 lines of the form  <number>: <result>
+```
+
+**Test items appear as expressions with no answers.** 500 items over 10
+independent calls; the evidence block is re-sent each time and nothing carries
+between calls, which is where the 4,871 H100-s of input went.
+
+**Leakage checked, not assumed**: 2000 purchased expressions against 500 scored
+expressions, **intersection 0**. The purchases are drawn from a fresh sampler,
+not from the test set, so no scored item's answer appears anywhere in the
+context.
+
+## The caveat
+
+**A0' does not choose its own evidence.** Those 2000 queries were drawn by the
+script — 70% single-level probes, 30% in-domain expressions — and the model sees
+them already fixed. A real agent probes *adaptively*: A6 bought marker-value
+probes first to read the structural operators' permutation rules, then targeted
+what it still needed.
+
+So the precise claim is:
+
+> A0' measures what the frontier can infer **from a given large body of
+> evidence**, not what it could achieve if it chose its own queries.
+
+What this does and does not touch:
+
+- It does **not** affect the retrieval-versus-extrapolation split (0.976 against
+  0.016). That is a statement about the evidence it was given, independent of
+  how the evidence was chosen.
+- It **does** leave an opening on "A0' lost": an adaptive buyer might extract
+  more per query from the same budget.
+
+The opening looks narrow. The evidence already revealed **2551 of 4913** unary
+entries — 52% of the table — and extrapolation still came out at 1.6%. The
+failure is not about *which* entries were handed over; it is that being handed
+entries does not generalise beyond them. A different selection changes which
+items land in the 126 it answers correctly, not the fact that the other 374 are
+at chance.
+
+Worth doing eventually as a control: A0' with an adaptive buyer, or A0' fed a
+real agent's log — which is what the original design specified before the
+capacity framing made the generous-evidence version the sharper test.
