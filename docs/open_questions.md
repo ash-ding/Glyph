@@ -226,28 +226,47 @@ read as a per-query one.
 
 Constraint taken on: `base ≤ 26`, which narrows #10.
 
-### [#8](https://github.com/ash-ding/Glyph/issues/8) — `unary_coupling` · P1
+### [#8](https://github.com/ash-ding/Glyph/issues/8) — `unary_coupling`, which value · P1
 
-Unary operators are one joint MLP; binary ones got a per-digit factorisation.
-Self-check #5 found this makes **unary the harder half**, inverting the spec's
-assumption.
+**Layer 1 settled** (`3a35a2a`): unary is now built like binary, one MLP per
+digit position plus a weak global coupling term. The joint form it replaced was
+never a decision — D2 factorised *binary* because 24M entries leave no choice,
+unary has 4913 and never got the same treatment, and self-check #5 then found
+this made unary the harder half (reach 0.158 against binary's 0.734), inverting
+what the spec assumed.
 
-| | per-entry reach |
-|---|---|
-| unary, joint (current) | 0.158 at 24k steps |
-| unary, digit-wise (`unary_coupling=0.25`) | 0.597 |
-| binary, c=0.25 | 0.734 |
+**Layer 2 open**: 0.25 is carried over from binary and probably wrong, because
+the part counts differ 16-fold — binary's parts are per-position pairs
+(3 × 17² = 867), unary's are single digits (3 × 17 = 51).
 
-`pi_low` needs 4.42 lookups per item and 100% of its items touch the table, so
-item-level exact match is roughly `reach ** 4.4`:
+Swept on pi_mid. Left is a least-squares fit over the 51 parts seeing the raw
+output vector — an upper bound on a weights arm. Right is the realistic code-arm
+attack: decoded symbols only, N queries, one 17-cell table per position.
 
-```
-reach 0.158  →  ~0.0006     pi_low is unsolvable
-reach 0.597  →  ~0.11       pi_low is thin but measurable
-```
+| coupling | reach (upper bound) | N=200 | N=5000 | gap |
+|---|---|---|---|---|
+| 0.0 | 1.000 | 1.000 | 1.000 | +0.000 |
+| 0.1 | 0.922 | 0.774 | 0.774 | +0.148 |
+| **0.25** *(current)* | 0.821 | 0.473 | 0.524 | +0.297 |
+| 0.5 | 0.680 | 0.248 | 0.285 | +0.395 |
+| 1.0 | 0.524 | 0.080 | 0.111 | **+0.413** |
+| None *(old)* | 0.427 | 0.041 | 0.040 | +0.387 |
 
-All of #5's numbers were produced at lr 1e-5, which the LR sweep showed
-understates the student by ~0.24 on binary. They are a floor.
+At coupling 0 the table is gone in **200 queries** — ten times cheaper than
+binary's ~2000, the direct consequence of 16× fewer parts. Enumeration also
+saturates almost immediately: 51 cells fill in a couple of hundred queries and
+further buying gains nothing.
+
+**Layer 3**: the widest gap is not automatically right. The left column is an
+upper bound; the student realised **37%** of it at the one point where both are
+known. Carried forward and compounded over pi_low's 4.42 lookups per item,
+neither 0.25 (≈0.006) nor 1.0 (≈0.0005) clears the bar — **the binding
+constraint is the realisation rate and the compounding, not coupling**. Coupling
+decides how the arms separate, not whether the low-π end is measurable.
+
+On the gap alone 0.5 beats 0.25: +0.395 is 96% of the peak while keeping the
+upper bound at 0.680. What settles it is whether 37% holds as coupling rises —
+GPU only, added as an axis to [#22](https://github.com/ash-ding/Glyph/issues/22).
 
 ### [#9](https://github.com/ash-ding/Glyph/issues/9) — test-set size and per-arm evaluation size · P1
 
