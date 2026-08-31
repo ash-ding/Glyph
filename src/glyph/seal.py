@@ -88,6 +88,10 @@ class ScoreReport:
     # where the arm sits between that and perfect. See `headroom`.
     ceiling: dict = field(default_factory=dict)
     headroom: dict = field(default_factory=dict)
+    # What instance this was: its seed and its measured pi. The preset name is
+    # added by the arm runner and is provenance only -- the phase diagram's
+    # axis is `instance["pi"]["pi"]`, never the name. See GlyphInstance.
+    instance: dict = field(default_factory=dict)
     failures: list[str] = field(default_factory=list)
 
     def to_json(self) -> str:
@@ -178,4 +182,7 @@ def evaluate(inst: GlyphInstance, artifact: SealedArtifact, ledger: Ledger, *,
         arm=artifact.arm, overall=overall, by_split=by_split, tail=tail,
         n=len(items), sizes=artifact.sizes(), ledger=ledger.summary(),
         digest=artifact.digest(), ceiling=ceiling, headroom=head,
+        instance={"seed": inst.seed, "pi": inst.measured_pi(),
+                  "n_structural": inst.cfg.n_structural,
+                  "atomic_ratio": inst.cfg.atomic_ratio},
     )

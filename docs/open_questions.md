@@ -26,6 +26,7 @@ correction is in `progress.md` under the entry that contains it.
 | the skeleton-only and table-only ceilings ship with every score, plus `headroom` | `8253c9a` |
 | `value_form = letter_sep` — four tokens per value, fixed width | `553abe5`, closes [#7](https://github.com/ash-ding/Glyph/issues/7) |
 | digit layout stays `17³` | closes [#10](https://github.com/ash-ding/Glyph/issues/10) |
+| a preset is a sampler; every report carries the instance's measured π | closes [#2](https://github.com/ash-ding/Glyph/issues/2) |
 
 ---
 
@@ -61,30 +62,26 @@ does not.
 *Counter-argument worth weighing:* if `pi_low`'s job is to be a pure table task,
 `comp` matters least there, and a fixed probe is simpler.
 
-### [#2](https://github.com/ash-ding/Glyph/issues/2) — is a preset a condition or a sampler?
+### ~~[#2](https://github.com/ash-ding/Glyph/issues/2) — condition or sampler?~~ · settled
 
-Measured π, stratified, 20 seeds each:
+**A sampler.** Seven of twenty `pi_mid` seeds fall inside `pi_high`'s measured
+range, so an instance at π = 0.70 cannot be attributed to a preset; the union
+covers [0.12, 0.82] continuously, which is what the phase diagram wants.
 
-```
-pi_low   [0.11 0.12 0.17 0.18 | 0.38 0.41 0.44]
-pi_mid   [0.36 … 0.58 | 0.61 0.63 0.65 0.66 0.66 0.68 0.72 0.76]
-pi_high                       [0.62 0.65 0.66 … 0.84]
-```
+The position was already in `config.py`. What this issue was really hiding is
+that it was **unenforceable**: `measured_pi` was never recorded in a run report,
+so every report said `preset: pi_mid` and nothing about the instance's actual π.
+Plotting against π would have meant regenerating each instance afterwards and
+trusting the config had not moved. The stated axis did not exist in the data.
 
-Seven of twenty `pi_mid` seeds fall inside `pi_high`'s range. Given an instance
-at π = 0.70 you cannot say which preset made it.
+`ScoreReport.instance` now carries `{seed, preset, pi, n_structural,
+atomic_ratio}`, with `pi` being the whole `measure_pi` dict rather than the
+ratio alone — so if [#3](https://github.com/ash-ding/Glyph/issues/3) changes
+which items π is measured on, the new value is a recomputation from `a_skel`
+and `a_tab` rather than a rerun. `measured_pi()` caches (0.22 s once).
 
-`config.py` already takes the sampler position and the data supports it — the
-union covers [0.12, 0.82] continuously. What is unsettled is whether it is
-**stated**: the paper cannot say "three settings", only "N instances along a
-continuous axis", and the grids should be organised by measured π rather than by
-preset name.
-
-Holding everything at `pi_mid`'s settings and moving only `atomic_ratio` sweeps
-π from 0.765 to 0.358 monotonically, 42/42 generating, mode baseline steady:
-one knob covers most of the axis where the presets move six.
-
-Blocks nothing.
+Commits the paper to describing N instances along a continuous axis, not three
+settings. Figures key on `instance["pi"]["pi"]`.
 
 ### [#3](https://github.com/ash-ding/Glyph/issues/3) — does π stay measured on `iid` only?
 

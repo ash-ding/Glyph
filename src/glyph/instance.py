@@ -227,6 +227,7 @@ class GlyphInstance:
         self._skel_interp: Interpreter | None = None
         self._tab_interp: Interpreter | None = None
         self._ceil_cache: dict[tuple, str] = {}
+        self._pi: dict[str, float] | None = None
 
     # -- agent-visible, free ------------------------------------------
     def syntax_spec(self) -> str:
@@ -264,8 +265,24 @@ class GlyphInstance:
         return out
 
     def measured_pi(self) -> dict[str, float]:
-        from .measure import measure_pi
-        return measure_pi(self)
+        """Cached: every run records this, and it is the phase diagram's axis.
+
+        The preset name is provenance, not a condition. Measured pi ranges
+        overlap between neighbouring presets -- seven of twenty `pi_mid` seeds
+        fall inside `pi_high`'s range -- so an instance at pi = 0.70 cannot be
+        attributed to a preset, and a figure keyed on the name would be
+        grouping instances that differ more within a group than between.
+
+        Which items this is measured on is still open (#3): `measure_pi`
+        samples `test[:1500]`, which at full size is entirely `iid`. The whole
+        dict is recorded rather than the ratio alone so that a later change of
+        definition can be recomputed from `a_skel` and `a_tab` without
+        regenerating anything.
+        """
+        if self._pi is None:
+            from .measure import measure_pi
+            self._pi = measure_pi(self)
+        return self._pi
 
     def is_tail(self, t: TestItem) -> bool:
         """Did this run never buy a table entry this item needs?

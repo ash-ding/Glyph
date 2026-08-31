@@ -67,7 +67,13 @@ class Job:
 def grid(*, arms=ARMS, presets=("pi_mid",), instance_seeds=(1001,),
          budgets=(15000.0,), run_seeds=(0,), n_test=None,
          out_root="runs") -> list[Job]:
-    """Every cell, emitted instance-major so pairs stay together."""
+    """Every cell, emitted instance-major so pairs stay together.
+
+    Enumerating by preset is how instances are *sampled*, not how results are
+    grouped. Measured pi ranges overlap between neighbouring presets, so the
+    analysis keys on `report.instance["pi"]`; the preset name only records
+    where a point came from.
+    """
     jobs: list[Job] = []
     for inst in instance_seeds:
         for preset in presets:
