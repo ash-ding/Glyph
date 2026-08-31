@@ -99,8 +99,8 @@ def mode_baseline(tables, task: str, n: int = 4000, seed: int = 11) -> dict:
 
 
 def build_tables(coupling: float, base: int, n_digits: int,
-                 value_form: str = "underscore",
-                 unary_coupling: float | None = None) -> Tables:
+                 value_form: str = CFG.value_form,
+                 unary_coupling: float | None = CFG.unary_coupling) -> Tables:
     """The pi=0 table config, with D3's digit layout left open.
 
     Self-check #6 turned D3 into a live decision: Qwen3 splits numbers into
@@ -233,8 +233,14 @@ def main() -> int:
     ap.add_argument("--coupling", type=float, default=CFG.binary_coupling)
     ap.add_argument("--base", type=int, default=CFG.base)
     ap.add_argument("--n-digits", type=int, default=CFG.n_digits)
-    ap.add_argument("--value-form", default="underscore")
-    ap.add_argument("--unary-coupling", type=float, default=None,
+    # These track `GlyphConfig` rather than being written out, because the
+    # check is only worth its GPU time if it trains on the table and surface
+    # form the benchmark actually uses. They were pinned to "underscore" and
+    # None, and both drifted: the config now defaults to `letter_sep` and a
+    # digit-wise unary table, so a run with the old defaults would have
+    # measured a benchmark that no longer exists.
+    ap.add_argument("--value-form", default=CFG.value_form)
+    ap.add_argument("--unary-coupling", type=float, default=CFG.unary_coupling,
                     help="give the unary tables the digit-wise form binary has")
     ap.add_argument("--model", default="Qwen/Qwen3-1.7B")
     ap.add_argument("--steps", type=int, default=3000)
@@ -247,6 +253,11 @@ def main() -> int:
                          "everything, which answers 'can it hold the whole "
                          "table' rather than 'can it extrapolate'")
     ap.add_argument("--out", default=None)
+    ap.add_argument("--save-model", default=None,
+                    help="directory to write the trained model to. Without it "
+                         "the run reports two numbers and discards what "
+                         "produced them, so anything wanting to ask a further "
+                         "question of the same student has to retrain first.")
     args = ap.parse_args()
     HOLDOUT_MOD = args.holdout_mod
 
@@ -339,6 +350,22 @@ def main() -> int:
               "mode_baseline": mode_ref, "decode": tables.cfg.decode,
               "verdict": verdict,
               "minutes": round((time.time() - t0) / 60, 1)}
+    if args.save_model:
+        import pathlib as _pl
+        d = _pl.Path(args.save_model)
+        d.mkdir(parents=True, exist_ok=True)
+        model.save_pretrained(d)
+        tok.save_pretrained(d)
+        # The table this student was trained against is part of the artifact:
+        # a checkpoint whose tables cannot be reconstructed measures nothing.
+        with open(d / "table_config.json", "w") as fh:
+            json.dump({k: result[k] for k in
+                       ("task", "coupling", "base", "n_digits", "value_form",
+                        "unary_coupling", "holdout_mod", "decode")}
+                      | {"seed": SEED}, fh, indent=2)
+        result["saved_to"] = str(d)
+        print(f"    model written to {d}", flush=True)
+
     if args.out:
         with open(args.out, "w") as fh:
             json.dump(result, fh, indent=2)
