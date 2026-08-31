@@ -2731,3 +2731,295 @@ the contaminated observation the last entry retracted.
 costs teacher calls. E0's four arms are invalidated by the held-pair change,
 pi_mid included — that was the point of doing all of it in one pass. Prompt
 caching is still unimplemented. T2 is still zero lines.
+
+---
+
+# 2026-08-31 — six data-layer decisions, and three things I had recorded wrong
+
+The data layer is settled enough to freeze. Six of the ten open questions in it
+closed, one had its first layer closed, and nothing that remains blocks
+regenerating instances. What follows is what was decided, what the deciding
+turned up, and what I had to retract.
+
+Fifteen commits since the last entry. `docs/open_questions.md` is the standing
+list — edited in place, unlike this file — and one GitHub issue per item.
+
+## What was settled
+
+| | decision | commit |
+|---|---|---|
+| #7 | `value_form = letter_sep` | `553abe5` |
+| #10 | digit layout stays `17³` | — (no code change) |
+| #2 | a preset is a sampler; measured π ships in every report | `1bc6aad` |
+| #6 | `depth_stop_prob = 0.15` | `d21a39f` |
+| #4 | both ceilings ship; `headroom` primary | `d21a39f` |
+| #1 | `pi_low` gets five structural operators | `3906b91` |
+| #8 layer 1 | unary is built like binary | `3a35a2a` |
+
+Still open, and none of it blocks generation: #3 (π's sample, a pi_low-only
+effect), #5 (comp's level offset, waiting on what comp is for), #8 layer 2 (the
+coupling value, waiting on GPU), #9 (evaluation size, an analysis decision).
+
+## The decisions, and what each one turned up
+
+### #7 — values render as letters
+
+`v_k_e_e` rather than `v_10_4_4`. Four tokens, fixed width, against 8.24 with a
+maximum of 10.
+
+**The argument is neutrality, not cost.** Much of `underscore`'s 8.24 is a
+tokenizer accident — base 17 has two-character digits 10–16 — so a value's token
+length correlated with its digit values. A weak leak, and an unpredictable
+output length, which is the soil the truncation bug grew in.
+
+I had claimed this "halves what the context arm pays per query". Measured end to
+end it does not: a 30-fact prompt block goes 1650 → 1063 tokens (−36%), mean
+answer length 18.92 → 10.70 (−43%). Operator and bracket scaffolding does not
+shrink. **The per-value ratio was being read as the per-query one.**
+
+### #10 — the digit layout stays 17³
+
+Both first-order constraints hold with room. The test set needs 11,387 distinct
+unary entries so the table cannot be bought; the mode-answer baseline is 0.003;
+no value takes more than 0.9% of random decode queries — against 24, 0.099–0.134
+and 0.480 for the 8¹ layout it replaced.
+
+**A third axis this had never listed**: `base / d_digit` sets how well separated
+the digit embeddings are, and 17-in-16 is tighter than the 8-in-24 it replaced
+(nearest-over-mean 0.707 with the worst digit at 0.493, against 0.814 / 0.705).
+`d_digit = 32` recovers it (0.784 / 0.709).
+
+That is second-order and the first-order effect runs the other way. I initially
+read a single seed as showing hubness degrading badly at `d_digit = 32` (0.208 →
+0.343). **Over five seeds that vanishes**: medians 0.187 / 0.249 / 0.191 across
+16 / 24 / 32, ranges almost entirely overlapping. The only robust effect of
+raising `d_digit` is better worst-case digit separation; the costs are compute
+and a doubled parameter count. What would actually decide it — does the student
+learn it better or worse — is not measurable on CPU, so it folded into #22's
+sweep rather than becoming its own question.
+
+### #2 — a preset is a sampler, and the position was unenforceable
+
+Seven of twenty `pi_mid` seeds fall inside `pi_high`'s measured range. The
+position was already stated in `config.py`.
+
+**What the issue was hiding is that it could not be acted on.** `measured_pi`
+was never recorded in a run report. Every report said `preset: pi_mid` and
+nothing about the instance's actual π, so plotting against π would have meant
+regenerating each instance afterwards and trusting the config had not moved —
+and it moved five times in this session alone. **The stated axis did not exist
+in the data.**
+
+`ScoreReport.instance` now carries `{seed, preset, pi, n_structural,
+atomic_ratio}`. The whole `measure_pi` dict goes in rather than the ratio, so
+that if #3 changes which items π is measured on, the new value is a
+recomputation from `a_skel` and `a_tab` rather than a rerun.
+
+Commits the paper to describing N instances along a continuous axis, not three
+settings.
+
+### #6 — depth is sampled rather than restated from the budget
+
+`depth_stop_prob = 0.15`. Depth used to *equal* the split's budget, so
+`min_depth` was nearly a no-op and pi_mid's test set was two points.
+
+```
+                改前          改后
+iid depths    {2: 1300}    {1: 238, 2: 1062}
+depth split   {4: 240}     {3: 45, 4: 195}
+ceiling         0.228        0.235
+```
+
+`comp` stays pinned at depth 2 — a held-out pair needs two levels.
+
+**A side effect worth naming.** Depth-1 expressions are now reachable and carry
+*no adjacent operator pair at all*, so every constraint built on held-out pairs
+passes over them in both directions. Concretely: holding out every realizable
+pair used to empty the demos and now empties `depth` instead, because the demos
+can be filled from pair-free depth-1 items. `iid` has gained a population the
+held-pair machinery cannot touch.
+
+### #4 — both ceilings, `headroom` primary, and a claim retracted
+
+The gap this closed was `tail`, the one number in the report with nothing to
+read it against.
+
+**I had recorded that the skeleton ceiling equals the fraction of items needing
+no lookup, "and not approximately".** That held at pi_mid seed 1001 and is not
+general: equality on 3 of 5 seeds, exceeded by 7% and 9% on the other two.
+
+The cause is a distinction I had not drawn. **`needs_u` / `needs_b` record
+entries *touched*, not entries the answer *depends on*.** `eval_logged` logs
+every table call, including calls a later transform discards. On seed 1002:
+
+```
+s0 = map_skip(j=1) → dedup → rotate(1)      skips element 1
+s3 = drop → reverse → dedup → drop(3)       keeps only that element
+
+s3(1, s0(u2, [A, B, C]))  →  [B]
+```
+
+Both lookups happen and are logged; the answer is the one element that was
+never mapped, so the identity-table oracle answers it too.
+
+### #1 — five structural operators for `pi_low`
+
+Neither of the two things this number decides is difficulty.
+
+It started at 2, which could not generate. Filtering the held-pair draw to
+realizable pairs fixed that at any n ≥ 3. **What 5 buys is that `comp` becomes a
+sample rather than a fixed probe.** `STRUCT_SHAPES` is
+`(UL, LB, L, KL, L, UL, KL, LB)` and the first four shapes are pairwise
+distinct, so below 5 every `(outer shape, inner shape)` class holds exactly one
+pair and the stratified draw has nothing to choose. Over 40 seeds:
+
+| n | realizable | n_hold | distinct held sets |
+|---|---|---|---|
+| 2, 3, 4 | 2, 6, 12 | 1, 2, 4 | **1** |
+| 5 | 20 | 6 | 35 |
+| 6 | 30 | 10 | 40 |
+
+π does not pay for it. Ten seeds at full size, n = 3/4/5: median π 0.344 / 0.302
+/ 0.332, ceiling 0.067 / 0.077 / 0.054, lookups 4.36 / 4.32 / 4.25 — noise, and
+n = 4 is the lowest of the three. The one column that moves is comp's spread
+across seeds (sd 0.007 / 0.103 / 0.228), which is the variation being restored
+rather than a cost, and is what `headroom` exists to divide out.
+
+Re-measured under the current sampler; the earlier sweep predated
+`depth_stop_prob` and the unary rebuild.
+
+## The unary tables now look like the binary ones
+
+`unary_coupling` defaults to 0.25: one small MLP per digit position plus a weak
+global coupling term.
+
+**The asymmetry it replaced was never a decision.** D2 factorised the *binary*
+tables because 24 million entries leave no choice; unary has 4913 and simply
+never got the same treatment. Self-check #5 then found this made unary the
+**harder** half to extrapolate — reach 0.158 against binary's 0.734 — inverting
+what the spec assumed.
+
+### What "extrapolate" turns out to depend on
+
+Measured with a least-squares fit over the per-digit parts, which is an upper
+bound: it is handed the correct hypothesis class and sees the continuous output.
+
+**Distance from digit-wise additivity is the whole story.** If the table
+decomposes as `Σₖ fₖ(dₖ)`, each digit's contribution is learnable independently
+and every unseen combination follows. `mlp_temp` and `coupling` are the same
+knob wearing two hats:
+
+| `mlp_temp` | R² of the parts model | unseen-entry accuracy |
+|---|---|---|
+| 0.25 | 0.998 | 0.896 |
+| 1.00 *(current)* | 0.911 | 0.427 |
+| 4.00 | 0.587 | 0.126 |
+
+The mechanism is that `tanh(τz) ≈ τz` for small τ, and a linear map applied to a
+*concatenation* is exactly additive. Large τ saturates and the digit
+contributions entangle. `mlp_temp` has been fixed at 1.0 and never questioned.
+
+**A gap worth naming**: the upper bound at the joint setting is 0.427 and the
+student measured 0.158 — it realises **37%**. Whether that fraction is stable is
+unknown, and it matters twice over: if it is, the CPU probe becomes a cheap
+predictor and the benchmark can be tuned without a GPU.
+
+### The coupling curve, and what it cannot settle
+
+Unary, swept. Left is the weights-arm upper bound; right is the realistic
+code-arm attack — decoded symbols only, N purchased queries, one 17-cell table
+per digit position.
+
+| coupling | reach (UB) | N=200 | N=5000 | gap |
+|---|---|---|---|---|
+| 0.0 | 1.000 | 1.000 | 1.000 | +0.000 |
+| 0.25 *(current)* | 0.821 | 0.473 | 0.524 | +0.297 |
+| 0.5 | 0.680 | 0.248 | 0.285 | +0.395 |
+| 1.0 | 0.524 | 0.080 | 0.111 | **+0.413** |
+| None *(old joint)* | 0.427 | 0.041 | 0.040 | +0.387 |
+
+At coupling 0 a unary table is gone in **200 queries** — ten times cheaper than
+binary's ~2000, the direct consequence of 16× fewer parts (3 × 17 = 51 against
+3 × 17² = 867). Enumeration also saturates almost immediately: 51 cells fill in
+a couple of hundred queries and further buying gains nothing.
+
+**The widest gap is not automatically the setting.** Carrying the 37% forward
+and compounding over pi_low's 4.4 lookups per item, neither 0.25 (≈0.006) nor
+1.0 (≈0.0005) clears the bar. The binding constraint is the realisation rate and
+the compounding, not coupling. Coupling decides how the arms separate, not
+whether the low-π end is measurable at all. Added as an axis to #22.
+
+### A claim about binary I made and withdrew within the hour
+
+Fitting the 867-part model to the binary table at coupling 0.25 gives R² 0.994,
+which I read as "not tabulatable was never achieved" — a serious charge against
+a decision marked settled.
+
+**It was wrong.** The probe saw the continuous output vector and 8000
+observations, and decoding is an `argmin`, so the 0.6% residual is enough to
+flip the result. Under the realistic threat model — decoded symbols only —
+enumeration saturates at 0.514 and needs ~2000 queries to get there, against
+0.998 at coupling 0. **Coupling 0.25 does hold for binary.** High R² is not the
+same as enumerable.
+
+What survives is smaller and still worth having: a code arm that enumerated
+would reach 0.514 per binary lookup against the weights arm's measured 0.734.
+Those are the first two numbers that can be put side by side, and they say the
+weights arm leads without leading by an order of magnitude. A4 scored 0.255 in
+E0 — exactly the skeleton ceiling — so it never tried this. **Its real ceiling
+is unmeasured**, and the experiment that would measure it is cheap.
+
+## `tail` is over-inclusive, and how much depends on Q
+
+Following from the touched-versus-required distinction: an item counts as `tail`
+when it touched an entry the run never bought, even where the answer never
+depended on it.
+
+Measured on pi_mid, 4000 items, 5 seeds, treating the first N as purchases and
+comparing against "the answer changes when unbought entries are replaced by
+identity":
+
+| N purchased | touched-tail | dependent-tail | contamination | worst seed |
+|---|---|---|---|---|
+| 100 | 2939 | 2934 | 0.002 | 0.074 |
+| 500 | 2625 | 2609 | **0.006** | 0.081 |
+| 1000 | 2237 | 2211 | 0.012 | 0.088 |
+| 2000 | 1481 | 1455 | 0.018 | **0.141** |
+
+At the volume runs actually reach, 0.6% — an order of magnitude below the 1–3
+point differences the arms will be separated by. **Not fixed**, for that reason
+and because `tail` is load-bearing for H1 and the "depends on" definition has a
+weak and a strong form that would give different splits.
+
+But it grows monotonically with Q, and the spread grows faster than the median.
+The mechanism is that buying more pushes tail membership onto the margin — items
+missing one or two entries, where the chance those are the discarded ones is
+highest. **This makes Q load-bearing for H1 rather than only for the figure's
+axis**, and it is recorded on #15. Every run now carries
+`ceiling["skeleton"]["tail"]`, which is this contamination measured on that run
+rather than estimated from five seeds.
+
+## Corrections in this entry
+
+- "the skeleton ceiling equals the no-lookup fraction, and not approximately" —
+  seed 1001, not a property. Equality on 3 of 5 seeds.
+- "`letter_sep` halves what the context arm pays" — −36% end to end, not −50%.
+  The per-value ratio read as the per-query one.
+- "hubness degrades badly at `d_digit = 32`" — one seed. Gone over five.
+- "binary's not-tabulatable was never achieved" — the probe had advantages the
+  agent does not. Under decoded-only observation, coupling 0.25 holds.
+
+Two of those four were caught before anything was acted on, and two after I had
+already said them out loud. The pattern in both of the latter is the same: a
+single seed, or a probe with an advantage I had not accounted for.
+
+## Where this leaves the data layer
+
+**Nothing open blocks regenerating instances.** #3 and #9 do not touch
+generation, #8's remaining layer waits on GPU, and #5 waits on a decision about
+what `comp` is for.
+
+Next is P1: #19, what a trained adapter actually scores on the full test set —
+the benchmark's real ceiling, which is still unknown — and #20, A0' on a paired
+subset, which is the core evidence for H1 and currently rests on 200 items.
+Then the three P2 reruns, once, on frozen instances.
