@@ -442,9 +442,30 @@ My projection of 0.502 was wrong twice in the same direction: it treated every
 lookup as extrapolation, and it assumed lookup errors are independent when they
 are correlated. **The independence model is a lower bound, not an estimate.**
 
-**[#20](https://github.com/ash-ding/Glyph/issues/20) — rerun A0' on a paired subset.** A0' at the ceiling is the strongest
-form of H1 and rests on 200 items. ~75 H100-s per item, so the subset size is
-#9's decision. Blocked on the data layer being frozen.
+**~~[#20](https://github.com/ash-ding/Glyph/issues/20)~~ — A0' on a paired
+subset. Done.** Same 500 items as #19. Evidence deliberately more generous than
+any arm could buy: 2000 queries revealing **2551 of 4913** unary entries, 70k
+tokens, unlimited thinking.
+
+| split | A0' | skeleton ceiling | headroom |
+|---|---|---|---|
+| overall | **0.258** | **0.248** | **+0.013** |
+| depth | 0.067 | 0.083 | −0.018 |
+| tail | 0.016 | 0.000 | +0.016 |
+
+**A0' sits on the line that requires no table knowledge at all.** The split that
+says why: items whose needed entries were *in* the evidence, 126 of them, score
+**0.976**; items needing entries that were not, 374 of them, score **0.016**.
+Retrieval saturated, extrapolation at zero.
+
+Against the weights arm on the same items: frontier 0.258 with 2551 entries
+given and unlimited thinking, against 0.498 for a 1.7B student that saw ~491.
+Five times the table, hundreds of times the model, 24 points lower.
+
+This settles H1 in its strong form — the advantage is learning-algorithmic, not
+economic — and confirms the data layer's foundation, since A0' failing from
+partial observation is the direct test of "learnable but not
+in-context-extractable". The freeze stands.
 
 ### P2 — invalidated, must be redone
 

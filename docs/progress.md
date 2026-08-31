@@ -3160,3 +3160,96 @@ frontier failing when the harness is what failed** — the same misreading that
 cost two wrong diagnoses on self-check #4. `chunk` is now a parameter (50 rather
 than 25, which also halves how many times the evidence block is re-sent) and a
 coverage guard raises below 95% answered instead of scoring.
+
+---
+
+# 2026-08-31 — the frontier can use a table it is handed and cannot infer one
+
+`#20`. A0' on the same 500-item paired subset as `#19`, so the three lines are
+finally on one axis.
+
+Evidence deliberately more generous than any arm could buy: 2000 purchased
+queries revealing **2551 of 4913** unary entries and 622 binary, 70k tokens of
+it, unlimited thinking, `claude-opus-4-8`. The original design paired A0' against
+another arm's query log; under the capacity framing the sharper question is
+whether the frontier can do it *given more than any agent would have*, because a
+failure there does not depend on how much a particular agent happened to buy.
+
+## Result
+
+| split | A0' | skeleton ceiling | headroom |
+|---|---|---|---|
+| iid | 0.277 | 0.258 | +0.025 |
+| comp | 0.304 | 0.304 | **+0.000** |
+| depth | 0.067 | 0.083 | **−0.018** |
+| **overall** | **0.258** | **0.248** | **+0.013** |
+| tail | 0.016 | 0.000 | +0.016 |
+
+**A0' sits on the line that requires no table knowledge at all.**
+
+## The split that says what actually happened
+
+| | items | accuracy |
+|---|---|---|
+| needed entries were in the evidence | 126 | **0.976** |
+| needed entries were not | 374 | **0.016** |
+
+It uses what it is told almost perfectly and infers almost nothing. Not a
+capability shortfall — a clean separation of two capabilities: **retrieval
+saturated, extrapolation at zero.**
+
+## Against the weights arm, same items, same instance
+
+```
+                                                 overall   tail
+skeleton ceiling, no table at all                 0.248    0.000
+A0'   frontier, 2551 entries given, unlimited     0.258    0.016
+weights arm, 1.7B, ~491 entries seen              0.498      —
+```
+
+The frontier was handed **five times** the table the student had, thinks without
+limit, and is hundreds of times larger — and scores **24 points lower**.
+
+## What this settles
+
+`a0p_saturated.py` set the criterion before the run:
+
+> If A0' loses even when saturated and unconstrained, the advantage is
+> **learning-algorithmic**: some structure gradient descent reaches and
+> in-context learning does not.
+
+That is what happened. With cost dropped as an experimental dimension the claim
+gets *stronger* rather than weaker: it is not that the frontier cannot afford to
+re-read the evidence per query, it is that re-reading does not help.
+
+**It also confirms the data layer's foundation.** The π→0 end assumes the tables
+are learnable-but-not-in-context-extractable. A0' failing from partial
+observation is the direct test of that, and it passed — so the freeze does not
+have to be reopened.
+
+Two details worth keeping:
+
+**`depth`'s headroom is negative** (−0.018). On the split with the most lookups
+per item, A0' scores *below* what knowing zero table entries gets you. More
+lookups, more actively wrong.
+
+**Output was 2.7× input** — 13,090 H100-s out against 4,871 in, $19.94 total. It
+was not answering cheaply; it thought hard and still could not extrapolate.
+
+## The harness bug this nearly hid
+
+The first attempt used `max_tokens=64000` and `CHUNK=25`, and truncated on the
+second chunk: 0 of 25 answered. Measured across the successful run, per-chunk
+output ran **40k to 78k tokens**, so the old ceiling sat near the middle of the
+distribution and would have caught roughly half the calls.
+
+Unanswered items are filled with `""` and score as wrong, so **a truncated run
+reports the frontier failing when the harness is what failed** — and the number
+it reports is exactly the shape of the number we were hoping to see. That is the
+third time this failure mode has appeared (twice on self-check #4), and the
+first time it would have confirmed a hypothesis rather than contradicted one.
+
+Fixed: `chunk` is a parameter, 50 rather than 25 — which also halves how often
+the 70k evidence block is re-sent — `max_tokens` defaults to 128000, and a
+coverage guard raises `Truncated` below 95% answered instead of scoring. The run
+above answered 500/500 with zero truncated calls.
