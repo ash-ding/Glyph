@@ -233,29 +233,38 @@ PRESETS: dict[str, GlyphConfig] = {
     # pi -> 0 : difficulty lives in the tables.  Large value space,
     # near-trivial structural ops, no guards, no composition.
     #
-    # `n_structural` is 3 rather than 2, and the reason is generation rather
-    # than difficulty.  The `comp` split requires a held-out (outer, inner)
-    # operator pair to appear and the `depth` split forbids every held-out
-    # pair, so both are spent from the same small vocabulary.  With two
-    # operators there are four Cartesian pairs but only two the grammar can
-    # actually build -- s1 returns VAL and nothing accepts a VAL argument, so
-    # any pair with s1 inside is a phantom -- and `n_hold` takes one of the
-    # four at random.  Half the time it takes a phantom and `comp` can never
-    # be filled; a quarter of the time it takes (s0, s0), which is the only
-    # route to depth 3, and `depth` can never be filled.
+    # `n_structural` is 5, and neither of the two things that number decides is
+    # difficulty.  It started at 2, which could not generate: `comp` requires a
+    # held-out (outer, inner) pair to appear while `depth` forbids every one, so
+    # both are spent from the same vocabulary, and with two operators only two
+    # of the four Cartesian pairs are buildable -- s1 returns VAL and nothing
+    # accepts a VAL argument.  13 of 20 seeds failed, and the seven that
+    # survived had all drawn the same pair.
     #
-    # Measured: 13 of 20 seeds could not generate, and the seven that did all
-    # held out the same pair, so they were not a sample of anything. Enumerating
-    # the choices gives 75% unfillable at two operators, 1.2% at three, 0% at
-    # four or more. Three seeds 20/20 here.
+    # Filtering the draw to realizable pairs fixed generation at any n >= 3.
+    # What 5 buys is that `comp` becomes a *sample* rather than a fixed probe.
+    # `STRUCT_SHAPES` is (UL, LB, L, KL, L, UL, KL, LB): the first four shapes
+    # are pairwise distinct, so below 5 every (outer shape, inner shape) class
+    # holds exactly one pair and the stratified draw has nothing to choose.
+    # Over 40 seeds:
     #
-    # The cost is that pi's low end rises -- median measured pi goes from about
-    # 0.15 to about 0.33, because three operators are more skeleton to not
-    # know. That is the trade: 0.18 of pi range against a 65% generation
-    # failure rate and a survivorship-biased sample.
+    #     n = 2, 3, 4   1 possible held set
+    #     n = 5        35
+    #     n = 6        40
+    #
+    # At n <= 4 every instance holds out the same pairs, so `comp` cannot
+    # separate "this instance's comp is hard" from "this composition is hard".
+    # Difficulty still varies -- the skeleton's semantics differ by seed -- but
+    # the identity of the tested composition does not.
+    #
+    # pi does not pay for it. Measured over 10 seeds at full size, n = 3/4/5
+    # gives median pi 0.344 / 0.302 / 0.332, overall ceiling 0.067 / 0.077 /
+    # 0.054, lookups per item 4.36 / 4.32 / 4.25 -- noise, not a trend. What
+    # does move is comp's spread across seeds: sd 0.007 / 0.103 / 0.228, which
+    # is the variation being restored rather than a cost.
     "pi_low": _preset(
         atomic_ratio=0.85, base=17, n_digits=3,
-        n_structural=3, max_transform_depth=0, guard_prob=0.0,
+        n_structural=5, max_transform_depth=0, guard_prob=0.0,
         max_expr_depth=3, demo_max_depth=2,
     ),
     # tiny config for fast tests
