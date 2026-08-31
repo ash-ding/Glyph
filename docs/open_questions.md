@@ -369,6 +369,29 @@ Query spend never exceeded 0.064% of the budget across 8 runs, and pi_mid's
 test set needs ~10⁴ distinct unary entries. Q is a coverage knob, not a cost
 knob.
 
+**Q also decides how clean `tail` is** — noticed while settling #4, and it makes
+Q load-bearing for H1 rather than only for the figure's axis. `tail` selects
+items that *touched* an unbought entry, not items whose answer *depends* on one,
+so it over-counts. Measured on pi_mid, 4000 items, 5 seeds, treating the first N
+as purchases:
+
+| N purchased | contamination (median) | worst seed |
+|---|---|---|
+| 100 | 0.002 | 0.074 |
+| 500 | **0.006** | 0.081 |
+| 1000 | 0.012 | 0.088 |
+| 2000 | 0.018 | **0.141** |
+
+At the volume runs reach — a few hundred — 0.6% sits an order of magnitude below
+the 1–3 point differences the arms will be separated by, which is why #4 records
+the defect rather than fixing it. But it grows monotonically with Q and the
+spread grows faster than the median, because buying more pushes tail membership
+onto the margin: items missing one or two entries, where the chance those are
+the discarded ones is highest. **A high Q buys coverage and pays in the
+credibility of the split that carries H1.** Every run now carries
+`ceiling["skeleton"]["tail"]`, which is this contamination measured on that run
+rather than estimated from five seeds.
+
 ### [#16](https://github.com/ash-ding/Glyph/issues/16) — `declare_target`'s roles are declarative
 
 `_t_synthesize_data` never reads `role`; `_t_train` uses it only to check one
