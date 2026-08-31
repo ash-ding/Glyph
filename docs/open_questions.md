@@ -29,40 +29,35 @@ correction is in `progress.md` under the entry that contains it.
 | a preset is a sampler; every report carries the instance's measured π | closes [#2](https://github.com/ash-ding/Glyph/issues/2) |
 | `depth_stop_prob = 0.15` — depth is sampled, not the split's budget restated | closes [#6](https://github.com/ash-ding/Glyph/issues/6) |
 | both ceilings ship on every scored subset; `headroom` is the primary figure | closes [#4](https://github.com/ash-ding/Glyph/issues/4) |
+| `pi_low` gets five structural operators, so `comp` is a sample not a fixed probe | closes [#1](https://github.com/ash-ding/Glyph/issues/1) |
 
 ---
 
 ## Data layer
 
-### [#1](https://github.com/ash-ding/Glyph/issues/1) — `n_structural` for `pi_low`: 3, 4 or 5 · P1
+### ~~[#1](https://github.com/ash-ding/Glyph/issues/1) — `n_structural` for `pi_low`~~ · settled
 
-Raised from 2 to 3 because at 2 the generator failed on 13 of 20 seeds. 3 was
-the smallest value that worked, not a choice on merit.
+**5.** Neither of the two things this number decides is difficulty.
 
-20 seeds each, full 10⁴, at the real `pi_low` config:
+It started at 2, which could not generate. Filtering the held-pair draw to
+realizable pairs fixed that at any n ≥ 3. What 5 buys is that `comp` becomes a
+**sample** rather than a fixed probe: `STRUCT_SHAPES` is
+`(UL, LB, L, KL, L, UL, KL, LB)`, the first four shapes are pairwise distinct,
+so below 5 every `(outer shape, inner shape)` class holds exactly one pair and
+the stratified draw has nothing to choose. Over 40 seeds — 1 distinct held set
+at n = 2, 3 and 4; **35 at n = 5**; 40 at n = 6.
 
-| n | π median | skeleton ceiling | lookups/item | comp ceiling | comp sd | possible held sets |
-|---|---|---|---|---|---|---|
-| 3 | 0.346 | 0.067 | 4.42 | [0.142, 0.167] | 0.0063 | **1** |
-| 4 | 0.356 | 0.076 | 4.23 | [0.202, 0.476] | 0.0839 | **1** |
-| 5 | 0.358 | 0.075 | 4.25 | [0.053, 0.767] | 0.2084 | 128 |
+π does not pay for it. Ten seeds at full size, n = 3/4/5: median π 0.344 / 0.302
+/ 0.332, ceiling 0.067 / 0.077 / 0.054, lookups 4.36 / 4.32 / 4.25 — noise, and
+n = 4 is the lowest of the three. The column that moves is comp's spread across
+seeds (sd 0.007 / 0.103 / 0.228), which is the variation being restored rather
+than a cost — and is what `headroom` exists to divide out.
 
-π, ceiling and lookups barely move. The only thing `n` changes is **what `comp`
-is**. At `n ≤ 4` the stratified draw is deterministic — `STRUCT_SHAPES` is
-`(UL, LB, L, KL, L, UL, KL, LB)` and the first four shapes are pairwise
-distinct, so every `(outer shape, inner shape)` class holds exactly one pair and
-nothing is left to choose. All 20 instances hold out the same pairs, making
-`comp` a fixed probe: you cannot separate "this instance's comp is hard" from
-"this composition is hard". Difficulty still varies (n=4's sd is 0.084) because
-the skeleton's semantics differ by seed; the identity of the tested composition
-does not.
+Re-measured under the current sampler; the earlier sweep predated
+`depth_stop_prob` and the unary rebuild.
 
-**Recommendation: 5.** The cost it pays is comp's difficulty variance, and
-`headroom` (#4) divides exactly that out. It also leaves `pi_low` differing from
-`pi_mid` only in `atomic_ratio` and skeleton complexity.
-
-*Counter-argument worth weighing:* if `pi_low`'s job is to be a pure table task,
-`comp` matters least there, and a fixed probe is simpler.
+Side effect: `pi_low` and `pi_mid` now share `n_structural` and differ only in
+`atomic_ratio`, transform depth, guard probability and expression depth.
 
 ### ~~[#2](https://github.com/ash-ding/Glyph/issues/2) — condition or sampler?~~ · settled
 
