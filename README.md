@@ -8,14 +8,18 @@ model's *weights* — and does the agent itself know which?
 Glyph is the instrument that makes that question measurable. It is a ruler with
 known graduations, not a discovery in its own right.
 
+**→ [ash-ding.github.io/Glyph](https://ash-ding.github.io/Glyph/)** — the
+project page: the first result, how an instance is built, and what is still
+open.
+
 ## What an instance is
 
 A generator draws a hidden interpreter `P`. **The syntax is public; the
 semantics are private.**
 
 ```
-expr:  s1( s3( s0(u2, [v_0_1_0, v_3_13_2, v_6_1_12]) ), b0 )
-out:   v_1_4_14
+expr:  s1( s3( s0(u2, [v_a_b_a, v_d_n_c, v_g_b_m]) ), b0 )
+out:   v_b_e_o
 ```
 
 Operator names are deliberately opaque — `s0`/`u2`/`b0`, never `map`/`fold` —
@@ -108,6 +112,25 @@ Two things about it are easy to get wrong and both fail silently:
 
 ## Status
 
-Self-checks #1 (round-trip), #2 (oracle exactness), #3 (π ordering) pass;
-#6 (tokenizer probe) ships as a script and needs a real tokenizer to run.
-Design decisions and open questions are tracked in the Glyph specification.
+**The data layer is frozen** as of 2026-08-31. All six self-checks pass, 122
+tests, and the first measurement is in:
+
+| oracle | knows | overall |
+|---|---|---|
+| skeleton ceiling | every structural rule, not one table entry | 0.248 |
+| A0′ | frontier model, 2551 of 4913 entries in context, unlimited thinking | 0.258 |
+| weights | Qwen3-1.7B fine-tuned on 491 entries | **0.498** |
+
+Split by whether the evidence held the entries an item needed, the frontier
+scores **0.976** on the 126 it had and **0.016** on the 374 it did not.
+Retrieval saturated, extrapolation at zero — which is the separation the
+benchmark was built to produce. Details on the
+[project page](https://ash-ding.github.io/Glyph/#result).
+
+Arm results are not published yet: the earlier sweep is invalidated by the
+data-layer changes, and two harness asymmetries are still open decisions.
+
+- [`docs/progress.md`](docs/progress.md) — append-only record of what was run
+  and what it showed, corrections included
+- [`docs/open_questions.md`](docs/open_questions.md) — the standing list of what
+  is undecided, edited in place, one GitHub issue per item
