@@ -473,13 +473,29 @@ in-context-extractable". The freeze stands.
 particular is a different task now. Costs teacher calls; last full run ~110
 minutes.
 
-**[#22](https://github.com/ash-ding/Glyph/issues/22) — self-check #5 (capacity).** Presets changed, and every full fine-tune
-number was at lr 1e-5:
+**~~[#22](https://github.com/ash-ding/Glyph/issues/22)~~ — self-check #5
+(capacity). Done.** On the current tables, lr 1e-4, 4000 steps:
 
-| binary c=0.25, 4000 steps | lr 1e-5 | lr 1e-4 |
-|---|---|---|
-| full fine-tune | 0.562 | **0.797** |
-| LoRA r=32 | 0.556 | 0.715 |
+| task | coupling | fit | reach |
+|---|---|---|---|
+| unary | **0.25** | 1.000 | **0.710** |
+| unary | 0.5 | 1.000 | 0.505 |
+| unary | 1.0 | 1.000 | 0.439 |
+| binary | 0.25 | 0.858 | 0.857 |
+
+`fit` is 1.000 everywhere, so capacity is never the constraint. The failure this
+check exists to catch — reach collapsing to chance, leaving the π→0 end with no
+winner — did not happen.
+
+Both questions the added axis asked came back inverted: the 37% realisation rate
+was itself wrong (contaminated by lr 1e-5; actually 74–86%), and the CPU upper
+bound does predict GPU reach but **only read at the item level** — per-entry it
+pointed the opposite way. See [#8](https://github.com/ash-ding/Glyph/issues/8).
+
+The `value_form` and digit-layout axes it expected to sweep collapsed when #7
+and #10 settled; the holdout question it did not think to ask was answered more
+thoroughly by [#19](https://github.com/ash-ding/Glyph/issues/19)'s `seen_frac`
+curve. Not redone: LoRA versus full, which does not depend on the presets.
 
 **[#23](https://github.com/ash-ding/Glyph/issues/23) — E0's four arms.** Invalidated twice: by the preset change and by the
 held-pair change (which touches every instance's `comp`, pi_mid included). And
