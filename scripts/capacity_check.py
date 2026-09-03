@@ -58,9 +58,9 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, IterableDataset
 
-from glyph.config import PRESETS
-from glyph.grammar import digits, render_value
-from glyph.tables import Tables
+from glyph.data.config import PRESETS
+from glyph.data.grammar import digits, render_value
+from glyph.data.tables import Tables
 
 # The pi=0 end is the only place this question is interesting: it is where
 # the tables carry the difficulty.

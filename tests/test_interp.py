@@ -3,12 +3,12 @@ scores 100%.  Anything less is an interpreter bug, and it must be fixed
 before any arm is written."""
 import pytest
 
-from glyph.config import PRESETS
-from glyph.grammar import parse, render_list, render_value
-from glyph.instance import generate
-from glyph.interp import Interpreter
-from glyph.semantics import trivial_skeleton
-from glyph.tables import IdentityTables
+from glyph.data.config import PRESETS
+from glyph.data.grammar import parse, render_list, render_value
+from glyph.data.instance import generate
+from glyph.data.interp import Interpreter
+from glyph.data.semantics import trivial_skeleton
+from glyph.data.tables import IdentityTables
 
 FAST = {k: v.with_(n_iid=200, n_comp=70, n_depth=30) for k, v in PRESETS.items()}
 
@@ -50,7 +50,7 @@ def test_digit_neighbours_are_correlated():
     design actually rests on.
     """
     import numpy as np
-    from glyph.grammar import digits
+    from glyph.data.grammar import digits
     inst = generate(5, FAST["pi_mid"])
     cfg, rng = inst.cfg, np.random.default_rng(0)
 

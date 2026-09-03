@@ -1,9 +1,9 @@
 """Split construction, determinism, and the derived tail split."""
 import pytest
 
-from glyph.config import PRESETS
-from glyph.grammar import depth, op_pairs, parse
-from glyph.instance import generate
+from glyph.data.config import PRESETS
+from glyph.data.grammar import depth, op_pairs, parse
+from glyph.data.instance import generate
 
 FAST = PRESETS["pi_mid"].with_(n_iid=300, n_comp=120, n_depth=80)
 

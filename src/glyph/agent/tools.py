@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..budget import BudgetExhausted, Ledger
-from ..instance import GlyphInstance
+from ..data.instance import GlyphInstance
 from ..sandbox import run_solver
 from ..seal import SealedArtifact, answer_with
 from ..train.sft import Example, HParams

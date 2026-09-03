@@ -38,12 +38,12 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from glyph.config import PRESETS
-from glyph.grammar import (binary_names, parse, render_list, render_value,
+from glyph.data.config import PRESETS
+from glyph.data.grammar import (binary_names, parse, render_list, render_value,
                            unary_names)
-from glyph.instance import generate
-from glyph.interp import Interpreter
-from glyph.tables import IdentityTables
+from glyph.data.instance import generate
+from glyph.data.interp import Interpreter
+from glyph.data.tables import IdentityTables
 
 SEED = 20260831
 
@@ -133,7 +133,7 @@ class StudentTables:
 
 def generate_answers(model, tok, cfg, prompts, device, batch=256):
     """One batched pass; returns the decoded value index or -1."""
-    from glyph.grammar import parse_value
+    from glyph.data.grammar import parse_value
     out = []
     model.eval()
     for s in range(0, len(prompts), batch):

@@ -3405,3 +3405,73 @@ is training-time sampling, since `stream()` draws from its own RNG per run.
 **About ±0.04 on reach between identical runs.** Worth knowing before reading
 small differences as signal; single points on any of these curves carry that
 much noise. Nothing in the conclusions above turns on a gap that size.
+
+---
+
+# 19 · 数据层被隔离成 `glyph/data/`
+
+2026-09-03。纯重构，无逻辑改动。七个模块 `git mv` 进 `src/glyph/data/`：
+`config` `grammar` `semantics` `tables` `interp` `instance` `measure`。
+
+## 为什么
+
+依赖本来就是单向的，只是没有任何东西守着这一点。移动前的图：
+
+```
+config     ->  (无)
+grammar    ->  config
+semantics  ->  config, grammar
+tables     ->  config, grammar
+interp     ->  config, grammar, semantics
+measure    ->  grammar, interp, semantics, tables
+instance   ->  config, grammar, interp, measure, semantics, tables
+```
+
+而 `seal -> grammar, instance`，`agent.tools -> instance`，`arms.base ->
+config, instance`，`cli -> config, instance, semantics`。**评测依赖数据，数据
+不依赖任何外部东西。** 生成一个实例不需要知道它将如何被打分。
+
+这条性质此前只靠习惯维持。T2 要复用这个生成器，如果哪天有人在
+`instance.py` 里 import 了 `seal`，两层就粘死了，而且不会有任何东西报错。
+
+## 边界测试
+
+`tests/test_data_boundary.py`，10 项：
+
+- 逐模块 AST 扫描，`data/` 内任何 import 的目标必须是同级模块（`ast.ImportFrom`
+  的 `level == 1` 且 module 在同目录内），绝对 `glyph.*` 必须是 `glyph.data.*`。
+- 公开面单点可用：`from glyph.data import generate, PRESETS, measure_pi` 一行
+  拿到生成器，不用 import 七次。
+- 反向断言：`seal.py` / `arms/base.py` / `agent/tools.py` 仍然引用 `data.`，
+  一旦不再引用说明两层被误合并了。
+
+## 重构中暴露的三种漏网 import
+
+批量改写用正则，跑第一遍全量测试才发现三类没覆盖的写法：
+
+1. `from glyph import instance as inst_mod`（`test_generation_failure.py`、
+   `depth_sampling_probe.py`）—— 从包里取子模块，不是 `from glyph.instance import`。
+2. `seal.py:183` 的**函数内缩进** import `from .grammar import depth, parse`
+   —— 我对 `src/glyph/*.py` 的正则锚了行首。
+3. 无。前两类修完即通过。
+
+值得记一笔的是这三处都不是靠 review 发现的，是靠全量测试。25 个文件的机械改写
+不可能靠读代码验，`ModuleNotFoundError` 才是这里唯一可信的检查。
+
+## 结果
+
+- 全量 **138 passed**（原 128 + 10 个边界测试），含 `test_infer.py`。
+- CLI `show` / `pi` 端到端跑通，pi_mid/1001 仍是 `a_skel=0.309 a_tab=0.453
+  pi=0.442`，与移动前逐位一致。
+- `README.md` 与 `site/index.html` 的目录树、流程图源码标签同步。
+
+## 没有改的两件事
+
+**`is_tail()` 和 `ceilings()` 留在 `data/instance.py`。** 它们服务于打分，
+但实现只用数据层原语（`needs_u` / `needs_b`、真骨架、恒等表）。搬去 `seal.py`
+会让 `seal` 反过来需要实例内部结构，把一个单向依赖换成双向的。留在原处的代价
+只是命名上不够纯粹。
+
+**`src/` 保留。** 扁平布局下从仓库根 `import glyph` 会命中源码目录、绕过安装，
+正好会掩盖上个月那类错误（setup 脚本漏了 vLLM，静默少跑 3 个测试）。`src/`
+布局强制测试跑在装好的包上。

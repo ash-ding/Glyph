@@ -5,9 +5,9 @@ from __future__ import annotations
 import argparse
 import json
 
-from .config import PRESETS
-from .instance import generate
-from .semantics import describe
+from .data.config import PRESETS
+from .data.instance import generate
+from .data.semantics import describe
 
 
 def cmd_show(args) -> int:

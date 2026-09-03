@@ -3,8 +3,8 @@ import statistics
 
 import pytest
 
-from glyph.config import PRESETS
-from glyph.instance import GenerationFailed, generate
+from glyph.data.config import PRESETS
+from glyph.data.instance import GenerationFailed, generate
 
 SEEDS = (1001, 1002, 1003, 1004)
 

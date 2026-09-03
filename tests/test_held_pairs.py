@@ -11,9 +11,9 @@ import statistics as st
 import numpy as np
 import pytest
 
-from glyph.config import PRESETS
-from glyph.grammar import SHAPE_RESULT, enabled_ops
-from glyph.instance import _draw_held_pairs, generate
+from glyph.data.config import PRESETS
+from glyph.data.grammar import SHAPE_RESULT, enabled_ops
+from glyph.data.instance import _draw_held_pairs, generate
 from glyph.seal import headroom
 
 PRESET_NAMES = ["pi_low", "pi_mid", "pi_high"]

@@ -19,7 +19,7 @@ import json
 from pathlib import Path
 
 from ..budget import BudgetExhausted, Ledger
-from ..instance import GlyphInstance
+from ..data.instance import GlyphInstance
 from ..trace import ResponseCache, TraceWriter
 from ..vertex import EFFORT, TEACHER, client, request_kwargs
 from .prompts import opening_message, system_prompt

@@ -9,8 +9,8 @@ import pytest
 from glyph.agent.schema import Container
 from glyph.agent.tools import ToolBox
 from glyph.budget import Ledger
-from glyph.config import PRESETS
-from glyph.instance import generate
+from glyph.data.config import PRESETS
+from glyph.data.instance import generate
 from glyph.trace import TraceWriter
 
 

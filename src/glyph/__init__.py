@@ -1,6 +1,6 @@
 """Glyph -- a hidden-semantics DSL execution benchmark."""
-from .config import GlyphConfig, PRESETS
-from .instance import GlyphInstance, generate
+from .data.config import GlyphConfig, PRESETS
+from .data.instance import GlyphInstance, generate
 from .budget import Ledger, CostModel, BudgetExhausted
 
 __all__ = ["GlyphConfig", "PRESETS", "GlyphInstance", "generate",

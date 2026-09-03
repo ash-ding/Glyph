@@ -13,8 +13,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..budget import Ledger
-from ..config import PRESETS, GlyphConfig
-from ..instance import GlyphInstance, generate
+from ..data.config import PRESETS, GlyphConfig
+from ..data.instance import GlyphInstance, generate
 from ..seal import ScoreReport, calibration, evaluate
 from ..trace import ResponseCache, TraceWriter
 from ..vertex import TEACHER

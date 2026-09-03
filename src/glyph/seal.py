@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Literal
 
 from .budget import Ledger
-from .instance import GlyphInstance, TestItem
+from .data.instance import GlyphInstance, TestItem
 
 Entry = Literal["program", "model"]
 
@@ -180,7 +180,7 @@ def calibration(answer_fn, dev, test_accuracy, purchased, scored, cfg) -> dict:
     numbers describe the same sealed artifact and the gap is real rather than an
     artifact of two scoring paths.
     """
-    from .grammar import depth, parse
+    from .data.grammar import depth, parse
 
     def hist(exprs):
         out: dict[int, int] = {}

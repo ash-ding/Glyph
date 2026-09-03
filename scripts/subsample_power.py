@@ -28,8 +28,8 @@ import json
 
 import numpy as np
 
-from glyph.config import PRESETS
-from glyph.instance import generate
+from glyph.data.config import PRESETS
+from glyph.data.instance import generate
 
 
 def arm_vector(inst, p_known: float, rng) -> np.ndarray:

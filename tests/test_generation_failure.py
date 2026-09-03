@@ -8,10 +8,10 @@ import collections
 
 import pytest
 
-from glyph import instance as inst_mod
-from glyph.config import PRESETS
-from glyph.grammar import SHAPE_RESULT, enabled_ops
-from glyph.instance import GenerationFailed, generate
+from glyph.data import instance as inst_mod
+from glyph.data.config import PRESETS
+from glyph.data.grammar import SHAPE_RESULT, enabled_ops
+from glyph.data.instance import GenerationFailed, generate
 
 FAST = PRESETS["pi_mid"].with_(n_iid=300, n_comp=120, n_depth=80)
 
@@ -139,7 +139,7 @@ def test_depth_one_expressions_carry_no_operator_pair():
     held-out pairs, in either direction, passes over it silently. Before
     `depth_stop_prob` these did not exist: depth equalled the split's budget,
     which is at least 2 everywhere."""
-    from glyph.grammar import depth, op_pairs, parse
+    from glyph.data.grammar import depth, op_pairs, parse
     inst = generate(1001, PRESETS["pi_mid"].scaled(2000))
     shallow = [t for t in inst.test
                if depth(parse(t.expr_src, inst.cfg)) == 1]

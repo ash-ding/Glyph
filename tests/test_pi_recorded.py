@@ -11,8 +11,8 @@ import json
 import pytest
 
 from glyph.budget import Ledger
-from glyph.config import PRESETS
-from glyph.instance import generate
+from glyph.data.config import PRESETS
+from glyph.data.instance import generate
 from glyph.seal import SealedArtifact, evaluate
 
 FAST = PRESETS["pi_mid"].scaled(300)

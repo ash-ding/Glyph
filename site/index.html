@@ -232,7 +232,7 @@
       <div class="pipe__head">
         <span class="pipe__n">STEP 01</span>
         <span class="pipe__title">The value space</span>
-        <span class="pipe__src">grammar.py · tables.py</span>
+        <span class="pipe__src">data/grammar.py · data/tables.py</span>
       </div>
       <p>
         A value is a fixed-length digit string, not an atomic symbol:
@@ -253,7 +253,7 @@
       <div class="pipe__head">
         <span class="pipe__n">STEP 02</span>
         <span class="pipe__title">The skeleton — sampled, and describable</span>
-        <span class="pipe__src">semantics.py</span>
+        <span class="pipe__src">data/semantics.py</span>
       </div>
       <p>
         Each structural operator's meaning is drawn from a <em>finite</em>
@@ -274,7 +274,7 @@
       <div class="pipe__head">
         <span class="pipe__n">STEP 03</span>
         <span class="pipe__title">The tables — learnable, not describable</span>
-        <span class="pipe__src">tables.py</span>
+        <span class="pipe__src">data/tables.py</span>
       </div>
       <p>
         Never materialised. A table is a function: digits → shared embeddings →
@@ -294,7 +294,7 @@
       <div class="pipe__head">
         <span class="pipe__n">STEP 04</span>
         <span class="pipe__title">Held-out operator pairs</span>
-        <span class="pipe__src">instance.py</span>
+        <span class="pipe__src">data/instance.py</span>
       </div>
       <p>
         A third of the directly-nested <span class="mono">(outer, inner)</span>
@@ -312,7 +312,7 @@
       <div class="pipe__head">
         <span class="pipe__n">STEP 05</span>
         <span class="pipe__title">Demos and the three splits</span>
-        <span class="pipe__src">instance.py</span>
+        <span class="pipe__src">data/instance.py</span>
       </div>
       <p>
         Rejection sampling: draw an expression, test it against the split's
@@ -631,7 +631,7 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
 <pre><code>pip install -e ".[dev]"
 python -m glyph.cli show --preset pi_mid --seed 1001   # one instance, end to end
 python -m glyph.cli pi --n-seeds 4                     # measure π across presets
-pytest -q                                              # 122 tests, self-checks included
+pytest -q                                              # 138 tests, self-checks included
 
 python scripts/bench_scan.py --presets pi_mid --seeds 20    # π and the ceilings
 python scripts/table_ceiling.py --seen-frac 0.10            # how far weights reach
@@ -639,16 +639,26 @@ python scripts/run_a0p.py --n-facts 2000 --n-test 500       # the saturated fron
 
   <h3>Layout</h3>
 <pre><code>src/glyph/
-├── config.py      GlyphConfig + presets (pi_low / pi_mid / pi_high / smoke)
-├── grammar.py     public syntax: AST, value codec, printer, parser, checker
-├── semantics.py   combinator grammar → skeleton; the trivial-skeleton baseline
-├── tables.py      digit embeddings, frozen MLPs, the identity-table baseline
-├── interp.py      P = Interpreter(skeleton, tables); lookup logging
-├── instance.py    generation, demos, query oracle, splits, tail derivation
-├── measure.py     π via two crippled oracles
+├── data/          <b>数据层 — 只负责造实例，不负责评分</b>
+│   ├── config.py      GlyphConfig + presets (pi_low / pi_mid / pi_high / smoke)
+│   ├── grammar.py     public syntax: AST, value codec, printer, parser, checker
+│   ├── semantics.py   combinator grammar → skeleton; the trivial-skeleton baseline
+│   ├── tables.py      digit embeddings, frozen MLPs, the identity-table baseline
+│   ├── interp.py      P = Interpreter(skeleton, tables); lookup logging
+│   ├── instance.py    generation, demos, query oracle, splits, tail derivation
+│   └── measure.py     π via two crippled oracles
 ├── seal.py        one scoring path for every arm; ceilings and headroom
 ├── budget.py      the ledger — the single metered entry point
+├── agent/         tool declaration · per-arm allocation · orchestrator
+├── train/         full fine-tuning · vLLM inference
 └── arms/          a2_context · a4_code · a6_weights · a0p_saturated</code></pre>
+
+  <p class="muted" style="font-size:.88rem">
+    <code>data/</code> 内部不 import 任何外部模块，<code>tests/test_data_boundary.py</code>
+    守住这条线。依赖是单向的 —— <code>seal</code>、<code>agent</code>、<code>arms</code>
+    都 import 生成器，反过来没有。所以生成器可以整体搬去下一个任务，
+    不会拖着一套为本任务写的评测协议。
+  </p>
 
   <p class="muted" style="font-size:.88rem">
     <code>docs/progress.md</code> is the append-only record of what was run and

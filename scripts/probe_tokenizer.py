@@ -41,7 +41,7 @@ from __future__ import annotations
 
 import argparse
 
-from glyph.config import GlyphConfig
+from glyph.data.config import GlyphConfig
 
 LAYOUTS = [(17, 3), (10, 4), (8, 4)]
 IMPLEMENTED = ("underscore", "bracket", "flat")

@@ -14,7 +14,7 @@ wrong was that the miscalibration was invisible.
 import pytest
 
 from glyph.arms.base import RunConfig, finish, prepare
-from glyph.config import PRESETS
+from glyph.data.config import PRESETS
 from glyph.seal import SealedArtifact, calibration
 
 

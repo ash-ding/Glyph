@@ -28,13 +28,13 @@ import json
 import sys
 import time
 
-from glyph.config import PRESETS
-from glyph.grammar import parse, render_list, render_value
-from glyph.instance import GenerationFailed, generate
-from glyph.interp import Interpreter
-from glyph.measure import _score
-from glyph.semantics import trivial_skeleton
-from glyph.tables import IdentityTables
+from glyph.data.config import PRESETS
+from glyph.data.grammar import parse, render_list, render_value
+from glyph.data.instance import GenerationFailed, generate
+from glyph.data.interp import Interpreter
+from glyph.data.measure import _score
+from glyph.data.semantics import trivial_skeleton
+from glyph.data.tables import IdentityTables
 
 
 def _render(out, cfg) -> str:

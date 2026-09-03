@@ -38,10 +38,10 @@ import math
 import re
 import time
 
-from glyph.config import PRESETS
-from glyph.grammar import parse, render_list, render_value
-from glyph.instance import generate
-from glyph.interp import Interpreter, LookupLog
+from glyph.data.config import PRESETS
+from glyph.data.grammar import parse, render_list, render_value
+from glyph.data.instance import generate
+from glyph.data.interp import Interpreter, LookupLog
 from glyph.vertex import TEACHER, client, request_kwargs
 
 PROMPT = """You are shown a small language you have never seen before.

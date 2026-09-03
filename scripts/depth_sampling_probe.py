@@ -27,14 +27,14 @@ import time
 
 import numpy as np
 
-from glyph import instance as inst_mod
-from glyph.config import PRESETS
-from glyph.grammar import (App, K_RANGE, Lit, SHAPE_RESULT, Val, binary_names,
+from glyph.data import instance as inst_mod
+from glyph.data.config import PRESETS
+from glyph.data.grammar import (App, K_RANGE, Lit, SHAPE_RESULT, Val, binary_names,
                            depth, enabled_ops, parse, unary_names)
-from glyph.instance import GenerationFailed, generate
-from glyph.interp import Interpreter
-from glyph.measure import _score
-from glyph.tables import IdentityTables
+from glyph.data.instance import GenerationFailed, generate
+from glyph.data.interp import Interpreter
+from glyph.data.measure import _score
+from glyph.data.tables import IdentityTables
 
 _ORIGINAL = inst_mod._sample
 

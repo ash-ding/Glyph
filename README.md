@@ -64,17 +64,27 @@ python scripts/probe_tokenizer.py Qwen/Qwen3-1.7B      # self-check #6
 
 ```
 src/glyph/
-├── config.py      GlyphConfig + presets (pi_low / pi_mid / pi_high / smoke)
-├── grammar.py     public syntax: AST, value codec, printer, parser, checker
-├── semantics.py   combinator grammar → skeleton; the trivial-skeleton baseline
-├── tables.py      digit embeddings, frozen MLPs, the identity-table baseline
-├── interp.py      P = Interpreter(skeleton, tables); lookup logging
-├── instance.py    generation, demos, query oracle, splits, tail derivation
-├── measure.py     π via two crippled oracles
+├── data/          the data layer — makes an instance, never scores one
+│   ├── config.py      GlyphConfig + presets (pi_low / pi_mid / pi_high / smoke)
+│   ├── grammar.py     public syntax: AST, value codec, printer, parser, checker
+│   ├── semantics.py   combinator grammar → skeleton; the trivial-skeleton baseline
+│   ├── tables.py      digit embeddings, frozen MLPs, the identity-table baseline
+│   ├── interp.py      P = Interpreter(skeleton, tables); lookup logging
+│   ├── instance.py    generation, demos, query oracle, splits, tail derivation
+│   └── measure.py     π via two crippled oracles
 ├── budget.py      the ledger — the single metered entry point
+├── seal.py        scoring: one answer path, ceilings, headroom, calibration
+├── agent/         tool declaration, per-arm allocation, the orchestrator
+├── arms/          A0′ / A2 / A4 / A6 runners
+├── train/         full fine-tuning and vLLM inference
 ├── trace.py       JSONL trace + response cache (replay, not re-billing)
 └── cli.py
 ```
+
+Nothing in `data/` imports from outside it, and `tests/test_data_boundary.py`
+holds that line. The arrow runs one way — `seal`, `agent` and `arms` all import
+the generator — so the generator can be lifted whole into a second task without
+dragging along an evaluation protocol written for this one.
 
 ## Splits
 

@@ -38,9 +38,9 @@ import numpy as np
 
 from glyph.arms import a0p_saturated
 from glyph.arms.base import RunConfig
-from glyph.config import PRESETS
-from glyph.grammar import render, render_list, render_value
-from glyph.instance import _sample_constrained, generate
+from glyph.data.config import PRESETS
+from glyph.data.grammar import render, render_list, render_value
+from glyph.data.instance import _sample_constrained, generate
 
 
 def buy(inst, n_probe: int, n_domain: int, seed: int) -> list[tuple[str, str]]:
@@ -117,7 +117,7 @@ def main() -> int:
     items = paired_subset(inst, a.n_test)
 
     depths = collections.Counter()
-    from glyph.grammar import depth, parse
+    from glyph.data.grammar import depth, parse
     for e, _ in purchased:
         depths[depth(parse(e, cfg))] += 1
     print(f"evidence  {len(purchased)} facts, depths {dict(sorted(depths.items()))}")

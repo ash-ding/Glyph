@@ -11,8 +11,8 @@ import pytest
 from glyph.agent.schema import Container, Role, tool_defs, validate
 from glyph.agent.tools import ToolBox
 from glyph.budget import BudgetExhausted, Ledger
-from glyph.config import PRESETS
-from glyph.instance import generate
+from glyph.data.config import PRESETS
+from glyph.data.instance import generate
 from glyph.seal import SealedArtifact, score_answers
 from glyph.trace import TraceWriter
 

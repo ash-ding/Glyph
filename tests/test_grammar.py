@@ -2,10 +2,10 @@
 import numpy as np
 import pytest
 
-from glyph.config import PRESETS, GlyphConfig
-from glyph.grammar import (check, digits, parse, parse_value, render,
+from glyph.data.config import PRESETS, GlyphConfig
+from glyph.data.grammar import (check, digits, parse, parse_value, render,
                            render_value, syntax_spec, undigits)
-from glyph.instance import _sample
+from glyph.data.instance import _sample
 
 CFGS = [PRESETS["smoke"], PRESETS["pi_mid"], PRESETS["pi_high"]]
 
