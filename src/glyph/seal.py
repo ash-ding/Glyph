@@ -92,6 +92,8 @@ class ScoreReport:
     # added by the arm runner and is provenance only -- the phase diagram's
     # axis is `instance["pi"]["pi"]`, never the name. See GlyphInstance.
     instance: dict = field(default_factory=dict)
+    # How well the agent's own dev estimate tracked the truth. See `calibration`.
+    calibration: dict = field(default_factory=dict)
     failures: list[str] = field(default_factory=list)
 
     def to_json(self) -> str:
@@ -151,6 +153,58 @@ def answer_with(artifact: SealedArtifact, base_model: str | None,
         return student.answer(exprs, ledger=ledger).answers
     finally:
         student.close()
+
+
+def calibration(answer_fn, dev, test_accuracy, purchased, scored, cfg) -> dict:
+    """How far the agent's own dev estimate was from the truth, and why.
+
+    The dev split is carved from what the agent bought (`DEV_FRACTION` of its
+    own query log). That was a deliberate choice -- handing over a free labelled
+    dev set would be quietly refunding the query budget -- and it has a cost
+    that was not foreseen: **dev does not estimate test**.
+
+    The agent buys single-level probes because isolating one table entry is how
+    you read a table, and it is right to. But almost nothing on the test set
+    looks like that, so it grades itself on flashcards and is examined on essays.
+    One run reached dev 0.400 against test 0.035, and the loop is worse than the
+    gap: once dev stopped reading zero, the agent bought more of the same
+    probes, trained on them, watched dev rise, and continued. **A clearer signal
+    made it optimise harder in the wrong direction.**
+
+    Settled as: leave the environment alone and measure this. An agent with a
+    narrow probing strategy *should* get a misleading self-estimate, and whether
+    it knows how well it is doing is part of what the experiment is asking. What
+    was wrong was that the miscalibration was invisible.
+
+    `dev` is scored through the same `answer_fn` as the test set, so the two
+    numbers describe the same sealed artifact and the gap is real rather than an
+    artifact of two scoring paths.
+    """
+    from .grammar import depth, parse
+
+    def hist(exprs):
+        out: dict[int, int] = {}
+        for e in exprs:
+            try:
+                d = depth(parse(e, cfg))
+            except Exception:
+                continue
+            out[d] = out.get(d, 0) + 1
+        return {str(k): out[k] for k in sorted(out)}
+
+    dev_acc = None
+    if dev:
+        got = answer_fn([e for e, _ in dev])
+        dev_acc = sum(g.strip() == a.strip()
+                      for g, (_, a) in zip(got, dev)) / len(dev)
+    return {
+        "dev_accuracy": dev_acc,
+        "dev_n": len(dev) if dev else 0,
+        "test_accuracy": test_accuracy,
+        "gap": (dev_acc - test_accuracy) if dev_acc is not None else None,
+        "purchased_by_depth": hist(purchased),
+        "scored_by_depth": hist(scored),
+    }
 
 
 def score_answers(items: list[TestItem], answers: list[str]) -> tuple[float, dict[str, float]]:

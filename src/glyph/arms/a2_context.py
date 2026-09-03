@@ -34,4 +34,5 @@ def run(rc: RunConfig) -> ScoreReport:
     def answer(exprs):
         return answer_with(box.sealed, rc.base_model, p.ledger, exprs)
 
-    return finish(p, rc, box.sealed, answer)
+    return finish(p, rc, box.sealed, answer,
+                  dev=box._split()[1], purchased=box.queried)

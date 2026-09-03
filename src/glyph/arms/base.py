@@ -15,7 +15,7 @@ from pathlib import Path
 from ..budget import Ledger
 from ..config import PRESETS, GlyphConfig
 from ..instance import GlyphInstance, generate
-from ..seal import ScoreReport, evaluate
+from ..seal import ScoreReport, calibration, evaluate
 from ..trace import ResponseCache, TraceWriter
 from ..vertex import TEACHER
 
@@ -79,14 +79,24 @@ def prepare(rc: RunConfig) -> Prepared:
     )
 
 
-def finish(p: Prepared, rc: RunConfig, artifact, answer_fn) -> ScoreReport:
-    """Score the sealed artifact and write the report next to the trace."""
+def finish(p: Prepared, rc: RunConfig, artifact, answer_fn, *,
+           dev=None, purchased=None) -> ScoreReport:
+    """Score the sealed artifact and write the report next to the trace.
+
+    `dev` and `purchased` come from the agent's own box. Scoring dev through the
+    same `answer_fn` makes the calibration gap a property of one artifact rather
+    than of two scoring paths -- see `seal.calibration`.
+    """
     report = evaluate(p.inst, artifact, p.ledger, answer_fn=answer_fn)
     report.instance["preset"] = rc.preset      # provenance, not a condition
+    report.calibration = calibration(
+        answer_fn, dev or [], report.overall,
+        [e for e, _ in (purchased or [])],
+        [t.expr_src for t in p.inst.test_set()], p.inst.cfg)
     (p.work_dir / "report.json").write_text(report.to_json())
     p.trace.emit("report", arm=rc.arm, overall=report.overall,
                  by_split=report.by_split, tail=report.tail,
                  ceiling=report.ceiling, headroom=report.headroom,
-                 instance=report.instance)
+                 instance=report.instance, calibration=report.calibration)
     p.trace.close()
     return report
