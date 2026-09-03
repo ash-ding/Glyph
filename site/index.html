@@ -639,7 +639,7 @@ python scripts/run_a0p.py --n-facts 2000 --n-test 500       # the saturated fron
 
   <h3>Layout</h3>
 <pre><code>src/glyph/
-├── data/          <b>数据层 — 只负责造实例，不负责评分</b>
+├── data/          <b>the data layer — makes an instance, never scores one</b>
 │   ├── config.py      GlyphConfig + presets (pi_low / pi_mid / pi_high / smoke)
 │   ├── grammar.py     public syntax: AST, value codec, printer, parser, checker
 │   ├── semantics.py   combinator grammar → skeleton; the trivial-skeleton baseline
@@ -654,10 +654,11 @@ python scripts/run_a0p.py --n-facts 2000 --n-test 500       # the saturated fron
 └── arms/          a2_context · a4_code · a6_weights · a0p_saturated</code></pre>
 
   <p class="muted" style="font-size:.88rem">
-    <code>data/</code> 内部不 import 任何外部模块，<code>tests/test_data_boundary.py</code>
-    守住这条线。依赖是单向的 —— <code>seal</code>、<code>agent</code>、<code>arms</code>
-    都 import 生成器，反过来没有。所以生成器可以整体搬去下一个任务，
-    不会拖着一套为本任务写的评测协议。
+    Nothing in <code>data/</code> imports from outside it, and
+    <code>tests/test_data_boundary.py</code> holds that line. The arrow runs one
+    way — <code>seal</code>, <code>agent</code> and <code>arms</code> all import
+    the generator — so the generator can be lifted whole into a second task
+    without dragging along an evaluation protocol written for this one.
   </p>
 
   <p class="muted" style="font-size:.88rem">
