@@ -31,6 +31,8 @@ correction is in `progress.md` under the entry that contains it.
 | both ceilings ship on every scored subset; `headroom` is the primary figure | closes [#4](https://github.com/ash-ding/Glyph/issues/4) |
 | `pi_low` gets five structural operators, so `comp` is a sample not a fixed probe | closes [#1](https://github.com/ash-ding/Glyph/issues/1) |
 | `unary_coupling = 0.25` — widest arm gap on every preset, measured at the item level | closes [#8](https://github.com/ash-ding/Glyph/issues/8) |
+| the tool layer: declaration separate from allocation, one answering path | closes [#13](https://github.com/ash-ding/Glyph/issues/13) |
+| the agent's self-estimate is measured rather than hidden | closes [#14](https://github.com/ash-ding/Glyph/issues/14) |
 
 ---
 
@@ -320,35 +322,29 @@ H3 predicts "the biggest lever is data curation, not target or
 hyperparameters". **There is no curation lever on T1 to measure**, so H3 cannot
 be tested as stated.
 
-### [#13](https://github.com/ash-ding/Glyph/issues/13) — `evaluate` is gated behind the weights container · P1
+### ~~[#13](https://github.com/ash-ding/Glyph/issues/13) — `evaluate` gated behind weights~~ · settled
 
-| | A2 | A4 | A6 |
-|---|---|---|---|
-| tools | 3 | 3 | 7 |
-| self-evaluation | **none** | `write_code(check_on=…)` | evaluate / inspect / retrain |
-| what it did (rerun) | query ×5, set_context, seal | — | query ×11, synth ×3, train ×3, evaluate ×2, inspect ×2, seal |
+**Universal.** Self-assessment is not a property of a container. Ungating was
+not enough — `evaluate` was checkpoint-only by construction, so A2 (a string)
+and A4 (source) had no id to pass. `seal.answer_with` now answers with any
+artifact and is used by the tool layer at dev time and all three arm runners at
+test time, so the number the agent steers on and the number it is graded by
+cannot drift apart. Declaration and allocation are separate tables; A7 became a
+row rather than a module. See `docs/tools.md`.
 
-A2 writes its prompt blind and seals. Since the dev signal strongly shapes
-behaviour — once dev stopped reading zero the agent went from 187 purchased
-facts to 565 — **A2's and A6's scores were not produced under equal feedback**.
+### ~~[#14](https://github.com/ash-ding/Glyph/issues/14) — dev does not estimate test~~ · settled
 
-Whether an arm can score itself is a harness choice, not a property of the
-container. **Recommendation: move both out of the gate.**
+**Left alone and measured.** Re-measured on the current data layer: 91.5% of one
+run's purchases were single-level against **12.5%** of the test set (was 0%
+before `depth_stop_prob`). Smaller, still large.
 
-### [#14](https://github.com/ash-ding/Glyph/issues/14) — dev does not estimate test · P1
-
-`DEV_FRACTION = 0.15` of the purchased log becomes dev. A6's rerun reached
-**dev 0.400, test 0.035**:
-
-| | nesting depth | single-level expressions |
-|---|---|---|
-| what the agent bought | median 1, max 2 | **92%** |
-| the test set | median 2, max 4 | **0%** |
-
-A clearer dev signal made the agent optimise harder in the wrong direction.
-Partly a consequence of #6. Arguably real rather than a defect — a narrow
-probing strategy *should* yield a misleading self-estimate, and calibration is
-worth measuring — but right now it is neither controlled nor reported.
+An agent with a narrow probing strategy *should* get a misleading self-estimate,
+and whether it knows how well it is doing is part of what the experiment asks;
+selling a matched-distribution dev set would hand it the shape of the exam. What
+was wrong is that the miscalibration was invisible. `ScoreReport.calibration`
+now carries dev accuracy, test accuracy, the gap, and the depth histograms of
+purchased against scored — the gap arrives with the distributions that explain
+it. Both sides use one `answer_fn`, which #13 made possible.
 
 ### [#15](https://github.com/ash-ding/Glyph/issues/15) — the query cap Q · P1
 

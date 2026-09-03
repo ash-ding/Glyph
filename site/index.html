@@ -542,7 +542,7 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
         <tr><td class="mono">A6</td><td>weights</td><td>a fine-tuned student, no prompt</td>
             <td><span class="tag tag--todo">rerun pending</span></td></tr>
         <tr><td class="mono">A7</td><td>agent chooses</td><td>any combination</td>
-            <td><span class="tag tag--todo">not implemented</span></td></tr>
+            <td><span class="tag tag--todo">one row in the allocation table</span></td></tr>
       </tbody>
     </table>
   </div>
@@ -550,11 +550,24 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
   <div class="placeholder">
     <p>
       <b>Arm results are not published yet, deliberately.</b> The earlier sweep
-      is invalidated: the data layer changed underneath it, and two harness
-      asymmetries would have contaminated the comparison — only the weights arm
-      was given self-evaluation tools, and the dev split is carved from the
-      agent's own purchases, which do not match the test distribution. Both are
-      open decisions before the arms are rerun once, on frozen instances.
+      is invalidated — the data layer changed underneath it — and two harness
+      asymmetries that would have contaminated the comparison have since been
+      settled rather than carried.
+    </p>
+    <p>
+      Only the weights arm had self-evaluation tools, so A2 wrote its prompt
+      blind and sealed while A6 ran a full train–evaluate–inspect loop. Those
+      tools are now universal: self-assessment is not a property of a container,
+      and issuing it to one arm measured the harness instead. And the dev split
+      is carved from the agent's own purchases, which do not match the test
+      distribution — <span class="mono">91.5%</span> of one run's queries were
+      single-level against <span class="mono">12.5%</span> of the test set. That
+      is left in place, because an agent with a narrow probing strategy
+      <em>should</em> get a misleading self-estimate, but every report now
+      carries the gap and the distributions that explain it.
+    </p>
+    <p>
+      The arms are rerun once, on frozen instances, with one tool layer.
     </p>
   </div>
 </section>
@@ -571,6 +584,11 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
       now ships beside the skeleton-only and table-only ceilings computed on the
       same items, because a raw number is not comparable across splits or
       instances — the skeleton ceiling alone ranges 0.148 to 0.744 across seeds.
+    </p>
+    <p>
+      Dev-time and test-time scoring share one path, so the number an agent
+      steers on and the number it is graded by cannot drift apart — and the gap
+      between them is reported rather than hidden.
     </p>
     <p>
       Still to fix here: how many items each arm is scored on (pairing every arm
