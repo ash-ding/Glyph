@@ -123,7 +123,7 @@
         <tr class="is-lead">
           <td class="mono">weights</td>
           <td>Qwen3-1.7B fine-tuned on 491 entries (10% of the table)</td>
-          <td class="num">0.498</td><td class="num">—</td><td class="num">+0.333</td>
+          <td class="num">0.498</td><td class="num">0.328</td><td class="num">+0.333</td>
         </tr>
         <tr>
           <td class="mono">perfect</td>
@@ -162,8 +162,15 @@
       <b>Retrieval saturated, extrapolation at zero.</b> The frontier uses what
       it is told almost perfectly and infers almost nothing beyond it. That is
       not a capability shortfall — it is the separation the benchmark was built
-      to produce. Gradient descent on a model three orders of magnitude smaller,
-      given a fifth as many entries, reaches 0.498.
+      to produce.
+    </p>
+    <p>
+      The <span class="mono">tail</span> column is where that shows cleanly.
+      Both arms have a tail of ~370 items — those needing entries never supplied
+      — and on that subset the skeleton ceiling is <b>0.000</b>, so every point
+      is table knowledge. The frontier scores <b>0.016</b> there; a 1.7B student
+      given a fifth as many entries scores <b>0.328</b>. Twenty times, on
+      exactly the items that require extrapolating.
     </p>
   </div>
 

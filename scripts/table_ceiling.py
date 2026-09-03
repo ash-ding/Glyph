@@ -167,6 +167,11 @@ def main() -> int:
                          "buys a few percent.")
     ap.add_argument("--n-test", type=int, default=500)
     ap.add_argument("--out", default=None)
+    ap.add_argument("--save-model", default=None,
+                    help="directory to write the trained model to. The first "
+                         "sweep did not, so adding a column meant retraining "
+                         "six students to re-score items they had already "
+                         "answered once.")
     a = ap.parse_args()
 
     from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -231,6 +236,23 @@ def main() -> int:
     reach_u, fit_u = m(unseen, ok_u), m(seen, ok_u)
     reach_b, fit_b = m(unseen_bb, ok_b), m(seen_bb, ok_b)
 
+    # `tail`, for this measurement path.
+    #
+    # `inst.is_tail` asks whether an item needs an entry the run never *bought*
+    # through the oracle. This student never touched the oracle -- it was
+    # trained directly on the tables behind a `seen_frac` mask -- so
+    # `query_log` is empty and `is_tail` would call every item tail. The
+    # analogue is the same question against the mask: does the item need an
+    # entry the student was never shown?
+    #
+    # The mask is per *value*, shared across operators: if value i is visible
+    # then u0(i), u1(i) and u2(i) were all trainable. That mirrors an agent
+    # buying a query that mentions i, rather than buying one operator's entry
+    # in isolation.
+    def item_is_tail(t):
+        return (any(not seen_u(i, a.seen_frac) for _, i in t.needs_u)
+                or any(not seen_b(i, j, a.seen_frac) for _, i, j in t.needs_b))
+
     st = StudentTables(cfg, u_map, b_map)
     interp = Interpreter(cfg, inst.skeleton, st)
     skel_only = Interpreter(cfg, inst.skeleton, IdentityTables())
@@ -238,17 +260,25 @@ def main() -> int:
 
     hits = collections.Counter(); tot = collections.Counter()
     floor = 0
+    tail_n = tail_hit = tail_floor = 0
     for t in items:
         tot[t.split] += 1
+        ok = False
         try:
-            if rd(interp.eval(parse(t.expr_src, cfg))) == t.answer_src:
-                hits[t.split] += 1
+            ok = rd(interp.eval(parse(t.expr_src, cfg))) == t.answer_src
         except Exception:
             pass
+        hits[t.split] += ok
+        f = False
         try:
-            floor += rd(skel_only.eval(parse(t.expr_src, cfg))) == t.answer_src
+            f = rd(skel_only.eval(parse(t.expr_src, cfg))) == t.answer_src
         except Exception:
             pass
+        floor += f
+        if item_is_tail(t):
+            tail_n += 1
+            tail_hit += ok
+            tail_floor += f
 
     overall = sum(hits.values()) / len(items)
     res = {
@@ -262,11 +292,23 @@ def main() -> int:
                            "unary_reach": reach_u, "binary_all": entry_acc_b,
                            "binary_fit": fit_b, "binary_reach": reach_b},
         "item_score": {"overall": overall,
-                       **{k: hits[k] / tot[k] for k in tot}},
+                       **{k: hits[k] / tot[k] for k in tot},
+                       "tail": (tail_hit / tail_n) if tail_n else None},
+        "tail_items": tail_n,
         "skeleton_ceiling": floor / len(items),
+        "skeleton_ceiling_tail": (tail_floor / tail_n) if tail_n else None,
         "unparsed_lookups": st.miss,
         "minutes": round((time.time() - t0) / 60, 1),
     }
+    if a.save_model:
+        d = Path(a.save_model)
+        d.mkdir(parents=True, exist_ok=True)
+        model.save_pretrained(d); tok.save_pretrained(d)
+        (d / "run_config.json").write_text(json.dumps(
+            {k: res[k] for k in ("preset", "instance_seed", "seen_frac",
+                                 "steps", "lr")}, indent=2))
+        res["saved_to"] = str(d)
+
     print("\n" + json.dumps(res, indent=2))
     if a.out:
         Path(a.out).write_text(json.dumps(res, indent=2))

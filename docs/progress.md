@@ -3335,3 +3335,73 @@ at chance.
 Worth doing eventually as a control: A0' with an adaptive buyer, or A0' fed a
 real agent's log — which is what the original design specified before the
 capacity framing made the generous-evidence version the sharper test.
+
+---
+
+# 2026-09-03 — the tail column, which is where the comparison actually lives
+
+The three-way table shipped with a hole in it: the weights arm had no `tail`.
+That was not an oversight in the reporting, it was that `tail` had no meaning on
+that measurement path — and filling it changes how strong the result reads.
+
+## Why the column was missing
+
+`inst.is_tail(t)` asks whether an item needs an entry the run never *bought
+through the oracle*. `scripts/table_ceiling.py` trains its student directly on
+the tables behind a `seen_frac` mask and never touches the oracle, so
+`query_log` is empty and `is_tail` would call every item tail.
+
+The analogue is the same question asked of the mask: does the item need an entry
+the student was never shown? The mask is per *value* rather than per (operator,
+value) — if value `i` is visible then `u0(i)`, `u1(i)` and `u2(i)` were all
+trainable — which mirrors an agent buying a query that mentions `i` rather than
+buying one operator's entry in isolation.
+
+Six students retrained to add one column, because the first sweep did not save
+its checkpoints. `--save-model` exists now.
+
+## The comparison, complete
+
+pi_mid / seed 1001, the same stratified 500 items throughout:
+
+| | overall | tail | tail items |
+|---|---|---|---|
+| skeleton ceiling, no table at all | 0.248 | 0.000 | — |
+| A0′, frontier, 2551 entries in context, unlimited thinking | 0.258 | **0.016** | 374 |
+| weights, 1.7B, 491 entries seen | 0.498 | **0.328** | 372 |
+
+The two tail subsets are nearly the same items (374 against 372) and the
+skeleton ceiling on both is **0.000** — nothing in there is answerable from
+structure, so every point is table knowledge.
+
+**On the items that require extrapolating to entries never supplied, the 1.7B
+student beats the frontier model by a factor of twenty.**
+
+That is a materially stronger statement than the overall scores supported. At
+0.258 against 0.498 it was still arguable that A0′ had merely done worse on the
+easy items. The tail column removes that reading.
+
+## The tail curve
+
+| entries seen | of 4913 | item score | **tail** |
+|---|---|---|---|
+| 90% | 4422 | 0.880 | 0.709 |
+| 50% | 2456 | 0.724 | 0.590 |
+| 25% | 1228 | 0.582 | 0.430 |
+| **10%** | 491 | 0.498 | **0.328** |
+| 5% | 246 | 0.454 | 0.273 |
+| 2% | 98 | 0.360 | 0.147 |
+
+At **2% seen** — 98 entries — the student still scores 0.147 on items needing
+entries it was never shown. The frontier, holding 2551 of them in context,
+scores 0.016. Twenty-six times fewer entries, nine times the extrapolation.
+
+## Run-to-run noise, measured for the first time
+
+The 90% point came back at overall 0.880 and unary reach 0.809, against 0.878
+and 0.767 in the first sweep. Same config, same instance seed — the difference
+is training-time sampling, since `stream()` draws from its own RNG per run.
+
+**About ±0.04 on reach between identical runs.** Worth knowing before reading
+small differences as signal; single points on any of these curves carry that
+much noise. Nothing in the conclusions above turns on a gap that size.

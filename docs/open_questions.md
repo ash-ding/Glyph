@@ -418,15 +418,22 @@ the table the student saw, which nobody had varied. pi_mid/1001, 500-item paired
 subset, `scripts/table_ceiling.py` — true skeleton over student-learned tables,
 so everything below 1.0 is the table.
 
-| entries seen | unary reach | item score |
-|---|---|---|
-| 90% | 0.767 | 0.878 |
-| 50% | 0.737 | 0.724 |
-| 25% | 0.663 | 0.582 |
-| **10%** *(agent volume)* | 0.605 | **0.498** |
-| 5% | 0.531 | 0.454 |
-| 2% | 0.279 | 0.360 |
-| skeleton ceiling | — | *0.248* |
+| entries seen | unary reach | item score | tail |
+|---|---|---|---|
+| 90% | 0.809 | 0.880 | 0.709 |
+| 50% | 0.737 | 0.724 | 0.590 |
+| 25% | 0.663 | 0.582 | 0.430 |
+| **10%** *(agent volume)* | 0.605 | **0.498** | **0.328** |
+| 5% | 0.531 | 0.454 | 0.273 |
+| 2% | 0.279 | 0.360 | 0.147 |
+| skeleton ceiling | — | *0.248* | *0.000* |
+
+`tail` is the analogue of the arm-path split, asked of the training mask rather
+than of a query log: items needing an entry the student was never shown. Its
+skeleton ceiling is 0.000, so every point there is table knowledge. **A0′ scores
+0.016 on its own tail of 374 items against the student's 0.328 on 372** —
+twenty times, on the items that require extrapolation. Run-to-run noise on reach
+is about ±0.04, measured by repeating the 90% point.
 
 Extrapolation decays far more slowly than supervision — 98 entries still get
 27.9% of the other 98% right. **The band the arms operate in is [0.248, 0.498]**,
