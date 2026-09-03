@@ -101,187 +101,153 @@ def validate(tool: dict, args: dict) -> str | None:
     return None
 
 
+# ---------------------------------------------------------------------
+# Tool declarations.
+#
+# Declared once, here, and allocated to arms further down.  Those used to be
+# the same act -- the list was built inside `if Container.X in allowed:`
+# blocks -- so a tool belonged to an arm because of where it happened to be
+# typed.  `evaluate` was weights-only for exactly that reason; nobody decided
+# it.  The arms are meant to differ *only* in which container they may spend
+# on, and keeping declaration apart from allocation makes that readable in one
+# table instead of spread through a function body.
+#
+# Every parameter here is read by the implementation.  A declared-and-ignored
+# parameter is worse than a missing one: the agent operates a control that is
+# not connected and the trace records the intent as though it had an effect.
+# ---------------------------------------------------------------------
+def _t(name: str, description: str, props: dict, required: list[str]) -> dict:
+    return {"name": name, "description": description, "strict": True,
+            "input_schema": {"type": "object", "properties": props,
+                             "required": required,
+                             "additionalProperties": False}}
+
+
+TOOLS: dict[str, dict] = {
+    "query": _t(
+        "query",
+        "Ask the hidden interpreter to evaluate expressions. This is the only "
+        "way to learn the semantics. Every expression costs budget, and "
+        "malformed ones cost the same as well-formed ones.",
+        {"exprs": {"type": "array", "items": {"type": "string"}, "maxItems": 256,
+                   "description": "Well-formed expressions to evaluate."},
+         "why": {"type": "string",
+                 "description": "What you expect to learn. Recorded, not acted on."}},
+        ["exprs", "why"]),
+
+    "build_dataset": _t(
+        "build_dataset",
+        "Build a training set from what you have queried. It repeats the rows "
+        "you bought -- it cannot invent labels you do not have -- so `n` is "
+        "effectively an epoch count.",
+        {"source": {"type": "string", "enum": ["queries", "demos", "mixture"]},
+         "n": {"type": "integer", "minimum": 1, "maximum": 200000}},
+        ["source", "n"]),
+
+    "declare_target": _t(
+        "declare_target",
+        "State what you are putting into the student's weights. Required "
+        "before train. NOTE: this is a declaration only -- every role trains "
+        "identically at present.",
+        {"role": {"type": "string", "enum": [r.value for r in Role]},
+         "rationale": {"type": "string"}},
+        ["role", "rationale"]),
+
+    "train": _t(
+        "train",
+        "Fine-tune the student on a dataset you built. Always a full "
+        "fine-tune. Costs GPU seconds, measured not estimated.",
+        {"dataset_id": {"type": "string"},
+         "epochs": {"type": "integer", "minimum": 1, "maximum": 4},
+         "lr": {"type": "number"}},
+        ["dataset_id", "epochs", "lr"]),
+
+    "write_code": _t(
+        "write_code",
+        "Submit a Python solver defining solve(expr) -> str. It runs sandboxed "
+        "with no network. Use `evaluate` to check it.",
+        {"src": {"type": "string"}},
+        ["src"]),
+
+    "set_context": _t(
+        "set_context",
+        "Fix the prompt prefix the student will carry at test time. Its token "
+        "count is recorded and re-paid on every test query.",
+        {"text": {"type": "string"}},
+        ["text"]),
+
+    "evaluate": _t(
+        "evaluate",
+        "Score any artifact you have made on your dev split. The test split is "
+        "not reachable from here.",
+        {"artifact_id": {"type": "string"},
+         "n": {"type": "integer", "minimum": 16, "maximum": 2000}},
+        ["artifact_id", "n"]),
+
+    "inspect": _t(
+        "inspect",
+        "Look at items an artifact got wrong on dev.",
+        {"artifact_id": {"type": "string"},
+         "k": {"type": "integer", "minimum": 1, "maximum": 50}},
+        ["artifact_id", "k"]),
+
+    "seal": _t(
+        "seal",
+        "End the prepare phase and freeze one artifact as what answers the "
+        "test set. Nothing is reachable afterwards -- no oracle, no further "
+        "training, no you.",
+        {"artifact_id": {"type": "string",
+                         "description": "From set_context, write_code or train."},
+         "summary": {"type": "string",
+                     "description": "What you taught it, in your own words."}},
+        ["artifact_id", "summary"]),
+}
+
+# ---------------------------------------------------------------------
+# Allocation.  Which arm gets which tool, as a table rather than as control
+# flow inside the declarations.
+#
+# `evaluate` and `inspect` are universal on purpose.  Self-assessment is not a
+# property of a container -- someone writing a prompt can try it, someone
+# writing code can run it, someone training a model can hold out a validation
+# set.  Issuing it to one arm only measures the harness rather than the
+# container, and the dev signal is known to shape behaviour strongly: once it
+# stopped reading zero, one agent went from buying 187 facts to 565.
+# ---------------------------------------------------------------------
+UNIVERSAL: tuple[str, ...] = ("query", "evaluate", "inspect", "seal")
+
+BY_CONTAINER: dict[Container, tuple[str, ...]] = {
+    Container.CONTEXT: ("set_context",),
+    Container.CODE: ("write_code",),
+    Container.WEIGHTS: ("declare_target", "build_dataset", "train"),
+}
+
+# Presentation order only; membership is decided above.
+ORDER: tuple[str, ...] = (
+    "query", "declare_target", "build_dataset", "train",
+    "write_code", "set_context", "evaluate", "inspect", "seal")
+
+
+def allocate(allowed: set[Container], *, can_query: bool = True) -> set[str]:
+    """The tool names one arm may call."""
+    names = set(UNIVERSAL)
+    if not can_query:
+        names.discard("query")
+    for c in allowed:
+        names |= set(BY_CONTAINER[c])
+    return names
+
+
 def tool_defs(allowed: set[Container], *, can_query: bool = True,
               strict: bool = False) -> list[dict]:
-    """The tool surface for one arm.
-
-    An arm is defined by which containers it may spend on, and that is
-    enforced here rather than by asking the model nicely: A2 is simply not
-    given `train`.  Handing over every tool and instructing it to avoid some
-    would leave the arm boundary depending on compliance.
+    """The tool surface for one arm: declarations filtered by allocation.
 
     `strict` defaults to False because this Vertex project forbids it; see the
     module docstring.
     """
-    tools: list[dict] = []
-
-    if can_query:
-        tools.append({
-            "name": "query_oracle",
-            "description": (
-                "Ask the hidden interpreter to evaluate expressions. This is "
-                "the only way to learn the semantics. Every expression costs "
-                "budget, and malformed ones cost the same as well-formed ones."),
-            "strict": True,
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "exprs": {"type": "array", "items": {"type": "string"},
-                              "maxItems": 256,
-                              "description": "Well-formed expressions to evaluate."},
-                    "why": {"type": "string",
-                            "description": "What you expect to learn. Recorded, not acted on."},
-                },
-                "required": ["exprs", "why"],
-                "additionalProperties": False,
-            },
-        })
-
-    if Container.WEIGHTS in allowed:
-        tools += [
-            {
-                "name": "declare_target",
-                "description": (
-                    "State what you are putting into the student's weights. "
-                    "Required before train, and it cannot be changed afterwards."),
-                "strict": True,
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "role": {"type": "string",
-                                 "enum": [r.value for r in Role]},
-                        "rationale": {"type": "string"},
-                    },
-                    "required": ["role", "rationale"],
-                    "additionalProperties": False,
-                },
-            },
-            {
-                "name": "synthesize_data",
-                "description": (
-                    "Build a training set from what you have queried. Costs "
-                    "budget in proportion to size."),
-                "strict": True,
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "description": {"type": "string"},
-                        "n": {"type": "integer", "minimum": 1, "maximum": 200000},
-                        "source": {"type": "string",
-                                   "enum": ["queries", "demos", "mixture"]},
-                        "emphasis": {"type": "string",
-                                     "enum": ["uniform", "tail", "operator-focused"]},
-                        "include_reasoning": {"type": "boolean"},
-                    },
-                    "required": ["description", "n", "source", "emphasis",
-                                 "include_reasoning"],
-                    "additionalProperties": False,
-                },
-            },
-            {
-                "name": "train",
-                "description": (
-                    "Fine-tune the student on a dataset you built. Costs GPU "
-                    "seconds, measured not estimated."),
-                "strict": True,
-                "input_schema": {
-                    "type": "object",
-                    "properties": {
-                        "dataset_id": {"type": "string"},
-                        "lora_rank": {"type": "integer", "minimum": 4, "maximum": 128},
-                        "epochs": {"type": "integer", "minimum": 1, "maximum": 4},
-                        "lr": {"type": "number"},
-                    },
-                    "required": ["dataset_id", "lora_rank", "epochs", "lr"],
-                    "additionalProperties": False,
-                },
-            },
-            {
-                "name": "evaluate",
-                "description": (
-                    "Score a checkpoint on the dev split. The test split is "
-                    "not reachable from here."),
-                "strict": True,
-                "input_schema": {
-                    "type": "object",
-                    "properties": {"checkpoint_id": {"type": "string"},
-                                   "n": {"type": "integer", "minimum": 16, "maximum": 2000}},
-                    "required": ["checkpoint_id", "n"],
-                    "additionalProperties": False,
-                },
-            },
-            {
-                "name": "inspect_failures",
-                "description": "Look at items a checkpoint got wrong on dev.",
-                "strict": True,
-                "input_schema": {
-                    "type": "object",
-                    "properties": {"checkpoint_id": {"type": "string"},
-                                   "k": {"type": "integer", "minimum": 1, "maximum": 50}},
-                    "required": ["checkpoint_id", "k"],
-                    "additionalProperties": False,
-                },
-            },
-        ]
-
-    if Container.CODE in allowed:
-        tools.append({
-            "name": "write_code",
-            "description": (
-                "Submit a Python solver defining solve(expr) -> str. It runs "
-                "sandboxed with no network. Costs the same budget pool as "
-                "training."),
-            "strict": True,
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "src": {"type": "string"},
-                    "check_on": {"type": "integer", "minimum": 0, "maximum": 500,
-                                 "description": "Dev items to try it on before sealing."},
-                },
-                "required": ["src", "check_on"],
-                "additionalProperties": False,
-            },
-        })
-
-    if Container.CONTEXT in allowed:
-        tools.append({
-            "name": "set_context",
-            "description": (
-                "Fix the prompt prefix the student will carry at test time. "
-                "Its token count is recorded and re-paid on every test query."),
-            "strict": True,
-            "input_schema": {
-                "type": "object",
-                "properties": {"text": {"type": "string"}},
-                "required": ["text"],
-                "additionalProperties": False,
-            },
-        })
-
-    tools.append({
-        "name": "seal",
-        "description": (
-            "End the prepare phase and freeze what answers the test set. "
-            "Nothing is reachable afterwards -- no oracle, no training, no you."),
-        "strict": True,
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "entry": {"type": "string", "enum": ["program", "model"],
-                          "description": "What drives the test loop."},
-                "checkpoint_id": {"type": "string",
-                                  "description": "Empty string if none."},
-                "summary": {"type": "string",
-                            "description": "What you taught it, in your own words. "
-                                           "Used by the verbalization-gap arm."},
-            },
-            "required": ["entry", "checkpoint_id", "summary"],
-            "additionalProperties": False,
-        },
-    })
-
+    names = allocate(allowed, can_query=can_query)
+    out = [dict(TOOLS[n]) for n in ORDER if n in names]
     if not strict:
-        for t in tools:
+        for t in out:
             t.pop("strict", None)
-    return tools
+    return out

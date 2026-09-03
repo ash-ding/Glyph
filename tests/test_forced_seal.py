@@ -22,22 +22,27 @@ def box(tmp_path):
 
 
 def test_an_ordinary_seal_still_needs_something_to_seal(box):
-    assert "error" in box.dispatch("seal", {"entry": "model",
-                                            "checkpoint_id": "", "summary": "s"})
+    assert "error" in box.dispatch("seal", {"artifact_id": "", "summary": "s"})
     assert box.sealed is None
 
 
 def test_a_forced_seal_cannot_be_refused(box):
     """Training that all failed still has to produce a data point."""
-    out = box.dispatch("seal", {"entry": "model", "checkpoint_id": "",
-                                "summary": "harness", "forced": True})
+    out = box.dispatch("seal", {"artifact_id": "", "summary": "harness",
+                                "forced": True})
     assert out.get("sealed")
     assert box.sealed is not None
     assert box.sealed.adapter_path is None and box.sealed.context is None
 
 
-def test_a_forced_program_seal_without_a_program_falls_back_to_the_student(box):
-    box.dispatch("seal", {"entry": "program", "checkpoint_id": "",
-                          "summary": "harness", "forced": True})
+def test_a_forced_seal_with_no_artifact_falls_back_to_the_bare_student(box):
+    """Nothing was produced, so the base student with no prompt and no adapter
+    is what gets sealed -- a legitimate, and very bad, artifact. Refusing turns
+    a poor result into a missing one, and the arms most likely to hit that are
+    the ones whose preparation costs most."""
+    box.dispatch("seal", {"artifact_id": "", "summary": "harness",
+                          "forced": True})
     assert box.sealed is not None
-    assert box.sealed.entry == "model", "nothing to run, so the student answers"
+    assert box.sealed.entry == "model"
+    assert not (box.sealed.program or box.sealed.adapter_path
+                or box.sealed.context)

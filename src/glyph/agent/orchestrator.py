@@ -175,14 +175,17 @@ def run_agent(inst: GlyphInstance, ledger: Ledger, trace: TraceWriter,
     if box.sealed is None:
         # Out of turns or out of budget without sealing. Seal what exists, so
         # the run still produces a comparable number rather than a hole.
-        entry = "program" if box.program else "model"
-        box.dispatch("seal", {"entry": entry,
-                              "checkpoint_id": next(iter(box.checkpoints), ""),
+        # The last artifact produced, or none at all -- either way the seal
+        # must succeed, so that a run out of turns still yields a comparable
+        # number rather than a hole in the grid.
+        last = next(reversed(box.artifacts), "") if box.artifacts else ""
+        box.dispatch("seal", {"artifact_id": last,
                               "summary": "(sealed by the harness: the agent "
                                          "did not seal in time)",
                               "forced": True})
         assert box.sealed is not None, "the harness seal must not be refusable"
-        trace.emit("harness_seal", arm=arm, had_program=bool(box.program),
+        trace.emit("harness_seal", arm=arm, artifacts=len(box.artifacts),
+                   had_program=bool(box.program),
                    had_checkpoint=bool(box.checkpoints),
                    had_context=bool(box.context))
 

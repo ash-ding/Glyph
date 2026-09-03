@@ -14,8 +14,7 @@ forbid.
 from __future__ import annotations
 
 from ..agent import Container, run_agent
-from ..sandbox import run_solver
-from ..seal import ScoreReport
+from ..seal import ScoreReport, answer_with
 from .base import RunConfig, finish, prepare
 
 
@@ -26,14 +25,10 @@ def run(rc: RunConfig) -> ScoreReport:
                     base_model=rc.base_model, model=rc.teacher,
                     max_turns=rc.max_turns)
 
+    # `answer_with` is the same path the agent's own `evaluate` uses during
+    # prepare. A solver that will not run scores zero rather than crashing the
+    # run: a broken artifact is a result, not a missing data point.
     def answer(exprs):
-        res = run_solver(box.sealed.program or "", exprs, ledger=p.ledger,
-                         timeout=900)
-        if not res.ok:
-            # A solver that will not run scores zero rather than crashing the
-            # run: a broken artifact is a result, and the reason is traced.
-            p.trace.emit("solver_failed", arm="a4", error=res.error)
-            return [""] * len(exprs)
-        return res.answers
+        return answer_with(box.sealed, rc.base_model, p.ledger, exprs)
 
     return finish(p, rc, box.sealed, answer)

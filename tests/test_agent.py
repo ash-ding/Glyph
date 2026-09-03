@@ -36,9 +36,39 @@ def test_each_arm_only_gets_its_own_container_tools():
     assert "train" not in ctx and "write_code" not in ctx
     assert "train" not in code and "set_context" not in code
     assert "write_code" not in weights and "set_context" not in weights
-    # seal and the oracle belong to everyone
-    for names in (ctx, code, weights):
-        assert {"seal", "query_oracle"} <= names
+
+
+def test_self_assessment_is_universal_not_a_container_property():
+    """Someone writing a prompt can try it, someone writing code can run it,
+    someone training a model can hold out a validation set. Issuing it to one
+    arm only measures the harness rather than the container -- and the dev
+    signal is known to shape behaviour: once it stopped reading zero, one agent
+    went from buying 187 facts to 565."""
+    for containers in ({Container.CONTEXT}, {Container.CODE}, {Container.WEIGHTS}):
+        names = {t["name"] for t in tool_defs(containers)}
+        assert {"seal", "query", "evaluate", "inspect"} <= names, containers
+
+
+def test_the_free_choice_arm_is_an_allocation_not_a_module():
+    """A7 is every container at once, which under this structure is one row in
+    the allocation table rather than a new arm implementation."""
+    all_names = {t["name"] for t in tool_defs(set(Container))}
+    assert {"set_context", "write_code", "train"} <= all_names
+
+
+def test_every_declared_parameter_is_read_by_the_implementation():
+    """A declared-and-ignored parameter is worse than a missing one: the agent
+    operates a control that is not connected, and the trace records the intent
+    as though it had an effect. `synthesize_data` accepted three such."""
+    import inspect as _inspect
+    from glyph.agent.tools import ToolBox
+    from glyph.agent.schema import TOOLS
+    for name, spec in TOOLS.items():
+        fn = getattr(ToolBox, f"_t_{name}", None)
+        assert fn is not None, f"{name} is declared but not implemented"
+        params = set(_inspect.signature(fn).parameters) - {"self"}
+        declared = set(spec["input_schema"]["properties"])
+        assert declared <= params, (name, declared - params)
 
 
 def test_declaring_a_target_is_only_offered_where_weights_are():
@@ -73,7 +103,7 @@ def test_every_query_is_billed_including_malformed_ones(box):
     """
     good = box.inst.demos[0][0]          # a real expression, not a hand-written one
     before = box.ledger.spent_h100s
-    out = box.dispatch("query_oracle", {"exprs": [good, "not an expr"],
+    out = box.dispatch("query", {"exprs": [good, "not an expr"],
                                         "why": "probing"})
     assert box.ledger.spent_h100s > before
     assert out["malformed"] == 1
@@ -84,14 +114,14 @@ def test_every_query_is_billed_including_malformed_ones(box):
 def test_the_budget_stops_the_run(box):
     box.ledger.total = box.ledger.spent_h100s + 1e-9
     with pytest.raises(BudgetExhausted):
-        box.dispatch("query_oracle", {"exprs": [box.inst.demos[0][0]] * 50,
+        box.dispatch("query", {"exprs": [box.inst.demos[0][0]] * 50,
                                       "why": "overspend"})
 
 
 # -- dev comes out of what was paid for ----------------------------------
 def test_dev_is_carved_from_purchased_queries_not_given_free(box):
     exprs = [e for e, _ in box.inst.demos][:6]
-    box.dispatch("query_oracle", {"exprs": exprs, "why": "buy"})
+    box.dispatch("query", {"exprs": exprs, "why": "buy"})
     train, dev = box._split()
     assert dev, "a dev slice should exist once something has been bought"
     assert len(train) + len(dev) == len(box.queried)
@@ -99,16 +129,14 @@ def test_dev_is_carved_from_purchased_queries_not_given_free(box):
 
 
 def test_evaluating_before_buying_anything_is_an_error(box):
-    box.checkpoints["ck1"] = "/nonexistent"
-    out = box.dispatch("evaluate", {"checkpoint_id": "ck1", "n": 16})
+    out = box.dispatch("evaluate", {"artifact_id": "nope", "n": 16})
     assert "error" in out
 
 
 # -- sealing has prerequisites -------------------------------------------
 def test_training_without_declaring_a_target_is_refused(box):
     box.datasets["ds1"] = []
-    out = box.dispatch("train", {"dataset_id": "ds1", "lora_rank": 8,
-                                 "epochs": 1, "lr": 1e-4})
+    out = box.dispatch("train", {"dataset_id": "ds1", "epochs": 1, "lr": 1e-4})
     assert "declare_target" in out["error"]
 
 
@@ -118,13 +146,15 @@ def test_a_target_cannot_be_redeclared(box):
     assert box.role is Role.ANSWER
 
 
-def test_sealing_a_program_entry_needs_a_program(box):
-    assert "error" in box.dispatch("seal", {"entry": "program",
-                                            "checkpoint_id": "", "summary": "s"})
-    box.dispatch("write_code", {"src": "def solve(e):\n    return e", "check_on": 0})
-    assert box.dispatch("seal", {"entry": "program", "checkpoint_id": "",
+def test_sealing_needs_an_artifact_that_was_actually_made(box):
+    """Taking an artifact id rather than an entry plus a checkpoint means the
+    thing sealed is the thing that was evaluated -- an agent can no longer
+    measure one object and hand over another."""
+    assert "error" in box.dispatch("seal", {"artifact_id": "", "summary": "s"})
+    made = box.dispatch("write_code", {"src": "def solve(e):\n    return e"})
+    assert box.dispatch("seal", {"artifact_id": made["artifact_id"],
                                  "summary": "s"})["sealed"]
-    assert box.sealed.program
+    assert box.sealed.program and box.sealed.entry == "program"
 
 
 # -- scoring ------------------------------------------------------------

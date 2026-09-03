@@ -24,9 +24,9 @@ from pathlib import Path
 from ..budget import BudgetExhausted, Ledger
 from ..instance import GlyphInstance
 from ..sandbox import run_solver
-from ..seal import SealedArtifact
+from ..seal import SealedArtifact, answer_with
 from ..train.sft import Example, HParams
-from .schema import Container, DataSpec, Role
+from .schema import Container, Role
 
 DEV_FRACTION = 0.15
 
@@ -44,6 +44,10 @@ class ToolBox:
     queried: list[tuple[str, str]] = field(default_factory=list)
     datasets: dict[str, list[Example]] = field(default_factory=dict)
     checkpoints: dict[str, str] = field(default_factory=dict)
+    # Everything a production tool made, by id. `set_context`, `write_code` and
+    # `train` each register one, which is what lets `evaluate` and `inspect`
+    # take any of them instead of only an adapter.
+    artifacts: dict[str, SealedArtifact] = field(default_factory=dict)
     role: Role | None = None
     context: str | None = None
     program: str | None = None
@@ -59,6 +63,19 @@ class ToolBox:
     def _id(self, prefix: str) -> str:
         self._n += 1
         return f"{prefix}{self._n}"
+
+    def _register(self, entry: str, **kw) -> str:
+        """Record what a production tool just made, so it can be evaluated.
+
+        One artifact is exactly one production call -- a prompt, a program, or
+        a checkpoint -- rather than a running snapshot of everything the box
+        holds. That keeps `evaluate(artifact_id)` unambiguous about which thing
+        it is measuring.
+        """
+        aid = self._id("art")
+        self.artifacts[aid] = SealedArtifact(
+            arm=self.arm, entry=entry, base_model=self.base_model, **kw)
+        return aid
 
     # -- dispatch -------------------------------------------------------
     def dispatch(self, name: str, args: dict) -> dict:
@@ -78,7 +95,7 @@ class ToolBox:
         return out
 
     # -- the oracle -----------------------------------------------------
-    def _t_query_oracle(self, exprs: list[str], why: str) -> dict:
+    def _t_query(self, exprs: list[str], why: str) -> dict:
         self.ledger.charge("oracle_query", len(exprs), why=why[:200])
         rows, bad = [], 0
         for e in exprs:
@@ -104,9 +121,17 @@ class ToolBox:
         self.role = Role(role)
         return {"ok": True, "role": role}
 
-    def _t_synthesize_data(self, description: str, n: int, source: str,
-                           emphasis: str, include_reasoning: bool) -> dict:
-        spec = DataSpec(description, n, source, emphasis, include_reasoning)
+    def _t_build_dataset(self, source: str, n: int) -> dict:
+        """Repeat purchased rows up to `n`.
+
+        `n` is an epoch count wearing a costume: the agent cannot manufacture
+        labels it has not bought, so this repeats rather than invents.
+        Curriculum control -- filtering, emphasis by operator or by tail
+        coverage -- is deliberately absent until it is implemented. The
+        previous version declared `emphasis`, `description` and
+        `include_reasoning` and read none of them, so the agent spent every
+        call operating a control that was not connected.
+        """
         train_rows, _ = self._split()
         if not train_rows:
             return {"error": "nothing to synthesise from: query the oracle first"}
@@ -127,11 +152,11 @@ class ToolBox:
         ds_id = self._id("ds")
         self.datasets[ds_id] = examples
         self.trace.emit("dataspec", arm=self.arm, dataset_id=ds_id,
-                        spec=spec.__dict__, size=len(examples))
+                        source=source, n=n, size=len(examples))
         return {"dataset_id": ds_id, "size": len(examples),
                 "drawn_from": len(rows), "remaining_h100s": round(self.ledger.remaining, 3)}
 
-    def _t_train(self, dataset_id: str, lora_rank: int, epochs: int, lr: float) -> dict:
+    def _t_train(self, dataset_id: str, epochs: int, lr: float) -> dict:
         if self.role is None:
             return {"error": "declare_target must come before train"}
         ds = self.datasets.get(dataset_id)
@@ -141,103 +166,111 @@ class ToolBox:
         from ..train.sft import train as run_train
         ck_id = self._id("ck")
         out = self.work_dir / ck_id
-        hp = HParams(lora_rank=lora_rank, lora_alpha=lora_rank, epochs=epochs,
-                     lr=lr)
+        # Always a full fine-tune. The published weights-arm ceiling was
+        # measured that way, so an arm restricted to LoRA would have been
+        # compared against a line it could not reach. LoRA is deferred, not
+        # rejected -- see docs/tools.md.
+        hp = HParams(full_finetune=True, epochs=epochs, lr=lr)
         rec = run_train(ds, hp, base_model=self.base_model, out_dir=out,
                         ledger=self.ledger, log_every=0)
         self.checkpoints[ck_id] = str(out)
-        self.trace.emit("train", arm=self.arm, checkpoint_id=ck_id,
+        aid = self._register("model", adapter_path=str(out))
+        self.trace.emit("train", arm=self.arm, artifact_id=aid,
                         role=self.role.value, record=rec)
-        return {"checkpoint_id": ck_id, "examples": rec["examples"],
+        return {"artifact_id": aid, "examples": rec["examples"],
                 "final_loss": round(rec["final_loss"], 4),
                 "remaining_h100s": round(self.ledger.remaining, 3)}
 
-    def _t_evaluate(self, checkpoint_id: str, n: int) -> dict:
-        path = self.checkpoints.get(checkpoint_id)
-        if not path:
-            return {"error": f"no checkpoint {checkpoint_id!r}"}
+    def _t_evaluate(self, artifact_id: str, n: int) -> dict:
+        """Score any artifact on the dev split.
+
+        Routed through `seal.answer_with`, which is the same path the test
+        phase uses. Self-assessment is not a property of a container -- someone
+        writing a prompt can try it, someone writing code can run it, someone
+        training a model can hold out a validation set -- so issuing it to one
+        arm only would have measured the harness rather than the container.
+        """
+        art = self.artifacts.get(artifact_id)
+        if art is None:
+            return {"error": f"no artifact {artifact_id!r}"}
         _, dev = self._split()
         if not dev:
             return {"error": "no dev items yet: query more first"}
         dev = dev[:n]
-
-        from ..train.infer import Student
-        student = Student(self.base_model, adapter_path=path)
-        got = student.answer([e for e, _ in dev], ledger=self.ledger)
-        hits = sum(g.strip() == a.strip() for g, (_, a) in zip(got.answers, dev))
-        student.close()
-        del student
+        got = answer_with(art, self.base_model, self.ledger, [e for e, _ in dev])
+        hits = sum(g.strip() == a.strip() for g, (_, a) in zip(got, dev))
         return {"dev_accuracy": round(hits / len(dev), 4), "n": len(dev),
                 "remaining_h100s": round(self.ledger.remaining, 3)}
 
-    def _t_inspect_failures(self, checkpoint_id: str, k: int) -> dict:
-        path = self.checkpoints.get(checkpoint_id)
-        if not path:
-            return {"error": f"no checkpoint {checkpoint_id!r}"}
+    def _t_inspect(self, artifact_id: str, k: int) -> dict:
+        """Look at items an artifact got wrong.
+
+        Evaluates `k` items rather than the whole dev split and truncating the
+        output, which is what the previous version did.
+        """
+        art = self.artifacts.get(artifact_id)
+        if art is None:
+            return {"error": f"no artifact {artifact_id!r}"}
         _, dev = self._split()
-        from ..train.infer import Student
-        student = Student(self.base_model, adapter_path=path)
-        got = student.answer([e for e, _ in dev], ledger=self.ledger)
+        if not dev:
+            return {"error": "no dev items yet: query more first"}
+        dev = dev[:max(k, 1)]
+        got = answer_with(art, self.base_model, self.ledger, [e for e, _ in dev])
         bad = [{"expr": e, "want": a, "got": g}
-               for g, (e, a) in zip(got.answers, dev) if g.strip() != a.strip()]
-        student.close()
-        del student
-        return {"n_inspected": len(dev), "n_wrong": len(bad), "examples": bad[:k]}
+               for g, (e, a) in zip(got, dev) if g.strip() != a.strip()]
+        return {"n_inspected": len(dev), "n_wrong": len(bad), "examples": bad}
 
     # -- code path ------------------------------------------------------
-    def _t_write_code(self, src: str, check_on: int) -> dict:
+    def _t_write_code(self, src: str) -> dict:
+        """Store a solver. Checking it is `evaluate`'s job, not this one's."""
         self.program = src
-        if check_on <= 0:
-            return {"stored": True, "bytes": len(src.encode())}
-        _, dev = self._split()
-        dev = dev[:check_on]
-        if not dev:
-            return {"stored": True, "note": "no dev items to check against yet"}
-        res = run_solver(src, [e for e, _ in dev], ledger=self.ledger)
-        if not res.ok:
-            return {"stored": True, "solver_error": res.error}
-        hits = sum(g.strip() == a.strip() for g, (_, a) in zip(res.answers, dev))
-        return {"stored": True, "bytes": len(src.encode()),
-                "dev_accuracy": round(hits / len(dev), 4), "n": len(dev),
-                "remaining_h100s": round(self.ledger.remaining, 3)}
+        aid = self._register("program", program=src)
+        return {"artifact_id": aid, "bytes": len(src.encode())}
 
     # -- context path ---------------------------------------------------
     def _t_set_context(self, text: str) -> dict:
         self.context = text
-        return {"stored": True, "chars": len(text)}
+        aid = self._register("model", context=text)
+        return {"artifact_id": aid, "chars": len(text)}
 
     # -- sealing --------------------------------------------------------
-    def _t_seal(self, entry: str, checkpoint_id: str, summary: str,
+    def _t_seal(self, artifact_id: str, summary: str,
                 forced: bool = False) -> dict:
-        """Freeze whatever exists.
+        """Freeze one artifact. Nothing is reachable afterwards.
+
+        Takes an artifact rather than an entry plus a checkpoint id, so the
+        thing sealed is exactly the thing that was evaluated -- the agent can
+        no longer measure one object and hand over another.
 
         `forced` is the harness sealing on the agent's behalf, and it must
-        always succeed. An agent whose training all failed still has to
-        produce a comparable data point -- the base student answering with
-        no adapter and no prompt is a legitimate, and very bad, artifact.
-        Refusing to seal it turns a poor result into a missing one, and the
-        arms most likely to hit that are the ones whose preparation costs
-        most, which is exactly what the comparison is measuring.
+        always succeed. An agent whose training all failed still has to produce
+        a comparable data point: the base student answering with no adapter and
+        no prompt is a legitimate, and very bad, artifact. Refusing to seal it
+        turns a poor result into a missing one, and the arms most likely to hit
+        that are the ones whose preparation costs most -- which is exactly what
+        the comparison is measuring.
         """
-        adapter = self.checkpoints.get(checkpoint_id) if checkpoint_id else None
-        if not forced:
-            if entry == "model" and adapter is None and self.context is None:
-                return {"error": "sealing a model entry needs a checkpoint or a context"}
-            if entry == "program" and not self.program:
-                return {"error": "sealing a program entry needs write_code first"}
-        if forced and entry == "program" and not self.program:
-            entry = "model"          # nothing to run; fall back to the student
+        art = self.artifacts.get(artifact_id) if artifact_id else None
+        if art is None:
+            if not forced:
+                return {"error": "seal needs an artifact_id from set_context, "
+                                 "write_code or train"}
+            # Nothing was produced. Seal the bare student rather than nothing.
+            art = SealedArtifact(arm=self.arm, entry="model",
+                                 base_model=self.base_model)
+
         self.summary = summary
         self.sealed = SealedArtifact(
-            arm=self.arm, entry=entry, context=self.context,
-            program=self.program if entry == "program" else None,
-            adapter_path=adapter, base_model=self.base_model,
+            arm=self.arm, entry=art.entry, context=art.context,
+            program=art.program, adapter_path=art.adapter_path,
+            base_model=self.base_model,
             notes={"role": self.role.value if self.role else None,
-                   "summary": summary, "queries": len(self.queried)},
+                   "summary": summary, "queries": len(self.queried),
+                   "artifact_id": artifact_id or None},
         )
-        self.trace.emit("seal", arm=self.arm, entry=entry, forced=forced,
-                        empty=adapter is None and self.context is None
-                        and self.program is None,
+        empty = not (art.context or art.program or art.adapter_path)
+        self.trace.emit("seal", arm=self.arm, entry=art.entry, forced=forced,
+                        empty=empty, artifact_id=artifact_id or None,
                         role=self.role.value if self.role else None,
                         queries=len(self.queried),
                         ledger=self.ledger.summary())

@@ -122,6 +122,37 @@ def headroom(score: float, ceiling: float) -> float | None:
     return (score - ceiling) / (1.0 - ceiling)
 
 
+def answer_with(artifact: SealedArtifact, base_model: str | None,
+                ledger: Ledger, exprs: list[str]) -> list[str]:
+    """Answer expressions with whatever an artifact holds.
+
+    One path, used at dev time by the tool layer and at test time by the arm
+    runners. Two implementations would let the number the agent steers on drift
+    from the number it is finally graded by -- different answer cleaning,
+    different caching -- and that kind of drift is invisible from either side.
+    Sharing the path makes it impossible rather than unlikely.
+
+    A program runs in the sandbox; anything else is the student carrying
+    whatever prefix and adapter the artifact has, which covers a bare base
+    model, a prompt, a checkpoint, or both at once.
+    """
+    if not exprs:
+        return []
+    if artifact.entry == "program":
+        from .sandbox import run_solver
+        res = run_solver(artifact.program or "", exprs, ledger=ledger, timeout=900)
+        return res.answers if res.ok else [""] * len(exprs)
+
+    from .train.infer import Student
+    student = Student(base_model or artifact.base_model or "Qwen/Qwen3-1.7B",
+                      adapter_path=artifact.adapter_path,
+                      context=artifact.context)
+    try:
+        return student.answer(exprs, ledger=ledger).answers
+    finally:
+        student.close()
+
+
 def score_answers(items: list[TestItem], answers: list[str]) -> tuple[float, dict[str, float]]:
     """Exact match, overall and per split.
 

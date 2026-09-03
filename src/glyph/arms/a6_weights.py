@@ -12,7 +12,7 @@ would be our reading of its behaviour instead of a measurement of it.
 from __future__ import annotations
 
 from ..agent import Container, run_agent
-from ..seal import ScoreReport
+from ..seal import ScoreReport, answer_with
 from .base import RunConfig, finish, prepare
 
 
@@ -23,14 +23,15 @@ def run(rc: RunConfig) -> ScoreReport:
                     base_model=rc.base_model, model=rc.teacher,
                     max_turns=rc.max_turns)
 
-    from ..train.infer import Student
-    # box.sealed is guaranteed non-None: the harness seals if the agent
-    # does not. It may however be empty -- training that all failed leaves a
-    # base student with nothing attached, which scores badly and is exactly
-    # the comparable data point the grid needs.
-    student = Student(rc.base_model, adapter_path=box.sealed.adapter_path)
-
+    # `answer_with` is the same path the agent's own `evaluate` uses during
+    # prepare, so the number it steered on and the number it is graded by are
+    # produced by one implementation.
+    #
+    # box.sealed is guaranteed non-None: the harness seals if the agent does
+    # not. It may however be empty -- training that all failed leaves a base
+    # student with nothing attached, which scores badly and is exactly the
+    # comparable data point the grid needs.
     def answer(exprs):
-        return student.answer(exprs, ledger=p.ledger).answers
+        return answer_with(box.sealed, rc.base_model, p.ledger, exprs)
 
     return finish(p, rc, box.sealed, answer)
