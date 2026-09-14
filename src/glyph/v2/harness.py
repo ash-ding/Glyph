@@ -154,7 +154,7 @@ async def drive_final(session, client: ClientProto, *, opener: str) -> str:
     # non-final_answer end -> auto-commit rule
     session.turns_final = session.turns
     last_checked = getattr(session, "last_checked_test_path", None)
-    if last_checked:
+    if last_checked is not None:
         session.final_commit_path = last_checked
         session.final_commit = "auto_checked_path"
     else:
@@ -183,6 +183,24 @@ class RunConfig:
 # ---------------------------------------------------------------------
 # real path (SDK imports are LOCAL to run())
 # ---------------------------------------------------------------------
+def _resolve_cli_path():
+    """Path to the SDK's bundled Claude Code CLI (lazy; only called from run()).
+
+    claude_agent_sdk._bundled is a namespace package (its __file__ is None), so
+    resolve the CLI relative to the top-level package directory rather than a
+    submodule __file__.
+    """
+    import pathlib, claude_agent_sdk
+    p = pathlib.Path(claude_agent_sdk.__file__).parent / "_bundled" / "claude"
+    if p.exists():
+        return p
+    import shutil
+    w = shutil.which("claude")
+    if w:
+        return pathlib.Path(w)
+    raise FileNotFoundError("bundled Claude Code CLI not found under claude_agent_sdk._bundled")
+
+
 def run(rc: RunConfig) -> dict:
     """Full protocol-v2 run over the real SDK. Returns the ScoreReport dict.
 
@@ -247,7 +265,7 @@ def run(rc: RunConfig) -> dict:
     server = register_glyph_server(session, trace)
 
     # 6. sandbox wrapper
-    cli_path = Path(sandbox.DEFAULT_CLI) if hasattr(sandbox, "DEFAULT_CLI") else Path("claude")
+    cli_path = _resolve_cli_path()
     wrapper = sandbox.write_wrapper(run_dir, cli_path=cli_path, gw_sock=gw_sock)
 
     # 7. SDK options (S1: pin ANTHROPIC_SMALL_FAST_MODEL so background small-model
@@ -266,20 +284,23 @@ def run(rc: RunConfig) -> dict:
     )
 
     async def _go():
-        async with Gateway.serving(gateway, gw_sock) if hasattr(Gateway, "serving") else _noop_cm():
-            serve_task = asyncio.create_task(gateway.serve_unix(str(gw_sock)))
-            try:
-                client = ClaudeSDKClient(options)
-                async with client:
-                    await drive_practice(session, client,
-                                         opener=prompts.practice_opener(paths))
-                    session.turns_practice = session.turns
-                    session.switch_to_final()
-                    workspace.write_test_file(paths, inst, test_id_of)
-                    await drive_final(session, client,
-                                      opener=prompts.final_opener(paths))
-            finally:
-                serve_task.cancel()
+        serve_task = asyncio.create_task(gateway.serve_unix(str(gw_sock)))
+        for _ in range(200):                  # up to ~10s for the socket to bind
+            if gw_sock.exists():
+                break
+            await asyncio.sleep(0.05)
+        try:
+            client = ClaudeSDKClient(options)
+            async with client:
+                await drive_practice(session, client,
+                                     opener=prompts.practice_opener(paths))
+                session.turns_practice = session.turns
+                session.switch_to_final()
+                workspace.write_test_file(paths, inst, test_id_of)
+                await drive_final(session, client,
+                                  opener=prompts.final_opener(paths))
+        finally:
+            serve_task.cancel()
 
     asyncio.run(_go())
 
@@ -291,10 +312,3 @@ def run(rc: RunConfig) -> dict:
     trace.close()
     return report
 
-
-class _noop_cm:
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *a):
-        return False

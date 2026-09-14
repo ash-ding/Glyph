@@ -198,3 +198,14 @@ def test_legal_final_answer_ends_run(inst, tmp_path):
     report = build_report(s, s.final_commit_path, test_id_of)
     assert "overall" in report
     assert report["overall"] == 1.0
+
+
+# ---------------------------------------------------------------------
+# real-path helper: bundled CLI resolution (needs the SDK installed)
+# ---------------------------------------------------------------------
+def test_resolve_cli_path_points_at_a_real_file():
+    import pytest
+    pytest.importorskip("claude_agent_sdk")
+    from glyph.v2.harness import _resolve_cli_path
+    p = _resolve_cli_path()
+    assert p.exists() and p.name == "claude"
