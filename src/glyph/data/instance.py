@@ -323,6 +323,19 @@ class GlyphInstance:
             self._pi = measure_pi(self)
         return self._pi
 
+    def lookup_solvable(self, items, log) -> float:
+        """Fraction of `items` whose every needed table entry is in `log`.
+
+        The score a perfect retriever with a perfect skeleton could get on
+        `items` given exactly the entries in `log` -- the per-run covariate for
+        how much of a split is answerable by lookup alone.
+        """
+        if not items:
+            return 0.0
+        ok = sum(1 for t in items
+                 if not (t.needs_u - log.unary) and not (t.needs_b - log.binary))
+        return ok / len(items)
+
     def is_tail(self, t: TestItem) -> bool:
         """Did this run never buy a table entry this item needs?
 
