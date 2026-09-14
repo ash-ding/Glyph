@@ -18,7 +18,7 @@ without dragging in an evaluation protocol built for the first one.
         .ceilings()     what each crippled oracle scores on given items
 """
 
-from .config import PRESETS, VALUE_FORMS, GlyphConfig
+from .config import PRESETS, QUERY_OOD_POLICIES, VALUE_FORMS, GlyphConfig
 from .grammar import (Expr, check, depth, digits, enabled_ops, op_pairs, parse,
                       parse_value, render, render_list, render_value,
                       syntax_spec, undigits)
@@ -30,7 +30,7 @@ from .semantics import StructSem, sample_skeleton, trivial_skeleton
 from .tables import IdentityTables, Tables
 
 __all__ = [
-    "GlyphConfig", "PRESETS", "VALUE_FORMS",
+    "GlyphConfig", "PRESETS", "VALUE_FORMS", "QUERY_OOD_POLICIES",
     "generate", "GlyphInstance", "TestItem", "SPLITS", "GenerationFailed",
     "Interpreter", "LookupLog", "measure_pi",
     "Tables", "IdentityTables",

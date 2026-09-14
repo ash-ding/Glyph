@@ -38,6 +38,8 @@ from dataclasses import dataclass, replace
 # Constraint: `letter_sep` needs base <= 26 (grammar._need_letters).
 VALUE_FORMS = ("underscore", "bracket", "flat", "letter_sep")
 
+QUERY_OOD_POLICIES = ("strict", "open")
+
 
 @dataclass(frozen=True)
 class GlyphConfig:
