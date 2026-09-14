@@ -64,36 +64,65 @@ def iter_tool_calls(event) -> list[str]:
     return out
 
 
-async def _consume_turn(client, should_stop) -> list[str]:
-    """Drain ONE assistant turn from client.receive_response() to its terminal
-    event, returning the tool names seen. If ``should_stop()`` becomes true
-    mid-stream (a handler set the end flag), interrupt() the client once but
-    keep draining to the terminal event.
+def _is_assistant_event(event) -> bool:
+    """True if ``event`` is one assistant message (real or fake).
+
+    The real ClaudeSDKClient.receive_response() streams the WHOLE agent-loop
+    response as a single iteration -- many AssistantMessages, interleaved
+    with UserMessage (tool results) and a terminal ResultMessage. A turn
+    (spec Sec 4.5) is one assistant message, so we count events identified as
+    AssistantMessage here rather than counting receive_response() calls.
+
+      * a fake assistant event exposes ``.tool_names`` directly (even an idle
+        one, where the list is empty) -- the fake terminal event does not;
+      * a real AssistantMessage is identified by class name (duck-typed, so
+        this module never needs to import claude_agent_sdk).
+    """
+    if hasattr(event, "tool_names"):
+        return True
+    return type(event).__name__ == "AssistantMessage"
+
+
+async def _consume_turn(client, should_stop) -> tuple[list[str], int]:
+    """Drain ONE receive_response() to its terminal event.
+
+    Returns (tool_names, n_turns): tool_names is every tool name seen across
+    the drained response; n_turns is the count of assistant messages drained
+    (spec Sec 4.5: a turn = one assistant message). For the real SDK client
+    this can be >1 per call (the whole agent loop streams as one iteration);
+    for the fake test client it is always 1 (one scripted turn -> one
+    assistant event). If ``should_stop()`` becomes true mid-stream (a handler
+    set the end flag), interrupt() the client once but keep draining to the
+    terminal event.
     """
     tool_names: list[str] = []
+    n_turns = 0
     interrupted = False
     async for event in client.receive_response():
+        if _is_assistant_event(event):
+            n_turns += 1
         tool_names.extend(iter_tool_calls(event))
         if not interrupted and should_stop():
             await client.interrupt()
             interrupted = True
-    return tool_names
+    return tool_names, n_turns
 
 
 async def drive_practice(session, client: ClientProto, *, opener: str) -> str:
     """Drive the practice phase. Returns the end reason.
 
-    Every assistant turn increments session.turns (idle turns included). An
-    idle turn (no tool call) sends a fixed continuation; _IDLE_LIMIT
-    consecutive idle turns end practice as finish_practice (reason "idle").
-    Otherwise practice ends on should_switch (cap-th submit / finish_practice),
-    the practice turn cap, or the USD safety line.
+    Every assistant message drained increments session.turns (idle turns
+    included; at least 1 per cycle even if the drain produced none, so idle
+    cycles still advance). An idle turn (no tool call anywhere in the drained
+    response) counts consecutively toward _IDLE_LIMIT, ending practice as
+    finish_practice ("idle"). Otherwise practice ends on should_switch (cap-th
+    submit / finish_practice), the practice turn cap, or the USD safety line.
     """
     await client.query(opener)
     idle = 0
     while True:
-        names = await _consume_turn(client, lambda: session.should_switch)
-        session.turns += 1
+        names, n_turns = await _consume_turn(client, lambda: session.should_switch)
+        session.turns += max(1, n_turns)
 
         if names:
             idle = 0
@@ -127,9 +156,9 @@ async def drive_final(session, client: ClientProto, *, opener: str) -> str:
     idle = 0
     reason = None
     while True:
-        names = await _consume_turn(
+        names, n_turns = await _consume_turn(
             client, lambda: getattr(session, "final_commit_path", None) is not None)
-        session.turns += 1
+        session.turns += max(1, n_turns)
 
         if getattr(session, "final_commit_path", None) is not None:
             session.turns_final = session.turns
@@ -177,6 +206,7 @@ class RunConfig:
     tf: int = 30
     usd_line: float = 300.0
     n_val: int = 5000
+    max_turns: int = 60
     out_root: str | None = None
 
 
@@ -257,8 +287,10 @@ def run(rc: RunConfig) -> dict:
     paths.readme.write_text(prompts.task_readme(session))
 
     # 4. gateway (S1: gateway.py re-inserts /v1; allowed_models pins the model)
+    #    log_path persists a per-request audit log alongside the run's artifacts.
     gw_sock = run_dir / "gw.sock"
-    gateway = Gateway(ledger, pinned_model=rc.model, allowed_models={rc.model})
+    gateway = Gateway(ledger, pinned_model=rc.model, allowed_models={rc.model},
+                       log_path=str(run_dir / "gateway_log.jsonl"))
 
     # 5. trace + MCP server
     trace = RunTrace(run_dir)
@@ -269,7 +301,9 @@ def run(rc: RunConfig) -> dict:
     wrapper = sandbox.write_wrapper(run_dir, cli_path=cli_path, gw_sock=gw_sock)
 
     # 7. SDK options (S1: pin ANTHROPIC_SMALL_FAST_MODEL so background small-model
-    #    calls are not 403'd by the gateway allow-list)
+    #    calls are not 403'd by the gateway allow-list). max_turns bounds the
+    #    SDK's own agent loop -- the real runaway-turn guard; the harness
+    #    tp/tf caps below are a secondary per-cycle limit.
     options = ClaudeAgentOptions(
         cli_path=str(wrapper),
         cwd=str(paths.root),
@@ -281,6 +315,7 @@ def run(rc: RunConfig) -> dict:
                           "NotebookEdit", "Skill"],
         mcp_servers={"glyph": server},
         env={"ANTHROPIC_SMALL_FAST_MODEL": rc.model},
+        max_turns=rc.max_turns,
     )
 
     async def _go():
@@ -311,4 +346,3 @@ def run(rc: RunConfig) -> dict:
                final_commit=report["covariates"]["final_commit"])
     trace.close()
     return report
-
