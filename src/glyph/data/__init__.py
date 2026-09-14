@@ -21,7 +21,7 @@ without dragging in an evaluation protocol built for the first one.
 from .config import PRESETS, QUERY_OOD_POLICIES, VALUE_FORMS, GlyphConfig
 from .grammar import (Expr, check, depth, digits, enabled_ops, op_pairs, parse,
                       parse_value, render, render_list, render_value,
-                      syntax_spec, undigits)
+                      result_type, syntax_spec, undigits)
 from .instance import (SPLITS, GenerationFailed, GlyphInstance, TestItem,
                        generate)
 from .interp import Interpreter, LookupLog
@@ -36,6 +36,6 @@ __all__ = [
     "Tables", "IdentityTables",
     "StructSem", "sample_skeleton", "trivial_skeleton",
     "Expr", "parse", "check", "render", "render_value", "render_list",
-    "parse_value", "digits", "undigits", "depth", "op_pairs", "enabled_ops",
+    "parse_value", "digits", "undigits", "depth", "result_type", "op_pairs", "enabled_ops",
     "syntax_spec",
 ]
