@@ -153,6 +153,7 @@ class GlyphConfig:
     n_iid: int = 6500
     n_comp: int = 2300
     n_depth: int = 1200
+    n_val: int = 5000
 
     @property
     def n_values(self) -> int:
@@ -271,6 +272,6 @@ PRESETS: dict[str, GlyphConfig] = {
     "smoke": _preset(
         atomic_ratio=0.5, base=5, n_digits=2, d_digit=8,
         n_structural=4, mlp_width=16,
-        n_demos=8, n_iid=60, n_comp=25, n_depth=15,
+        n_demos=8, n_iid=60, n_comp=25, n_depth=15, n_val=40,
     ),
 }

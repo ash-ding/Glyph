@@ -226,6 +226,7 @@ class GlyphInstance:
 
         self.demos = self._make_demos(rng)
         self.test = self._make_test(rng)
+        self.val = self._make_val(rng)
         self.query_count = 0
         self.query_log = LookupLog()
         self._skel_interp: Interpreter | None = None
@@ -420,6 +421,32 @@ class GlyphInstance:
                  "wanted": {"iid": cfg.n_iid, "comp": cfg.n_comp,
                             "depth": cfg.n_depth}})
         return items
+
+    def _make_val(self, rng) -> list["TestItem"]:
+        cfg = self.cfg
+        seen = {a for a, _ in self.demos} | {t.expr_src for t in self.test}
+        out: list[TestItem] = []
+        stall = 0
+        while len(out) < cfg.n_val:
+            if stall >= _STALL_LIMIT:
+                raise GenerationFailed(
+                    "val", len(out), cfg.n_val,
+                    _diagnose(rng, cfg, cfg.demo_max_depth, self.held_pairs, None, 1))
+            e = _sample_constrained(rng, cfg, cfg.demo_max_depth,
+                                    forbid=self.held_pairs, require=None, min_depth=1)
+            if e is None:
+                stall += 1
+                continue
+            src = render(e, cfg)
+            if src in seen:
+                stall += 1
+                continue
+            seen.add(src)
+            o, log = self.P.eval_logged(e)
+            out.append(TestItem(src, self._render_out(o), "val",
+                                frozenset(log.unary), frozenset(log.binary)))
+            stall = 0
+        return out
 
 
 def generate(seed: int, cfg: GlyphConfig) -> GlyphInstance:
