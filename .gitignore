@@ -7,5 +7,5 @@ dist/
 .venv/
 venv/
 runs/
-data/
+/data/
 *.jsonl
