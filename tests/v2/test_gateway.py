@@ -136,3 +136,32 @@ def test_make_app_builds_a_real_aiohttp_application():
     gw = Gateway(ledger, pinned_model=PIN, forward_fn=fwd)
     app = gw.make_app()
     assert isinstance(app, web.Application)
+
+
+def test_forward_exception_becomes_retryable_503_not_a_hang():
+    """A forward that raises (upstream timeout / conn reset) must be caught and
+    returned as a retryable 503 -- never propagated to a silent aiohttp 500 that
+    stalls the CLI (the train-arm E2E hang). It is retried MAX_ATTEMPTS times and
+    bills nothing."""
+    from glyph.v2.gateway import MAX_ATTEMPTS
+
+    ledger = Ledger()
+    calls = {"n": 0}
+
+    async def fwd(method, url, headers, body):
+        calls["n"] += 1
+        raise TimeoutError("upstream stalled")
+
+    gw = Gateway(ledger, pinned_model=PIN, forward_fn=fwd)
+
+    async def run():
+        path = f"/projects/p/locations/global/publishers/anthropic/models/{PIN}:streamRawPredict"
+        status, _h, body = await gw.handle_request("POST", path, {}, b"{}")
+        assert status == 503
+        assert b"upstream forward failed" in body
+
+    anyio.run(run)
+
+    assert calls["n"] == MAX_ATTEMPTS  # retried, not abandoned after one attempt
+    assert ledger.summary()["usd_by_kind"].get("input", 0) == 0  # billed nothing
+    assert gw.records[-1]["allowed"] is True and gw.records[-1]["status"] == 503

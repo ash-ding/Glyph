@@ -147,11 +147,16 @@ class Gateway:
 
         Only reachable when no forward_fn is injected -- i.e. never in unit tests.
         """
-        from aiohttp import ClientSession, TCPConnector
+        from aiohttp import ClientSession, ClientTimeout, TCPConnector
 
         hdrs = dict(headers)
         hdrs["Authorization"] = "Bearer " + self._token()
-        async with ClientSession(connector=TCPConnector(ssl=True)) as sess:
+        # A long reasoning turn can stream for well over aiohttp's default
+        # total=300s; capping it there raised TimeoutError mid-turn, which
+        # became a silent 500 and stalled the CLI. Use no total cap, but keep
+        # a sock_read guard so a genuinely dead upstream still fails.
+        timeout = ClientTimeout(total=None, sock_connect=30, sock_read=300)
+        async with ClientSession(connector=TCPConnector(ssl=True), timeout=timeout) as sess:
             async with sess.request(method, url, data=body, headers=hdrs) as up:
                 resp_body = await up.read()
                 return up.status, dict(up.headers), resp_body
@@ -190,7 +195,15 @@ class Gateway:
         resp_headers: dict = {}
         resp_body = b""
         for attempt in range(1, MAX_ATTEMPTS + 1):
-            status, resp_headers, resp_body = await self._forward_fn(method, url, fwd_headers, body)
+            try:
+                status, resp_headers, resp_body = await self._forward_fn(method, url, fwd_headers, body)
+            except Exception as e:  # upstream connect/timeout/etc -- never let it become a silent 500
+                import sys
+                import traceback
+                print("gateway: forward attempt %d raised: %r" % (attempt, e), file=sys.stderr)
+                traceback.print_exc()
+                status, resp_headers, resp_body = (
+                    503, {}, json.dumps({"error": "upstream forward failed: %r" % e}).encode())
             if status < 300 or status not in RETRYABLE_STATUSES or attempt == MAX_ATTEMPTS:
                 break
             await asyncio.sleep(BASE_BACKOFF_SECONDS * attempt)
