@@ -1,10 +1,10 @@
 """The data layer must not know how it will be evaluated.
 
-The dependency runs one way -- `seal`, `budget`, `agent` and `arms` all import
-from `glyph.data`, and nothing in it imports back. That was true before the
-package existed, but only by habit; this holds the line so that a second task
-can take the generator whole without dragging in an evaluation protocol built
-for the first one.
+The dependency runs one way -- the protocol layer (v1's `seal` and, now,
+v2's `report`/`answers`/`tools`) imports from `glyph.data`, and nothing in
+it imports back. That was true before the package existed, but only by
+habit; this holds the line so that a second task can take the generator
+whole without dragging in an evaluation protocol built for the first one.
 """
 import ast
 import pathlib
@@ -49,12 +49,20 @@ def test_the_public_surface_is_importable_on_its_own():
 
 def test_the_protocol_layer_still_depends_on_the_data_layer():
     """The one-way arrow, asserted from the other side: if this ever stops
-    being true the layers have been merged by accident."""
+    being true the layers have been merged by accident.
+
+    v1 called this the protocol layer's `seal.py`, `base.py` (arms) and
+    `tools.py` (agent). v1 is gone; the protocol layer is now v2, and the
+    same arrow has to hold there -- `report.py` and `answers.py` build the
+    score off `glyph.data` instances, same as `seal.py`'s `score_answers`
+    still does."""
     src = pathlib.Path(__file__).resolve().parents[1] / "src" / "glyph"
+    markers = ("glyph.data", "from .data", "from ..data")
     users = set()
     for path in src.rglob("*.py"):
         if DATA in path.parents or "__pycache__" in str(path):
             continue
-        if "data." in path.read_text():
+        text = path.read_text()
+        if any(m in text for m in markers):
             users.add(path.name)
-    assert {"seal.py", "base.py", "tools.py"} <= users, users
+    assert {"seal.py", "report.py", "answers.py"} <= users, users

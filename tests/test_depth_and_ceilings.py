@@ -3,11 +3,10 @@ import collections
 
 import pytest
 
-from glyph.budget import Ledger
 from glyph.data.config import PRESETS
 from glyph.data.grammar import depth, parse
 from glyph.data.instance import generate
-from glyph.seal import SealedArtifact, evaluate
+from glyph.seal import headroom, score_answers
 
 FAST = PRESETS["pi_mid"].scaled(2000)
 
@@ -46,13 +45,47 @@ def test_the_root_never_stops():
 
 
 # ---- #4: every reported number has a line to read it against ----
+#
+# This used to go through v1's `seal.evaluate`, which combined a
+# SealedArtifact and a Ledger into a ScoreReport. Both are gone with the v1
+# protocol; what is left, and what this still exercises, is the scoring math
+# itself -- `score_answers`, `headroom`, and `GlyphInstance.ceilings` -- which
+# both v1 and v2 read off the same reference lines from.
+class _Result:
+    def __init__(self, overall, by_split, tail, ceiling, headroom):
+        self.overall = overall
+        self.by_split = by_split
+        self.tail = tail
+        self.ceiling = ceiling
+        self.headroom = headroom
+
+
+def _score(inst, items):
+    answers = [""] * len(items)
+    overall, by_split = score_answers(items, answers)
+
+    ceiling = inst.ceilings(items)
+    skel = ceiling["skeleton"]
+    head = {k: headroom(v, skel[k]) for k, v in by_split.items() if k in skel}
+    head["overall"] = headroom(overall, skel["overall"])
+
+    tail = None
+    picked = [(t, a) for t, a in zip(items, answers) if inst.is_tail(t)]
+    if picked:
+        tail = sum(a.strip() == t.answer_src.strip() for t, a in picked) / len(picked)
+        tc = inst.ceilings([t for t, _ in picked])
+        ceiling["skeleton"]["tail"] = tc["skeleton"]["overall"]
+        ceiling["table"]["tail"] = tc["table"]["overall"]
+        head["tail"] = headroom(tail, tc["skeleton"]["overall"])
+
+    return _Result(overall, by_split, tail, ceiling, head)
+
+
 def _scored():
     inst = generate(1001, FAST)
     for t in inst.test[:60]:
         inst.query(t.expr_src)
-    r = evaluate(inst, SealedArtifact(arm="t", entry="model"),
-                 Ledger(total_h100s=1e9), answer_fn=lambda e: [""] * len(e))
-    return inst, r
+    return inst, _score(inst, inst.test_set())
 
 
 def test_every_reported_score_has_a_ceiling():
@@ -78,8 +111,7 @@ def test_tails_ceiling_is_near_zero_and_that_is_the_point(seed):
     inst = generate(seed, FAST)
     for t in inst.test[:60]:
         inst.query(t.expr_src)
-    r = evaluate(inst, SealedArtifact(arm="t", entry="model"),
-                 Ledger(total_h100s=1e9), answer_fn=lambda e: [""] * len(e))
+    r = _score(inst, inst.test_set())
     assert 0.0 <= r.ceiling["skeleton"]["tail"] < 0.15
     assert r.headroom["tail"] == pytest.approx(
         (r.tail - r.ceiling["skeleton"]["tail"])
@@ -89,9 +121,7 @@ def test_tails_ceiling_is_near_zero_and_that_is_the_point(seed):
 def test_ceilings_are_computed_on_the_scored_subset():
     inst = generate(1001, FAST)
     sub = inst.test_set("depth")
-    r = evaluate(inst, SealedArtifact(arm="t", entry="model"),
-                 Ledger(total_h100s=1e9),
-                 answer_fn=lambda e: [""] * len(e), items=sub)
+    r = _score(inst, sub)
     assert set(r.ceiling["skeleton"]) >= {"depth", "overall"}
     assert r.ceiling["skeleton"]["depth"] == pytest.approx(
         r.ceiling["skeleton"]["overall"])
