@@ -7,8 +7,11 @@ dependencies = ["numpy>=1.26"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
-# The teacher runs on Vertex; the benchmark core stays numpy-only.
-agent = ["anthropic[vertex]>=1.0"]
+# The protocol harness: the Claude Agent SDK (with its bundled CLI) drives the
+# agent, and the metering gateway is an aiohttp server. The benchmark core
+# stays numpy-only. The train arm additionally needs a GPU stack (torch,
+# transformers, vllm, peft), installed via the conda env rather than pinned here.
+agent = ["claude-agent-sdk==0.2.152", "aiohttp>=3.9"]
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -19,4 +22,4 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["slow: multi-instance pi sweeps"]
+markers = ["slow: real-API end-to-end runs, GPU tests, and multi-instance pi sweeps"]

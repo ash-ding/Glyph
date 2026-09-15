@@ -2,8 +2,8 @@
 
 A hidden-semantics DSL execution benchmark, built for research on **weight-space
 delegation**: when a frontier agent faces a task it cannot solve on its own,
-does it pay to put capability into *context*, into *code*, or into a small
-model's *weights* — and does the agent itself know which?
+does it pay to train a small model on what it learns from the environment, or to
+just keep reasoning with the frontier — and does the agent itself know which?
 
 Glyph is the instrument that makes that question measurable. It is a ruler with
 known graduations, not a discovery in its own right.
@@ -38,27 +38,80 @@ write* — code's home ground. The table is *impossible to buy out and only ever
 approximable* — weights' home ground. **π** measures which half a given
 instance's difficulty sits in, and it is a knob you can sweep.
 
-## The agent's situation
+## The protocol
 
-It gets the syntax spec and 30 demos for free, then a **metered query oracle**:
-it may ask `P` about any well-formed expression, and every query costs budget
-(syntax errors included — probing the grammar is not free). At the end it
-seals an artifact that must answer 10,000 expressions it has never seen, with
-no further access to `P`.
+A run has **two phases** and compares **two arms** at equal stop conditions.
 
-`Q ≈ 2000` queries against `|V| = 4913` values means the unary tables are at
-best half covered, and the binary tables (≈24 M pairs) essentially not at all.
-That gap is why fitting can beat looking things up.
+**Practice.** The agent gets the syntax spec and 30 demos for free, plus a
+*visible validation set* and a **metered query oracle**: it may ask `P` about
+any well-formed expression, up to a cap of `Q` queries (syntax errors billed
+too — probing the grammar is not free; queries of validation or test items are
+refused and unbilled). It may submit answers to the validation set up to 20
+times, each time getting back an *aggregate* score only (overall + by depth,
+never per item or per split).
+
+**Final.** The oracle is gone. The hidden held-out test — 10,000 expressions,
+split `iid` / `comp` / `depth` — is revealed with no answers, and the agent
+commits its answers exactly once with `final_answer`. That commit is scored; the
+agent never sees a per-item or per-split test score.
+
+**Two arms**, differing in exactly one thing:
+
+| arm | what it has |
+|---|---|
+| **`no_train`** | the frontier model only |
+| **`train`** | the frontier model **plus** a trainable Qwen3-1.7B student — it can build a dataset from what it purchased, fine-tune, and run inference |
+
+The question is whether putting purchased knowledge into a small model's
+*weights* beats keeping it in the frontier's *context*, measured at matched
+coverage. `Q` is the coverage knob: a few hundred to a thousand queries against
+`|V| = 4913` values leaves the unary tables at best half covered and the binary
+tables (≈24 M pairs) essentially untouched — and that gap is why fitting can
+beat looking things up.
 
 ## Quick start
 
 ```bash
 pip install -e ".[dev]"
-python -m glyph.cli show --preset pi_mid --seed 1001   # one instance, end to end
-python -m glyph.cli pi --n-seeds 4                     # measure π across presets
-pytest -q                                              # self-checks #1–#3
-python scripts/probe_tokenizer.py Qwen/Qwen3-1.7B      # self-check #6
+
+# fast, offline self-checks (the `slow` marker covers the real-API + GPU tests)
+pytest -m "not slow"
+
+# inspect one instance end to end — data layer only, no API, no GPU
+python -c "from glyph.data import PRESETS, generate; \
+i = generate(1001, PRESETS['pi_mid']); print(i.measured_pi())"
+
+# tokenizer digit-split probe (self-check #6)
+python scripts/probe_tokenizer.py Qwen/Qwen3-1.7B
 ```
+
+**Running the protocol itself** is a real, *metered* agent run. It needs the
+Claude Agent SDK (`claude-agent-sdk==0.2.152`) and its bundled CLI, a reachable
+metering gateway, a `bwrap` sandbox host, a GPU (train arm only), and Vertex
+credentials — see [Harness](#harness):
+
+```bash
+python -m glyph.v2 run  --arm no_train --preset pi_mid --seed 1001
+python -m glyph.v2 run  --arm train    --preset pi_mid --seed 1001   # student needs a free GPU
+python -m glyph.v2 grid --arms no_train train --presets pi_mid --seeds 1001 1002
+```
+
+`python -m glyph.v2 run --help` lists every cap. Defaults are the plan's Global
+Constraints: `Q=1000`, `T_p=100`, `T_f=30`, 20 submissions, `V (n_val)=5000`,
+USD safety line `$300`, `effort=high`, model `claude-opus-4-8`.
+
+## Harness
+
+The agent runs under the **Claude Agent SDK**, so it keeps the CLI's own `Bash`
+and file tools; the eight Glyph tools are registered as **in-process MCP tools**
+(`mcp__glyph__*` — see [`docs/tools.md`](docs/tools.md)). Isolation and
+accounting are enforced around it:
+
+- the whole CLI runs inside a **`bwrap` sandbox** that hides the source, the
+  GPUs, and the credentials;
+- all model traffic is routed through a **host-side metering gateway** that
+  bills every request, pins the model (a non-pinned model is 403'd), and
+  injects the Vertex credentials so the sandbox holds none.
 
 ## Layout
 
@@ -70,29 +123,38 @@ src/glyph/
 │   ├── semantics.py   combinator grammar → skeleton; the trivial-skeleton baseline
 │   ├── tables.py      digit embeddings, frozen MLPs, the identity-table baseline
 │   ├── interp.py      P = Interpreter(skeleton, tables); lookup logging
-│   ├── instance.py    generation, demos, query oracle, splits, tail derivation
+│   ├── instance.py    generation, demos, query oracle, splits, tail, validation
 │   └── measure.py     π via two crippled oracles
-├── budget.py      the ledger — the single metered entry point
-├── seal.py        scoring: one answer path, ceilings, headroom, calibration
-├── agent/         tool declaration, per-arm allocation, the orchestrator
-├── arms/          A0′ / A2 / A4 / A6 runners
-├── train/         full fine-tuning and vLLM inference
-├── trace.py       JSONL trace + response cache (replay, not re-billing)
-└── cli.py
+├── v2/            protocol v2 — the two-phase, two-arm harness
+│   ├── session.py     run state + the (arm, phase) tool-availability matrix
+│   ├── tools.py       the eight tool handlers (query / submit / … / final_answer)
+│   ├── mcp.py         wraps the handlers as in-process SDK MCP tools
+│   ├── harness.py     the orchestrator: phases, caps, the agent loop
+│   ├── gateway.py     the metering model gateway (pin, meter, /v1 fix, retry)
+│   ├── sandbox.py     the bwrap wrapper; bridge.py is the in-sandbox proxy
+│   ├── student.py     the train arm's student pool (build_dataset / train / infer)
+│   ├── ledger.py      USD + GPU-second accounting
+│   ├── answers.py     answer-file legality + scoring
+│   ├── report.py      the final ScoreReport (ceilings, headroom, covariates)
+│   └── workspace · prompts · trace · cli
+├── train/         full fine-tuning (sft.py) and vLLM inference (infer.py)
+├── seal.py        scoring primitives: headroom, score_answers
+└── trace.py       JSONL trace + response cache
 ```
 
 Nothing in `data/` imports from outside it, and `tests/test_data_boundary.py`
-holds that line. The arrow runs one way — `seal`, `agent` and `arms` all import
-the generator — so the generator can be lifted whole into a second task without
-dragging along an evaluation protocol written for this one.
+holds that line. The arrow runs one way — the protocol layer (`v2/`) imports the
+generator, never the reverse — so the generator can be lifted whole into a
+second task without dragging along an evaluation protocol written for this one.
 
 ## Splits
 
 `iid` / `comp` (held-out operator pairs) / `depth` (deeper than any demo) are
-fixed at generation time. **`tail` is derived per run** — the items whose table
-entries this agent never bought. It cannot be fixed in advance, because the
-agent may query anything; and it doubles as a read on how smart its query
-strategy was.
+fixed at generation time. The visible validation set is drawn from `iid` only,
+generated *after* the test so the two never share an item. **`tail` is derived
+per run** — the items whose table entries this agent never bought. It cannot be
+fixed in advance, because the agent may query anything; and it doubles as a read
+on how smart its query strategy was.
 
 There is no `floor` split: the test set is fully solvable and the ceiling is a
 clean 100%. Leakage detection lives in the separate E8 audit.
@@ -122,8 +184,10 @@ Two things about it are easy to get wrong and both fail silently:
 
 ## Status
 
-**The data layer is frozen** as of 2026-08-31. All six self-checks pass, 122
-tests, and the first measurement is in:
+**The data layer is frozen** as of 2026-08-31. **Protocol v2 is implemented**
+and its harness validated end to end (a real `train`-arm run completes and is
+scored); `pytest -m "not slow"` = 194 tests green (the `slow` marker covers the
+real-API and GPU tests). The first data-layer measurement:
 
 | oracle | knows | overall |
 |---|---|---|
@@ -137,9 +201,11 @@ Retrieval saturated, extrapolation at zero — which is the separation the
 benchmark was built to produce. Details on the
 [project page](https://ash-ding.github.io/Glyph/#result).
 
-Arm results are not published yet: the earlier sweep is invalidated by the
-data-layer changes, and two harness asymmetries are still open decisions.
+Arm results for v2 are not published yet — pilot calibration is in progress. The
+v1 explore/prepare/seal protocol (arms A2/A4/A6/A7) was removed in favour of the
+two-phase, two-arm v2 design; see the migration entry in `docs/progress.md`.
 
+- [`docs/tools.md`](docs/tools.md) — the v2 tool set and the (arm, phase) matrix
 - [`docs/progress.md`](docs/progress.md) — append-only record of what was run
   and what it showed, corrections included
 - [`docs/open_questions.md`](docs/open_questions.md) — the standing list of what
