@@ -165,3 +165,27 @@ def test_forward_exception_becomes_retryable_503_not_a_hang():
     assert calls["n"] == MAX_ATTEMPTS  # retried, not abandoned after one attempt
     assert ledger.summary()["usd_by_kind"].get("input", 0) == 0  # billed nothing
     assert gw.records[-1]["allowed"] is True and gw.records[-1]["status"] == 503
+
+
+def test_forward_programming_bug_propagates_not_masked_as_503():
+    """A non-network exception from forward_fn (a real bug, e.g. ValueError)
+    must propagate out of handle_request, not be swallowed into a retryable 503
+    that hides it and makes the client retry three times over a broken path."""
+    ledger = Ledger()
+
+    async def fwd(method, url, headers, body):
+        raise ValueError("bug in forward path")
+
+    gw = Gateway(ledger, pinned_model=PIN, forward_fn=fwd)
+
+    async def run():
+        path = f"/projects/p/locations/global/publishers/anthropic/models/{PIN}:streamRawPredict"
+        await gw.handle_request("POST", path, {}, b"{}")
+
+    raised = False
+    try:
+        anyio.run(run)
+    except ValueError:
+        raised = True
+    assert raised, "a non-network forward bug must propagate, not become a 503"
+    assert ledger.summary()["usd_by_kind"].get("input", 0) == 0

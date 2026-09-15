@@ -29,6 +29,7 @@ import re
 import time
 from typing import Awaitable, Callable, Optional
 
+import aiohttp
 from aiohttp import web
 
 from glyph.v2.ledger import Ledger
@@ -41,6 +42,13 @@ ForwardFn = Callable[[str, str, dict, bytes], Awaitable[tuple]]
 TokenProvider = Callable[[], str]
 
 RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
+# Transient/network-level forward errors worth a retry-then-503. A
+# non-network exception (a programming bug in forward_fn) is deliberately
+# NOT caught -- it must surface loudly rather than be masked as a retryable
+# 503 the client retries MAX_ATTEMPTS times. (TimeoutError subclasses
+# OSError; asyncio.TimeoutError is that same builtin on 3.11+.)
+_RETRYABLE_FORWARD_ERRORS = (aiohttp.ClientError, asyncio.TimeoutError,
+                            ConnectionError, OSError)
 MAX_ATTEMPTS = 3
 BASE_BACKOFF_SECONDS = 0.05  # small on purpose: keeps retry tests fast
 
@@ -197,7 +205,7 @@ class Gateway:
         for attempt in range(1, MAX_ATTEMPTS + 1):
             try:
                 status, resp_headers, resp_body = await self._forward_fn(method, url, fwd_headers, body)
-            except Exception as e:  # upstream connect/timeout/etc -- never let it become a silent 500
+            except _RETRYABLE_FORWARD_ERRORS as e:  # network-level -- retry then 503, never a silent 500
                 import sys
                 import traceback
                 print("gateway: forward attempt %d raised: %r" % (attempt, e), file=sys.stderr)

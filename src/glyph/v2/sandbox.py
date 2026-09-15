@@ -148,6 +148,11 @@ def write_wrapper(
     if agent_home_dir.exists():
         import shutil
         shutil.rmtree(agent_home_dir, ignore_errors=True)
+        if agent_home_dir.exists():
+            import sys
+            sys.stderr.write(
+                "sandbox: warning: could not fully clear %s; stale CLI "
+                "session state may remain\n" % agent_home_dir)
     for d in (work_dir, task_dir, agent_home_dir):
         d.mkdir(parents=True, exist_ok=True)
 
