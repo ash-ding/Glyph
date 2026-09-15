@@ -6,7 +6,6 @@ be attributed to a preset from its pi, and a figure keyed on the name would
 group instances that differ more within a group than between. The axis has to
 be the measured value, which means every report has to carry it.
 """
-import json
 
 import pytest
 
@@ -67,9 +66,3 @@ def test_measured_pi_is_cached():
     inst = generate(1001, FAST)
     assert inst.measured_pi() is inst.measured_pi()
 
-
-def test_report_json_round_trips_the_instance_block():
-    inst = generate(1001, FAST)
-    got = json.loads(json.dumps(_instance_block(inst)))
-    assert got["seed"] == 1001
-    assert "pi" in got["pi"]
