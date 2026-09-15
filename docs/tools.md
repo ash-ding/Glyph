@@ -1,232 +1,176 @@
 # Tools
 
-The layer between the frozen data layer and the arms. This file defines **what
-the environment can do**; which arm may do which is a separate table at the
-bottom, and deliberately so.
+The layer between the frozen data layer and the agent. This file defines **what
+the environment can do**, and **who may do it when** — the availability matrix
+is a separate table, deliberately so.
 
-Implemented in `src/glyph/agent/schema.py` (declarations and allocation) and
-`src/glyph/agent/tools.py` (implementations). 128 tests.
+Protocol v2 collapses v1's explore/prepare/test phases into two:
 
-## Why the two are separated
+* **practice** — the agent works a *visible* validation set. It may spend
+  queries (capped at `Q`), submit validation answers up to `submit_cap` times
+  for an aggregate score, and (train arm only) build data and train a student.
+* **final** — the held-out test is revealed. Every practice tool is gone; the
+  agent commits its answers exactly once with `final_answer` and the run ends.
 
-They used to be the same act. `schema.py` built the tool list inside the
-container check:
+Two arms differ in **one** thing: the `train` arm has a trainable Qwen3-1.7B
+student (and its three tools); the `no_train` arm has only the frontier model.
+Everything else — the phases, the caps, the feedback discipline — is identical,
+so the arms are compared at equal stop conditions.
 
-```python
-if Container.WEIGHTS in allowed:
-    tools += [declare_target, synthesize_data, train, evaluate, inspect_failures]
-```
+Declared in `src/glyph/v2/mcp.py` (`_TOOL_SPECS`, the SDK schema), allocated in
+`src/glyph/v2/session.py` (`_MATRIX`, the `(arm, phase)` gate), implemented in
+`src/glyph/v2/tools.py` (`t_*` handlers).
 
-So "this tool exists" and "this arm may use it" were one line of code, and a
-tool landed in an arm by where it happened to be typed. `evaluate` was
-weights-only for exactly that reason — nobody decided it.
+## How the tools reach the agent
 
-The arms are supposed to differ **only in which container they may spend on**.
-Declaring tools in one table and allocating them in another makes that invariant
-readable, and a test now asserts it.
+The agent runs under the **Claude Agent SDK** harness, so it also has the CLI's
+own `Bash` and file tools — but the whole CLI is sealed inside a `bwrap`
+sandbox that hides the source, GPUs, and credentials, and all model traffic is
+routed through a host-side metering gateway (model-pinned, per-request billed).
+The eight Glyph tools are registered as **in-process MCP tools** (`create_sdk_mcp_server`),
+so the agent sees them as `mcp__glyph__<name>`. Each is a thin async shim around
+the matching `t_<name>(session, **args)` handler, which does all the state work
+(charging, `(arm, phase)` gating, counters) and emits a trace event.
 
 ## Discipline: a tool is fully implemented or it does not exist
 
-No parameter may be accepted and ignored.
+No parameter may be accepted and ignored. In v1, `synthesize_data` declared
+`emphasis`/`include_reasoning` and read none of them; the agent filled them on
+every call believing it was shaping a curriculum, and received identical rows.
+A control that is not connected but records intent as though it had effect is
+worse than a missing feature. Every v2 handler reads every argument it declares.
 
-The cost of breaking this is not "a missing feature". `synthesize_data` declared
-`description`, `emphasis` and `include_reasoning` and read none of them. The
-agent filled `emphasis: "operator-focused"` on every call of one run and wrote
-increasingly detailed descriptions — by the third it had derived the structural
-operators' permutation rules explicitly — believing it was designing a
-curriculum. It received the same rows at three lengths. It was operating a
-control that was not connected, and the trace recorded the intent as though it
-had an effect.
+## Discipline: declaration is separate from allocation
 
-`test_every_declared_parameter_is_read_by_the_implementation` now walks the
-declarations and checks each parameter against the implementation's signature,
-so this cannot return silently.
-
----
-
-## The v1 tool set
-
-Nine tools. Everything here is implemented; anything not needed yet is absent
-rather than stubbed.
-
-### Acquisition
-
-```
-query(exprs: list[str], why: str) -> {results, malformed, queries_so_far}
-```
-The only way to learn semantics. Malformed expressions are billed like any
-other — probing the grammar for free would make the public syntax spec worth
-less than it is meant to be. `why` is recorded, not acted on, and says so.
-
-### Building a training set
-
-```
-build_dataset(source: "queries"|"demos"|"mixture", n: int) -> {dataset_id, size, drawn_from}
-```
-Repeats purchased rows up to `n`: the agent cannot manufacture labels it has not
-bought, so `n` is an epoch count wearing a costume, and the description says so.
-Curriculum control is **absent**, not stubbed — see deferred.
-
-### Producing an artifact
-
-```
-set_context(text: str)                          -> {artifact_id, chars}
-write_code(src: str)                            -> {artifact_id, bytes}
-train(dataset_id: str, epochs: int, lr: float)  -> {artifact_id, examples, final_loss}
-```
-
-All three register an artifact and return its id, which is what makes the
-evaluation tools uniform. One artifact is exactly one production call rather
-than a running snapshot, so `evaluate(artifact_id)` is unambiguous about what it
-measured.
-
-**`train` is always a full fine-tune.** `HParams` carried the flag but the
-schema never exposed it and `lora_rank` had a minimum of 4, so the arm could
-only do LoRA — while the published weights-arm ceiling (0.498 at 10% of the
-table seen) was measured with full fine-tuning. The arm was being compared
-against a line it could not reach. LoRA is deferred.
-
-### Self-assessment
-
-```
-evaluate(artifact_id: str, n: int) -> {dev_accuracy, n}
-inspect(artifact_id: str, k: int)  -> {n_inspected, n_wrong, examples}
-```
-
-Both take **any** artifact and route through `seal.answer_with`.
-
-`inspect` evaluates `k` items rather than running the whole dev split and
-truncating the output, which is what the previous version did.
-
-### Declaration
-
-```
-declare_target(role: Role, rationale: str) -> {ok, role}
-```
-
-Its description says plainly that it is **declarative**: all seven roles produce
-identical training, so "the agent chose `world_model`" is a fact about how it
-described itself. Making the roles operationally distinct is deferred.
-
-### Termination
-
-```
-seal(artifact_id: str, summary: str) -> {sealed, digest}
-```
-
-Takes an artifact rather than an entry plus a checkpoint id, so **the thing
-sealed is the thing that was evaluated** — an agent can no longer measure one
-object and hand over another.
-
-A forced seal by the harness always succeeds. An agent whose training all failed
-still owes a comparable data point: the base student with no prompt and no
-adapter is a legitimate, and very bad, artifact. Refusing turns a poor result
-into a missing one, and the arms most likely to hit that are the ones whose
-preparation costs most.
-
----
-
-## One answering path, shared
+"This tool exists" (`_TOOL_SPECS` in `mcp.py`) and "this arm may use it in this
+phase" (`_MATRIX` in `session.py`) are two tables, not one line of code. The
+arms are supposed to differ **only** in whether the student exists, and phases
+only in what is exposed; keeping allocation in its own table makes that
+invariant readable and a pure function testable.
 
 ```python
-seal.answer_with(artifact, base_model, ledger, exprs) -> list[str]
+tool_available_for(arm, phase, name) -> bool   # (arm, phase) in _MATRIX[name]
 ```
 
-Used by the tool layer at dev time and by all three arm runners at test time.
+---
 
-This is what made universal self-assessment possible at all: `evaluate` was
-checkpoint-only by construction, so ungating it would have handed A2 (a string)
-and A4 (source code) a tool that returns an error. But the second benefit
-matters more. Two implementations could drift — different answer cleaning,
-different caching — and the agent would then be steering on a number produced
-differently from the one it is finally graded by. That class of bug is now
-impossible rather than unlikely, and the calibration measurement below depends
-on it.
+## The v2 tool set
+
+Eight tools. Everything here is implemented; anything not needed is absent
+rather than stubbed.
+
+### Practice — learning and self-assessment (both arms)
+
+```
+query(exprs: list[str], why: str)
+    -> {results:[{expr, out} | {expr, refused} | {expr, error}], q_used, <remaining>}
+```
+The only way to learn semantics. **Query oracle**: an expression that would read
+a validation- or test-set item is *refused* (`query_violation(expr, policy)`)
+and **not charged**; a malformed expression **is** charged (charge-first, so
+probing the grammar for free cannot cheapen the public syntax spec); a query
+past the cap returns `q_exhausted`. `why` is recorded, not acted on. Answered
+queries are logged to `task/queries.jsonl`.
+
+```
+submit(path: str) -> {submission, overall, by_depth, <remaining>}
+```
+Score an answer file against the **visible validation set**. Feedback is
+**aggregate only** — `overall` and a `by_depth` breakdown, never per-item and
+never per-split. An *illegal* file (wrong ids, wrong answer type, path escape)
+is rejected and **does not consume** a submission. A legal submit counts toward
+`submit_cap`; reaching the cap flags the run to switch to the final phase.
+
+```
+check_answers(path: str, set: "validation"|"test") -> {ok, violations, examples, <remaining>}
+```
+A free dry-run legality check — no scoring, no counter touched. `set="validation"`
+works in either phase; `set="test"` only in the final phase. This is how the
+agent confirms an answer file is well-formed before spending a `submit` or its
+one `final_answer`.
+
+```
+finish_practice(reason: str) -> {ok, <remaining>}
+```
+Voluntarily end practice before the caps are hit; flags the switch to final.
+
+### Practice — the student (train arm only)
+
+```
+build_dataset(path: str)                              -> {dataset_id, ..., <remaining>}
+train(dataset_id: str, epochs: int, lr: float)        -> {checkpoint, ..., <remaining>}
+```
+`build_dataset` assembles a student training set from **purchased queries** — the
+agent cannot manufacture labels it has not bought. `train` fine-tunes the
+Qwen3-1.7B student; GPU time is metered into the ledger like any other spend, so
+training competes with querying under one budget line.
+
+### Both phases — the student (train arm only)
+
+```
+student_infer(checkpoint: str, input_path: str, output_path: str, prefix_path: str|None)
+    -> {..., <remaining>}
+```
+Run a trained student checkpoint over an input file. Available in **practice**
+(to self-assess a checkpoint on validation) and in **final** (to produce the
+held-out-test answers the agent then commits).
+
+### Final — termination (both arms)
+
+```
+final_answer(path: str) -> {committed: true, digest, <remaining>}
+```
+Commit the held-out-test answers and end the run. An *illegal* file is **not
+committed** and may be corrected and re-submitted; a legal one is committed once
+and is the thing scored. The held-out test keeps its `iid`/`comp`/`depth`
+splits, but the agent never sees a split-level or per-item test score — only the
+final report does.
+
+Every handler echoes a `<remaining>` block (queries left, submissions left,
+budget left) so the agent can pace itself without a separate status call.
 
 ---
 
-## Allocation
+## Availability matrix
 
-Declared here, not inside the tool definitions.
+Declared in `session.py._MATRIX`, not inside the tool definitions.
 
-| | `query` | `build_dataset` | `set_context` | `write_code` | `train` | `evaluate` | `inspect` | `declare_target` | `seal` |
-|---|---|---|---|---|---|---|---|---|---|
-| **A2** context | ✓ | — | ✓ | — | — | ✓ | ✓ | — | ✓ |
-| **A4** code | ✓ | — | — | ✓ | — | ✓ | ✓ | — | ✓ |
-| **A6** weights | ✓ | ✓ | — | — | ✓ | ✓ | ✓ | ✓ | ✓ |
-| **A7** free choice | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| | no_train · practice | no_train · final | train · practice | train · final |
+|---|---|---|---|---|
+| `query`          | ✓ | — | ✓ | — |
+| `submit`         | ✓ | — | ✓ | — |
+| `check_answers`  | ✓ | ✓ | ✓ | ✓ |
+| `finish_practice`| ✓ | — | ✓ | — |
+| `build_dataset`  | — | — | ✓ | — |
+| `train`          | — | — | ✓ | — |
+| `student_infer`  | — | — | ✓ | ✓ |
+| `final_answer`   | — | ✓ | — | ✓ |
 
-**Self-assessment is universal** (#13, settled). It is not a property of a
-container: someone writing a prompt can try it, someone writing code can run it,
-someone training a model can hold out a validation set. Issuing it to one arm
-measured the harness rather than the container — A2 wrote its prompt blind and
-sealed while A6 ran a full train/evaluate/inspect loop, and the dev signal is
-known to shape behaviour: once it stopped reading zero, one agent went from
-buying 187 facts to 565.
-
-A0′ has no agent loop and takes no tools: the harness buys evidence and the
-frontier answers directly.
-
-**A7 is one row, not a module.** Under this structure the free-choice arm is an
-allocation, which is most of why the separation was worth doing.
+A call outside its cell returns a gate error naming the phase, and is not
+charged.
 
 ---
 
-## What the dev split is, and what it is not
+## What the validation set is, and what it is not
 
-`DEV_FRACTION = 0.15` of the agent's own query log. Handing over a free labelled
-dev set would quietly refund the query budget, so the agent pays for its own
-feedback.
-
-**It does not estimate test, and that is now measured rather than hidden**
-(#14, settled as "leave the environment alone"). The agent buys single-level
-probes because isolating one table entry is how you read a table, and it is
-right to — but almost nothing on the test set looks like that:
-
-| | single-level share |
-|---|---|
-| what one run purchased | 91.5% |
-| the test set | 12.5% |
-
-That run reached **dev 0.400 against test 0.035**. The loop is worse than the
-gap: once dev stopped reading zero, the agent bought more of the same probes,
-trained on them, watched dev rise, and continued — a clearer signal made it
-optimise harder in the wrong direction.
-
-The argument for leaving it alone: an agent with a narrow probing strategy
-*should* get a misleading self-estimate, and whether it knows how well it is
-doing is part of what the experiment asks. Selling a matched-distribution dev
-set would hand the agent the shape of the exam, and inferring that shape is
-itself a capability worth observing.
-
-So `ScoreReport.calibration` carries the dev accuracy, the test accuracy, the
-gap, and the depth histograms of what was purchased against what was scored —
-the gap arrives with the distributions that explain it. Dev is scored through
-the same `answer_fn` as the test set, so both numbers describe one artifact.
-
-This matters more after #13 than before: `evaluate` is now universal, so all
-three arms share the same compass and it points the same wrong way for each.
+The visible validation set is drawn from the **iid** split only (generated after
+the held-out test so the two never share items). Practice feedback is
+intentionally coarse — overall + by-depth aggregates — so the agent gets a real
+but blunt signal. It **does not estimate test**: an agent that probes narrowly
+*should* get a validation number that flatters it, and whether it can infer the
+shape of the held-out distribution is part of what the experiment asks. The
+final report carries validation-vs-test so the gap arrives with the trajectory
+that explains it, but that comparison is never handed to the agent mid-run.
 
 ---
 
 ## Deferred
 
-**LoRA.** All training is full fine-tuning, to keep one fewer variable between
-the arm and the ceiling it is measured against. At matched learning rate LoRA
-scored 0.715 against full's 0.797 on binary, and rank had no measurable effect
-between 4 and 128. Revisit if the question becomes "how cheaply can the
-capability be installed" rather than "can it be installed".
+**`query_ood_policy` = open (D1).** Whether a practice `query` may probe `comp`
+or `depth` items (not just `iid`) is a knob (`QUERY_OOD_POLICIES`), currently set
+to refuse anything outside the validation-eligible region. Opening it is a
+deferred comparison, not a redesign.
 
-**Curriculum control.** `filter_data` and a working `emphasis` are what H3's
-"the biggest lever is data curation" needs to be testable at all (#12). Absent
-from v1 because a declared-and-inert tool is worse than a missing one.
-
-**Operationally distinct roles.** Making `declare_target`'s seven roles produce
-different training — a weighted loss for proposal, scores rather than answers
-for value, a search loop for world model — is a larger change and belongs after
-the arms are comparable (#16).
-
-**Combining artifacts.** A7 can produce a context *and* an adapter, but each
-production call registers its own artifact and `seal` takes one. `SealedArtifact`
-already supports carrying both, so this is a `combine` tool when A7 needs it, not
-a redesign.
+**The Q sweep.** `Q` (the query cap) is the coverage knob that positions an arm
+on the effort axis; sweeping it to compare arms at matched coverage is planned,
+not yet run.

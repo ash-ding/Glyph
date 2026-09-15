@@ -226,12 +226,15 @@ class GlyphInstance:
 
         self.demos = self._make_demos(rng)
         self.test = self._make_test(rng)
+        self.val = self._make_val(rng)
         self.query_count = 0
         self.query_log = LookupLog()
         self._skel_interp: Interpreter | None = None
         self._tab_interp: Interpreter | None = None
         self._ceil_cache: dict[tuple, str] = {}
         self._pi: dict[str, float] | None = None
+        self._val_srcs = None
+        self._test_srcs = None
 
     # -- agent-visible, free ------------------------------------------
     def syntax_spec(self) -> str:
@@ -256,6 +259,38 @@ class GlyphInstance:
         if split is None:
             return list(self.test)
         return [t for t in self.test if t.split == split]
+
+    def _canon(self, src: str) -> str | None:
+        try:
+            return render(parse(src, self.cfg), self.cfg)
+        except Exception:
+            return None
+
+    def query_violation(self, expr_src: str, policy: str = "strict") -> str | None:
+        """Why `query` must refuse this expression, or None if it may run.
+
+        A malformed expression is NOT a violation (returns None); the tool layer
+        charges it. Validation and test items are refused under every policy;
+        `policy="open"` lifts only the held-pair and depth checks.
+        """
+        canon = self._canon(expr_src)
+        if canon is None:
+            return None
+        if self._val_srcs is None:
+            self._val_srcs = {self._canon(t.expr_src) for t in self.val}
+            self._test_srcs = {self._canon(t.expr_src) for t in self.test}
+        if canon in self._val_srcs:
+            return "is_validation_item"
+        if canon in self._test_srcs:
+            return "is_test_item"
+        if policy == "open":
+            return None
+        e = parse(expr_src, self.cfg)
+        if op_pairs(e) & self.held_pairs:
+            return "contains_held_out_pair"
+        if depth(e) > self.cfg.demo_max_depth:
+            return "deeper_than_demos"
+        return None
 
     def derive_tail(self, log: LookupLog | None = None) -> list[int]:
         """Indices of test items whose required table entries were never
@@ -287,6 +322,19 @@ class GlyphInstance:
             from .measure import measure_pi
             self._pi = measure_pi(self)
         return self._pi
+
+    def lookup_solvable(self, items, log) -> float:
+        """Fraction of `items` whose every needed table entry is in `log`.
+
+        The score a perfect retriever with a perfect skeleton could get on
+        `items` given exactly the entries in `log` -- the per-run covariate for
+        how much of a split is answerable by lookup alone.
+        """
+        if not items:
+            return 0.0
+        ok = sum(1 for t in items
+                 if not (t.needs_u - log.unary) and not (t.needs_b - log.binary))
+        return ok / len(items)
 
     def is_tail(self, t: TestItem) -> bool:
         """Did this run never buy a table entry this item needs?
@@ -420,6 +468,32 @@ class GlyphInstance:
                  "wanted": {"iid": cfg.n_iid, "comp": cfg.n_comp,
                             "depth": cfg.n_depth}})
         return items
+
+    def _make_val(self, rng) -> list["TestItem"]:
+        cfg = self.cfg
+        seen = {a for a, _ in self.demos} | {t.expr_src for t in self.test}
+        out: list[TestItem] = []
+        stall = 0
+        while len(out) < cfg.n_val:
+            if stall >= _STALL_LIMIT:
+                raise GenerationFailed(
+                    "val", len(out), cfg.n_val,
+                    _diagnose(rng, cfg, cfg.demo_max_depth, self.held_pairs, None, 1))
+            e = _sample_constrained(rng, cfg, cfg.demo_max_depth,
+                                    forbid=self.held_pairs, require=None, min_depth=1)
+            if e is None:
+                stall += 1
+                continue
+            src = render(e, cfg)
+            if src in seen:
+                stall += 1
+                continue
+            seen.add(src)
+            o, log = self.P.eval_logged(e)
+            out.append(TestItem(src, self._render_out(o), "val",
+                                frozenset(log.unary), frozenset(log.binary)))
+            stall = 0
+        return out
 
 
 def generate(seed: int, cfg: GlyphConfig) -> GlyphInstance:

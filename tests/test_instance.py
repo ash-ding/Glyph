@@ -63,3 +63,20 @@ def test_syntax_errors_are_still_charged():
     with pytest.raises(Exception):
         inst.query("s0(nonsense")
     assert inst.query_count == n + 1
+
+
+def test_validation_is_iid_and_disjoint():
+    inst = generate(7, FAST.with_(n_val=200))
+    assert len(inst.val) == 200
+    demo_test = {a for a, _ in inst.demos} | {t.expr_src for t in inst.test}
+    for t in inst.val:
+        assert t.split == "val"
+        e = parse(t.expr_src, inst.cfg)
+        assert depth(e) <= inst.cfg.demo_max_depth
+        assert not (op_pairs(e) & inst.held_pairs)
+        assert t.expr_src not in demo_test
+
+
+def test_validation_absent_from_test():
+    inst = generate(7, FAST.with_(n_val=200))
+    assert all(t.split in ("iid", "comp", "depth") for t in inst.test)
