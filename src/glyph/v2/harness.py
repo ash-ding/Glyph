@@ -200,6 +200,7 @@ class RunConfig:
     preset: str = "pi_mid"
     instance_seed: int = 1001
     model: str = "claude-opus-4-8"
+    student_model: str = "Qwen/Qwen3-1.7B"
     q_cap: int = 1000
     submit_cap: int = 20
     tp: int = 100
@@ -231,6 +232,23 @@ def _resolve_cli_path():
     raise FileNotFoundError("bundled Claude Code CLI not found under claude_agent_sdk._bundled")
 
 
+def _make_student(rc, ledger, paths):
+    """Build the train-arm student pool.
+
+    The student is a small, locally trainable model (Qwen3-1.7B by default,
+    ``rc.student_model``) -- deliberately NOT ``rc.model``, which is the
+    frontier the agent talks to and the id the gateway pins on. Conflating
+    the two would hand a frontier model id to ``sft.train``'s
+    ``from_pretrained`` and fail on the first train call.
+    """
+    from glyph.v2.student import StudentPool
+
+    return StudentPool(
+        rc.student_model, ledger, work_dir=paths.root,
+        queries_path=paths.queries,
+    )
+
+
 def run(rc: RunConfig) -> dict:
     """Full protocol-v2 run over the real SDK. Returns the ScoreReport dict.
 
@@ -248,7 +266,6 @@ def run(rc: RunConfig) -> dict:
     from glyph.v2.mcp import register_glyph_server
     from glyph.v2.report import build_report
     from glyph.v2.session import Session
-    from glyph.v2.student import StudentPool
     from glyph.v2.trace import RunTrace
     from glyph.v2 import prompts
 
@@ -280,8 +297,7 @@ def run(rc: RunConfig) -> dict:
     session.test_id_of = test_id_of
     session.preset = rc.preset
     if rc.arm == "train":
-        session.student = StudentPool(
-            rc.model, ledger, work_dir=paths.root, queries_path=paths.queries)
+        session.student = _make_student(rc, ledger, paths)
 
     # 3b. task README with concrete caps (fills the Task-11 placeholder)
     paths.readme.write_text(prompts.task_readme(session))
