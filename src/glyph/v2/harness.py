@@ -320,8 +320,22 @@ def run(rc: RunConfig) -> dict:
     #    calls are not 403'd by the gateway allow-list). max_turns bounds the
     #    SDK's own agent loop -- the real runaway-turn guard; the harness
     #    tp/tf caps below are a secondary per-cycle limit.
+    # Capture the CLI subprocess's real stderr to a file. The SDK's own
+    # ProcessError message is a fixed "Check stderr output for details"
+    # placeholder (claude-agent-sdk #256), so without this a CLI crash (e.g.
+    # the exit-250 seen on a very large turn) is undiagnosable.
+    cli_stderr_path = run_dir / "cli_stderr.log"
+
+    def _capture_stderr(line: str) -> None:
+        try:
+            with open(cli_stderr_path, "a", encoding="utf-8") as _f:
+                _f.write(line.rstrip("\n") + "\n")
+        except Exception:
+            pass
+
     options = ClaudeAgentOptions(
         cli_path=str(wrapper),
+        stderr=_capture_stderr,
         cwd=str(paths.root),
         model=rc.model,
         system_prompt=prompts.system_prompt(rc.arm),
