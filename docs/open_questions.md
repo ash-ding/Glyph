@@ -228,7 +228,15 @@ of the powers. It is now the preset where the weights arm leads by the most.
 Checkpoints kept at `~/glyph_runs/cap5/*.model` with their table config, so
 [#19](https://github.com/ash-ding/Glyph/issues/19) does not retrain.
 
-### [#9](https://github.com/ash-ding/Glyph/issues/9) — test-set size and per-arm evaluation size · P1
+### [#9](https://github.com/ash-ding/Glyph/issues/9) — test-set size and per-arm evaluation size · P1 · v2-settled
+
+> **Under v2 · settled.** The arms are `train`/`no_train`, not A2/A4/A6/A0', and
+> each arm commits exactly one `final_answer` file scored on the **full** held-out
+> test -- there is no per-arm evaluation-size knob any more. The population stays
+> 10^4 for per-split resolution (`iid`/`comp`/`depth`); the visible validation set
+> is a separate iid-only draw. Arm comparison is **paired on the shared instance**
+> (same `instance_seed`), which the SE table below shows is the ~4.5x variance
+> win when the arms nearly agree. The historical A2/A4/A6/A0' cost table is v1.
 
 Generating 10⁴ costs 1.5–11 s. Evaluating it costs:
 
@@ -289,7 +297,13 @@ issue yet.
 
 ## Protocol
 
-### [#11](https://github.com/ash-ding/Glyph/issues/11) — dead parameters in `synthesize_data`
+### ~~[#11](https://github.com/ash-ding/Glyph/issues/11) — dead parameters in `synthesize_data`~~ · v2-closed
+
+> **Closed by the v2 redesign.** `synthesize_data` is gone. `build_dataset(path)`
+> reads only its path (the set is assembled from purchased queries) and
+> `train(dataset_id, epochs, lr)` reads all three arguments. No accepted-and-
+> ignored parameter survives; the discipline is enforced by the v2 tool set
+> (`docs/tools.md`).
 
 Three of five parameters are accepted, traced, and never read:
 
@@ -313,7 +327,12 @@ Related: the tool repeats purchased rows rather than synthesising, which is
 correct — the agent cannot manufacture labels it has not bought. A6's "50,000
 examples" were 511 distinct rows at 98×, so `n` is epochs wearing a costume.
 
-### [#12](https://github.com/ash-ding/Glyph/issues/12) — `filter_data` does not exist
+### [#12](https://github.com/ash-ding/Glyph/issues/12) — `filter_data` does not exist · v2-out-of-scope
+
+> **Under v2.** There is no curation tool; `build_dataset` only assembles
+> purchased queries. H3 as stated ("the biggest lever is data curation") is not
+> part of v2's `train`-vs-`no_train` comparison, so a curation lever is deferred
+> rather than a missing feature. Revisit only if a curation arm is added.
 
 The plan's §6.2 lists `propose_curriculum`, `synthesize_data`, `filter_data`.
 Only the middle one exists, with its curation parameters inert (#11).
@@ -324,6 +343,13 @@ be tested as stated.
 
 ### ~~[#13](https://github.com/ash-ding/Glyph/issues/13) — `evaluate` gated behind weights~~ · settled
 
+> **Restated for v2.** No `evaluate` tool and no containers. Self-assessment is
+> `submit` (aggregate validation score, **both** arms) plus `student_infer` on
+> validation (train arm); availability is the `(arm, phase)` matrix in
+> `session.py`. The single-scoring-path principle holds -- validation and test
+> both score through `glyph.v2.answers`, so the number the agent steers on and
+> the one it is graded by cannot drift.
+
 **Universal.** Self-assessment is not a property of a container. Ungating was
 not enough — `evaluate` was checkpoint-only by construction, so A2 (a string)
 and A4 (source) had no id to pass. `seal.answer_with` now answers with any
@@ -333,6 +359,12 @@ cannot drift apart. Declaration and allocation are separate tables; A7 became a
 row rather than a module. See `docs/tools.md`.
 
 ### ~~[#14](https://github.com/ash-ding/Glyph/issues/14) — dev does not estimate test~~ · settled
+
+> **Restated for v2.** "dev" is the visible validation set (iid only); practice
+> feedback is aggregate-only (overall + by-depth) and deliberately does not
+> estimate the held-out `comp`/`depth` test. `build_report` carries
+> validation-vs-test (`validation.gap_last_vs_test_iid`) so the gap ships with
+> the trajectory that explains it -- but the agent never sees it mid-run.
 
 **Left alone and measured.** Re-measured on the current data layer: 91.5% of one
 run's purchases were single-level against **12.5%** of the test set (was 0%
@@ -346,7 +378,14 @@ now carries dev accuracy, test accuracy, the gap, and the depth histograms of
 purchased against scored — the gap arrives with the distributions that explain
 it. Both sides use one `answer_fn`, which #13 made possible.
 
-### [#15](https://github.com/ash-ding/Glyph/issues/15) — the query cap Q · P1
+### [#15](https://github.com/ash-ding/Glyph/issues/15) — the query cap Q · P1 · v2-set-variable
+
+> **Under v2.** `Q` is now an explicit set variable (`RunConfig.q_cap`) and the
+> **coverage axis** for the arm comparison -- no longer drifting run to run. The
+> tail-contamination-grows-with-Q analysis below still holds, and every run
+> records `ceiling["skeleton"]["tail"]` (the contamination measured on that run).
+> Sweeping Q to compare arms at matched coverage is a new tracked item -- see
+> **Protocol v2 -- new questions** below.
 
 Under the A+B split the main figure's axes are (π, Q), so Q must be a set
 variable. It currently drifts between 103 and 472 across runs.
@@ -382,13 +421,21 @@ credibility of the split that carries H1.** Every run now carries
 `ceiling["skeleton"]["tail"]`, which is this contamination measured on that run
 rather than estimated from five seeds.
 
-### [#16](https://github.com/ash-ding/Glyph/issues/16) — `declare_target`'s roles are declarative
+### ~~[#16](https://github.com/ash-ding/Glyph/issues/16) — `declare_target`'s roles are declarative~~ · v2-closed
+
+> **Closed.** `declare_target` does not exist in v2; there are no roles to be
+> declarative.
 
 `_t_synthesize_data` never reads `role`; `_t_train` uses it only to check one
 was declared. **All seven roles train identically**, so "the agent chose
 `world_model`" is a fact about its self-description. Bears on H3 and Fig. 4.
 
-### [#17](https://github.com/ash-ding/Glyph/issues/17) — implement A7?
+### ~~[#17](https://github.com/ash-ding/Glyph/issues/17) — implement A7?~~ · v2-superseded
+
+> **Superseded.** There is no A7/free-choice arm. v2's two-arm design *is* the
+> choice axis: the `train` arm may or may not use its student, compared to
+> `no_train` at equal stop conditions. Q2 ("how good is the choice?") now lives
+> there.
 
 `seal.py` allows a context *and* an adapter and `Student` carries both, but
 there is no A7 module and `cli.py` knows only `a2`, `a4`, `a6`. A7 is where Q2
@@ -514,12 +561,43 @@ layer is frozen** — any of #1, #5, #6, #7, #8 would make it a third time.
 - **[#26](https://github.com/ash-ding/Glyph/issues/26)** the phase diagram. Also: `worker.py`'s grid timeout is 5400 s and A6
   runs span ~10 to >90 minutes, so a timeout that clips the tail biases toward
   agents doing *less* of what the experiment is about
-- **[#27](https://github.com/ash-ding/Glyph/issues/27)** prompt caching. Specified in plan §6.3, never implemented, zero cache
+- **[#27](https://github.com/ash-ding/Glyph/issues/27)** prompt caching · **v2-closed** -- traffic runs through the metering gateway and the Agent-SDK CLI caches the system+tools prefix across turns; the gateway meters `cache_read` at 0.1x. Spike S1 measured a cache-warm turn at ~$0.012 against ~$0.08 cold, and the pathological uncached `declare_target` cost is gone with the tool. Original note below.
+- ~~[#27]~~ *(v1)* prompt caching. Specified in plan §6.3, never implemented, zero cache
   hits across eight runs. `declare_target` — one value from a seven-item enum —
   cost 311 H100-s, within 15% of the `train` call in the same run. ~20 lines
 - **[#28](https://github.com/ash-ding/Glyph/issues/28)** T2. Zero lines, and under A+B it carries half the paper. Glyph cannot
   carry amortisation: preparing costs ~100× serving, so the rational choice is
   always "don't train, just answer"
+
+---
+
+## Protocol v2 — new questions
+
+Opened with the v2 redesign (practice/final phases, `train`/`no_train` arms,
+query oracle, metering gateway + bwrap sandbox). See
+`docs/superpowers/specs/2026-09-14-protocol-v2-design.md`.
+
+### D1 — should `query_ood_policy` be open?
+
+Whether a practice `query` may probe `comp`/`depth` items, or only the
+iid/validation-eligible region. `QUERY_OOD_POLICIES` (in `data/config.py`)
+encodes the choice; the default **refuses** an OOD probe and does not charge it
+(`query_violation`). Opening it is a deferred comparison — does OOD probing let
+the agent close the depth/comp gap? — not a redesign. Deferred (D1).
+
+### The Q sweep
+
+`Q` (`RunConfig.q_cap`) is the coverage knob that positions an arm on the effort
+axis. Sweeping it to compare `train` vs `no_train` at **matched coverage** is
+planned, not yet run. Ties directly to #15.
+
+### `pi_low` seeds without binary tables
+
+Low-π presets can generate instances whose held-out test needs no binary-table
+entries (`instance.uses_binary_tables` False / `needs_b` uniformly false).
+Whether such seeds are a valid low-difficulty region or a degenerate corner to
+exclude is open — `build_report` already records `instance.uses_binary_tables`
+per run, so the population can be filtered post hoc rather than at generation.
 
 ---
 

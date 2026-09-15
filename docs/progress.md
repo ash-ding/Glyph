@@ -3475,3 +3475,45 @@ config, instance`，`cli -> config, instance, semantics`。**评测依赖数据�
 **`src/` 保留。** 扁平布局下从仓库根 `import glyph` 会命中源码目录、绕过安装，
 正好会掩盖上个月那类错误（setup 脚本漏了 vLLM，静默少跑 3 个测试）。`src/`
 布局强制测试跑在装好的包上。
+
+---
+
+# Protocol v2 —— explore/test 合并为 practice/final，双臂对照 (2026-09-14)
+
+## 改了什么
+
+v1 把一次运行切成 explore（买 query）→ prepare（造 artifact）→ test（打分）三段，臂是 A2/A4/A6/A7 四个容器。v2 推倒重来：
+
+- **两个阶段**：practice（可见的 validation，能买 query、提交打分、train arm 还能训 student）→ final（揭晓 held-out test，只允许一次 `final_answer` 提交，其余工具全禁）。
+- **两个臂**：`train`（frontier + 可训练 Qwen3-1.7B student）与 `no_train`（只有 frontier）。唯一差别是 student 在不在；在相同停止条件下对照。
+- **query oracle**：practice 里 `query` 有配额 `Q`；查询 validation/test 内的 item 会被 `query_violation` 拒绝且**不计费**；malformed 照样计费（先扣后查）。
+- **反馈只给聚合**：`submit` 只回 `overall` + `by_depth`，从不给逐项或分 split（iid/comp）。held-out test 保留 iid/comp/depth 三个 split，但分数只进最终 report，agent 全程看不到。
+- validation 从 iid 抽（在 test **之后**生成，保证种子逐位一致、两者不共享 item）。
+
+## 为什么
+
+见 spec：`docs/superpowers/specs/2026-09-14-protocol-v2-design.md`。核心动机：把「agent 自己决定何时停、要不要训 student」变成可观测的选择，而不是由 harness 预先切好阶段；`Q` 成为覆盖度旋钮，用来在 effort 轴上对齐两个臂再比较。
+
+## harness：复用 Claude Agent SDK + 计费网关 + bwrap 沙箱
+
+不重写 control loop，直接用 **Claude Agent SDK**（`claude-agent-sdk==0.2.152`）跑 bundled CLI，这样 agent 自带 Bash/文件工具；我们自己的 8 个工具作为 **in-process MCP**（`mcp__glyph__*`）注入。为了不让 agent 看到源码 / GPU / 凭证：
+
+- 整个 CLI 封在 **bwrap** 沙箱里（`--unshare-all --clearenv`，只 ro-bind `/usr` + CLI 目录 + 一个 `gw.sock`），沙箱内无网络、无 home、无凭证。
+- 所有模型流量走**宿主侧计费网关**（unix socket）：注入 `google.auth` token、按请求计费、pin 模型（非 `opus-4-8` 一律 403）、补回 CLI 丢掉的 `/v1` 前缀。
+
+### spike S1 结论（B/C/D 全 PASS）
+
+在 lumen1 打通整条链：`ClaudeSDKClient → bwrap(CLI) → 127.0.0.1:8787 bridge → unix gw.sock → 宿主网关 → Vertex(claude-opus-4-8)`。要点：
+
+- `setting_sources=[]` + 自定义 system_prompt **不泄漏**宿主配置（MEMORY.md / skills / 用户身份 / 项目内容都不出现在请求里）。
+- CLI 覆盖 base_url 时会**丢 `/v1`**，网关必须补回（否则 404）。
+- 没有真实的 small/background 模型请求；连 session 命名都走 `opus-4-8`，所以 model-pin 不误伤。
+- 成本：cache-cold 文本轮 ~$0.08，Read 工具轮 ~$0.17，cache-warm ~$0.012（#27 因此实质关闭）。
+
+### no_train 端到端验证（PASS）
+
+真实 SDK 路径跑通：网关计费 $5.03、bwrap+bridge+CLI 到达 Vertex、5 个 MCP 工具可用、答案合法性拦下一次 path_escape、相位机 `practice→final→commit`、report 产出（`overall 0.29`、`final_commit "agent"`、`run_status completed`）。
+
+## 删掉的东西（Task 19）
+
+移除整个 v1 prepare/seal 协议：`src/glyph/{arms,agent,worker.py,sandbox.py,budget.py,cli.py}` 及对应测试；`seal.py` 裁到只剩 `headroom` + `score_answers`。存活的真实代码是 `src/glyph/v2/` 与 data 层。审查发现一处被重写的测试退化成重言式（`test_report_json_round_trips_the_instance_block`），已换成对真实 `build_report()` 输出做 JSON 往返的检查。
