@@ -8,9 +8,10 @@ Read `README.md` first; it carries the design rationale.
 
 ## Rules that exist for a reason
 
-1. **The ledger is the only way to advance the clock.** Anything that consumes
-   compute goes through `budget.Ledger.charge`. One bypass and the crossover
-   figure is meaningless.
+1. **The ledger is the only way to advance the clock.** Every unit of spend —
+   model tokens and GPU seconds — goes through the ledger
+   (`glyph.v2.ledger.Ledger`); model traffic is metered by the gateway, GPU
+   time by the student pool. One bypass and the crossover figure is meaningless.
 2. **The public syntax must leak no semantics.** Operator names stay opaque;
    `tests/test_grammar.py::test_syntax_spec_leaks_no_semantics` enforces it.
 3. **π's numerator is `L_skel`.** See README. Flipping it fails silently.
@@ -56,7 +57,7 @@ next person needs to know what is broken far more than what is fine.
 - **D8 → A**: value surface form spells out digits. Exact notation comes from
   `scripts/probe_tokenizer.py` (self-check #6), not from argument.
 
-## Before touching the arms
+## Before running the protocol
 
 Self-checks in order **6 → 5 → 1 → 2 → 3 → 4** (`README.md`). #5, the capacity
 check, is the only one whose failure forces a design change rather than a bug
@@ -64,6 +65,9 @@ fix — run it first and in parallel, it needs no benchmark.
 
 ## Conventions
 
-- Python 3.11+, numpy only in the core. No torch/transformers below `arms/`.
-- `pytest -q` must be green before every commit; `-m slow` covers π sweeps.
+- Python 3.11+, numpy only in the data layer. torch/transformers live in
+  `train/` (fine-tuning, vLLM inference) and are used only by the train arm's
+  `v2/student.py`; the data layer and the rest of `v2/` stay torch-free.
+- `pytest -m "not slow"` must be green before every commit; the `slow` marker
+  covers the π sweeps, the GPU tests, and the real-API end-to-end run.
 - Use `GlyphConfig.scaled(n)` for fast iteration; real runs use the full 10k.

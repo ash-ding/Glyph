@@ -11,7 +11,7 @@
      an image at assets/img/og.png (1200x630) to enable the preview image. -->
 <meta property="og:type" content="website">
 <meta property="og:title" content="Glyph — a hidden-semantics DSL execution benchmark">
-<meta property="og:description" content="A ruler with known graduations for measuring weight-space delegation: context vs. code vs. weights.">
+<meta property="og:description" content="A ruler with known graduations for measuring weight-space delegation: does an agent train a small model on what it learns, or keep reasoning with the frontier?">
 <!-- <meta property="og:url" content="https://ash-ding.github.io/glyph/"> -->
 <!-- <meta property="og:image" content="https://ash-ding.github.io/glyph/assets/img/og.png"> -->
 <meta name="twitter:card" content="summary_large_image">
@@ -469,9 +469,11 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
   <h2>The agent's situation</h2>
   <div class="prose">
     <p>
-      An agent is given the syntax and 30 worked demos for free, and must buy
-      everything else. Whatever it produces is then sealed and answers the test
-      set with no further access to the oracle.
+      A run has two phases. In <b>practice</b> the agent gets the syntax and 30
+      worked demos for free, plus a visible validation set and a metered query
+      oracle, and must buy everything else. In the <b>final</b> phase the oracle
+      is gone: the hidden test set is revealed and the agent commits its answers
+      exactly once.
     </p>
   </div>
 
@@ -489,10 +491,10 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
          cost the same as well-formed ones.</p>
     </div>
     <div class="card">
-      <span class="card__key">sealed</span>
-      <h3>The artifact</h3>
-      <p>A prompt, a program, or a checkpoint. Sealing ends the prepare phase;
-         nothing is reachable afterwards.</p>
+      <span class="card__key">final</span>
+      <h3>One committed answer</h3>
+      <p>The held-out test is revealed with no answers and no oracle; the agent
+         commits once with <span class="mono">final_answer</span> and the run ends.</p>
     </div>
   </div>
 
@@ -521,53 +523,46 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
 <section class="section wrap" id="arms">
   <h2>The arms<span class="tag tag--todo">in progress</span></h2>
   <p class="section__lede">
-    Four containers for the same purchased knowledge. An arm is defined by which
-    tools it is given, enforced in the harness rather than by asking the model
-    to abstain.
+    Two arms for the same purchased knowledge, compared at equal stop
+    conditions. An arm is defined by which tools it is given, enforced in the
+    harness rather than by asking the model to abstain.
   </p>
 
   <div class="table-scroll">
     <table>
       <thead>
-        <tr><th>Arm</th><th>Container</th><th>What it seals</th><th>Status</th></tr>
+        <tr><th>Arm</th><th>What it has</th><th>Status</th></tr>
       </thead>
       <tbody>
-        <tr><td class="mono">A0′</td><td>none — frontier answers directly</td>
-            <td>nothing; one shot per chunk</td>
-            <td><span class="tag tag--done">measured</span></td></tr>
-        <tr><td class="mono">A2</td><td>context</td><td>a prompt prefix, re-paid on every query</td>
-            <td><span class="tag tag--todo">rerun pending</span></td></tr>
-        <tr><td class="mono">A4</td><td>code</td><td>a Python solver, sandboxed, no network</td>
-            <td><span class="tag tag--todo">rerun pending</span></td></tr>
-        <tr><td class="mono">A6</td><td>weights</td><td>a fine-tuned student, no prompt</td>
-            <td><span class="tag tag--todo">rerun pending</span></td></tr>
-        <tr><td class="mono">A7</td><td>agent chooses</td><td>any combination</td>
-            <td><span class="tag tag--todo">one row in the allocation table</span></td></tr>
+        <tr><td class="mono">no_train</td><td>the frontier model only</td>
+            <td><span class="tag tag--todo">pilot in progress</span></td></tr>
+        <tr><td class="mono">train</td>
+            <td>the frontier model <b>plus</b> a trainable Qwen3-1.7B student it
+                builds a dataset for, fine-tunes, and runs inference with</td>
+            <td><span class="tag tag--todo">pilot in progress</span></td></tr>
       </tbody>
     </table>
   </div>
 
   <div class="placeholder">
     <p>
-      <b>Arm results are not published yet, deliberately.</b> The earlier sweep
-      is invalidated — the data layer changed underneath it — and two harness
-      asymmetries that would have contaminated the comparison have since been
-      settled rather than carried.
+      <b>Arm results are not published yet, deliberately.</b> Protocol v2
+      replaced the earlier explore/prepare/seal design and its four containers
+      (A2/A4/A6/A7); pilot calibration of the caps is in progress before the
+      grid runs.
     </p>
     <p>
-      Only the weights arm had self-evaluation tools, so A2 wrote its prompt
-      blind and sealed while A6 ran a full train–evaluate–inspect loop. Those
-      tools are now universal: self-assessment is not a property of a container,
-      and issuing it to one arm measured the harness instead. And the dev split
-      is carved from the agent's own purchases, which do not match the test
-      distribution — <span class="mono">91.5%</span> of one run's queries were
-      single-level against <span class="mono">12.5%</span> of the test set. That
-      is left in place, because an agent with a narrow probing strategy
-      <em>should</em> get a misleading self-estimate, but every report now
-      carries the gap and the distributions that explain it.
+      Two harness asymmetries that would have contaminated the old comparison
+      are resolved by v2's design. Self-assessment is uniform — both arms submit
+      to the same visible validation set for an aggregate score, rather than one
+      arm running an evaluate loop the other lacked — and feedback is
+      aggregate-only. The validation set is drawn from the
+      <span class="mono">iid</span> distribution, not the agent's own purchases,
+      and every report carries the validation-vs-test gap that explains a
+      miscalibrated self-estimate.
     </p>
     <p>
-      The arms are rerun once, on frozen instances, with one tool layer.
+      Both arms run at the same caps, paired on the instance.
     </p>
   </div>
 </section>
@@ -629,9 +624,11 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
   <h2>Quick start</h2>
 
 <pre><code>pip install -e ".[dev]"
-python -m glyph.cli show --preset pi_mid --seed 1001   # one instance, end to end
-python -m glyph.cli pi --n-seeds 4                     # measure π across presets
-pytest -q                                              # 138 tests, self-checks included
+pytest -m "not slow"                                   # 194 tests (slow = real-API + GPU)
+python -c "from glyph.data import PRESETS, generate; print(generate(1001, PRESETS['pi_mid']).measured_pi())"
+
+# run the protocol (real, metered: needs the Agent SDK, gateway, bwrap, Vertex creds)
+python -m glyph.v2 run --arm no_train --preset pi_mid --seed 1001
 
 python scripts/bench_scan.py --presets pi_mid --seeds 20    # π and the ceilings
 python scripts/table_ceiling.py --seen-frac 0.10            # how far weights reach
@@ -647,17 +644,16 @@ python scripts/run_a0p.py --n-facts 2000 --n-test 500       # the saturated fron
 │   ├── interp.py      P = Interpreter(skeleton, tables); lookup logging
 │   ├── instance.py    generation, demos, query oracle, splits, tail derivation
 │   └── measure.py     π via two crippled oracles
-├── seal.py        one scoring path for every arm; ceilings and headroom
-├── budget.py      the ledger — the single metered entry point
-├── agent/         tool declaration · per-arm allocation · orchestrator
+├── v2/            protocol v2 — session · tools · mcp · harness · gateway
+│                  · sandbox/bridge · student · ledger · answers · report
 ├── train/         full fine-tuning · vLLM inference
-└── arms/          a2_context · a4_code · a6_weights · a0p_saturated</code></pre>
+└── seal.py        scoring primitives — headroom, score_answers</code></pre>
 
   <p class="muted" style="font-size:.88rem">
     Nothing in <code>data/</code> imports from outside it, and
     <code>tests/test_data_boundary.py</code> holds that line. The arrow runs one
-    way — <code>seal</code>, <code>agent</code> and <code>arms</code> all import
-    the generator — so the generator can be lifted whole into a second task
+    way — the protocol layer (<code>v2/</code>) imports the generator, never the
+    reverse — so the generator can be lifted whole into a second task
     without dragging along an evaluation protocol written for this one.
   </p>
 
