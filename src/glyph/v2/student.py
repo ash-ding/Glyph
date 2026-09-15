@@ -253,13 +253,37 @@ class StudentPool:
         }
 
     # -- infer --------------------------------------------------------
+    def _resolve_checkpoint(self, ck_dir):
+        """Map a trained checkpoint dir to (base_model, adapter_path) for infer.
+
+        A full fine-tune saved the whole model, so it is served AS the base
+        model (adapter_path=None); only a LoRA checkpoint is loaded through the
+        adapter path on top of the original base. Loading a full-finetune dir
+        as a LoRA adapter raises LoRAAdapterNotFoundError -- exactly the
+        train/infer mismatch this resolves. sft.train records which in
+        train_record.json ("adapter": "full" | "lora-rN"); an absent or
+        unreadable record is treated as full, since train() only ever does
+        full fine-tunes today (LoRA is deferred).
+        """
+        ck_dir = Path(ck_dir)
+        adapter = "full"
+        rec_path = ck_dir / "train_record.json"
+        if rec_path.exists():
+            try:
+                adapter = json.loads(rec_path.read_text()).get("adapter", "full")
+            except Exception:
+                adapter = "full"
+        if adapter == "full":
+            return str(ck_dir), None
+        return self.base_model, str(ck_dir)
+
     def infer(self, checkpoint, input_path, output_path, prefix_path=None) -> dict:
         import time
 
         if checkpoint == "base":
-            adapter_path = None
+            base_model, adapter_path = self.base_model, None
         else:
-            adapter_path = self.checkpoints[checkpoint]
+            base_model, adapter_path = self._resolve_checkpoint(self.checkpoints[checkpoint])
 
         prefix = None
         if prefix_path is not None:
@@ -273,7 +297,7 @@ class StudentPool:
             rows.append(json.loads(line))
 
         t0 = time.monotonic()
-        student = self.backend.make_student(self.base_model, adapter_path, prefix)
+        student = self.backend.make_student(base_model, adapter_path, prefix)
         try:
             answers = student.answer([r["expr"] for r in rows])
             truncated = getattr(student, "last_truncated", 0)

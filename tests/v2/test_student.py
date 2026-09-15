@@ -65,3 +65,40 @@ def test_infer_writes_answers(tmp_path):
     r = pool.infer("base", inp, out, None)
     rows = [json.loads(l) for l in out.read_text().splitlines() if l.strip()]
     assert r["rows"] == 3 and len(rows) == 3 and set(rows[0]) == {"id","answer"}
+
+
+class RecordingBackend(FakeBackend):
+    def __init__(self):
+        super().__init__()
+        self.last_make = None
+    def make_student(self, base_model, adapter_path, prefix):
+        self.last_make = (base_model, adapter_path)
+        return super().make_student(base_model, adapter_path, prefix)
+
+
+def test_full_finetune_checkpoint_served_as_base_not_lora(tmp_path):
+    """A full fine-tune is the whole model; infer must serve it AS the base
+    model (adapter_path=None), never load it as a LoRA adapter -- the latter
+    raised LoRAAdapterNotFoundError in the train-arm E2E. A LoRA checkpoint is
+    the opposite: original base + adapter_path."""
+    inst = generate(1001, CFG)
+    be = RecordingBackend()
+    pool = StudentPool("Qwen/Qwen3-1.7B", Ledger(), work_dir=tmp_path / "ck",
+                       queries_path=None, backend=be)
+    ds = tmp_path / "d.jsonl"
+    ds.write_text(json.dumps({"expr": inst.demos[0][0], "answer": "v_a_a"}) + "\n")
+    dsid = pool.build_dataset(ds, inst)["dataset_id"]
+    ckid = pool.train(dsid, 1, 1e-5)["checkpoint_id"]
+    ck_dir = pool.checkpoints[ckid]
+    inp = tmp_path / "in.jsonl"
+    out = tmp_path / "out.jsonl"
+    inp.write_text(json.dumps({"id": "t0", "expr": inst.test[0].expr_src}) + "\n")
+
+    # no train_record.json -> treated as full: served as the base, no adapter
+    pool.infer(ckid, inp, out, None)
+    assert be.last_make == (str(ck_dir), None)
+
+    # a LoRA record -> loaded via adapter_path on top of the original base
+    (pathlib.Path(ck_dir) / "train_record.json").write_text(json.dumps({"adapter": "lora-r8"}))
+    pool.infer(ckid, inp, out, None)
+    assert be.last_make == ("Qwen/Qwen3-1.7B", str(ck_dir))
