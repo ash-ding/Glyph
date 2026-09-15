@@ -62,3 +62,25 @@ def test_sandbox_hides_everything(tmp_path):
     assert "creds_env:UNSET" in out
     assert "net:UNREACHABLE" in out
     assert "taskwrite:READONLY" in out
+
+
+def test_write_wrapper_clears_stale_agent_home(tmp_path):
+    """A reused run_dir must not inherit a prior (killed) run's CLI session
+    state: write_wrapper clears agent_home so the CLI always starts fresh.
+    Inheriting stale ~/.claude sessions crashed the CLI (exit 250) on a later
+    large turn during the train-arm E2E."""
+    run = tmp_path / "run"
+    home = run / "agent_home"
+    home.mkdir(parents=True)
+    stale = home / ".claude" / "sessions" / "4.json"
+    stale.parent.mkdir(parents=True)
+    stale.write_text("{stale}")
+
+    cli = tmp_path / "clid" / "claude"
+    cli.parent.mkdir(parents=True)
+    cli.write_text("#!/bin/sh\n")
+
+    write_wrapper(run, cli, run / "gw.sock")
+
+    assert home.is_dir()           # recreated for the bind mount
+    assert not stale.exists()      # stale CLI session state cleared

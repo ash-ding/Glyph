@@ -140,6 +140,14 @@ def write_wrapper(
     work_dir = run_dir / "work"
     task_dir = work_dir / "task"
     agent_home_dir = run_dir / "agent_home"
+    # A reused run_dir must not hand the CLI a previous run's session state.
+    # A SIGKILLed run leaves half-written ~/.claude sessions in agent_home;
+    # inheriting them crashed the CLI (exit 250) on a later large turn. Start
+    # every run from a clean agent HOME. (work/task is repopulated by
+    # workspace.py each run, so only agent_home needs clearing here.)
+    if agent_home_dir.exists():
+        import shutil
+        shutil.rmtree(agent_home_dir, ignore_errors=True)
     for d in (work_dir, task_dir, agent_home_dir):
         d.mkdir(parents=True, exist_ok=True)
 
