@@ -207,7 +207,11 @@ class RunConfig:
     tf: int = 30
     usd_line: float = 300.0
     n_val: int = 5000
-    max_turns: int = 60
+    # max_turns is the SDK's own agent-loop backstop; it must sit ABOVE
+    # T_p + T_f (the spec's binding phase caps) or it truncates the run
+    # before those caps do.
+    max_turns: int = 200
+    effort: str = "high"  # pinned for comparability (plan Global Constraints)
     out_root: str | None = None
 
 
@@ -346,6 +350,7 @@ def run(rc: RunConfig) -> dict:
         mcp_servers={"glyph": server},
         env={"ANTHROPIC_SMALL_FAST_MODEL": rc.model},
         max_turns=rc.max_turns,
+        effort=rc.effort,
     )
 
     async def _go():
