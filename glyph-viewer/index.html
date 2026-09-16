@@ -45,7 +45,6 @@ main{overflow-y:auto;padding:20px 24px}
 .filters label{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
 .filters select,.filters input{background:var(--bg);color:var(--ink);border:1px solid var(--line);
   border-radius:7px;padding:5px 7px;font-size:13px;width:100%}
-.filters .pi{width:66px}
 .count{font-size:12px;color:var(--muted);margin:4px 2px 10px}
 .run{border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px;cursor:pointer;background:var(--panel)}
 .run:hover{border-color:var(--accent)}
@@ -127,8 +126,9 @@ details.narr .t{font-size:13px;white-space:pre-wrap;margin:6px 0;padding-left:8p
         <label>preset
           <select id="f-preset"><option value="">all</option></select>
         </label>
-        <label>π ≥ <input class="pi" id="f-pimin" type="number" step="0.05" min="0" max="1" placeholder="0"></label>
-        <label>π ≤ <input class="pi" id="f-pimax" type="number" step="0.05" min="0" max="1" placeholder="1"></label>
+        <label>instance
+          <select id="f-instance"><option value="">all</option></select>
+        </label>
       </div>
       <div class="count" id="count"></div>
       <div id="runs"></div>
@@ -174,6 +174,22 @@ function findInstance(cfg){
     if(!FROZEN||!Array.isArray(FROZEN.instances))return null;
     return FROZEN.instances.find(ins=>String(ins.seed)===String(cfg.seed)&&ins.preset===cfg.preset)||null;
   }catch(e){ return null; }
+}
+// instances to offer in the Runs-view #f-instance dropdown, scoped by the
+// selected preset ("" / falsy = all 15; a specific preset = that preset's 5).
+function instanceOptionsFor(preset){
+  try{
+    if(!FROZEN||!Array.isArray(FROZEN.instances))return [];
+    const list=preset?FROZEN.instances.filter(i=>i.preset===preset):FROZEN.instances;
+    return list.slice().sort((a,b)=>(a.measured_pi??0)-(b.measured_pi??0));
+  }catch(e){ return []; }
+}
+function populateInstanceOptions(){
+  const sel=$("#f-instance"); sel.innerHTML='<option value="">all</option>';
+  for(const inst of instanceOptionsFor($("#f-preset").value)){
+    const o=el("option",null,inst.id+" · π"+num(inst.measured_pi,3)); o.value=inst.id; sel.append(o);
+  }
+  sel.value="";
 }
 function refRow(table,label,ov,ta,isRun){
   const tr=el("tr",isRun?"runrow":null);
@@ -228,10 +244,19 @@ async function boot(){
   try{ idx=await (await fetch("runs/index.json",{cache:"no-store"})).json(); }
   catch(e){ $("#detail").innerHTML=""; const d=el("div","empty"); d.innerHTML="Could not load <code>runs/index.json</code>.<br>Run <code>python tools/collect_runs.py --out viewer/runs &lt;out_root&gt;</code>, then serve the repo with <code>python -m http.server</code> and open <code>/viewer/</code>."; $("#detail").append(d); return; }
   INDEX=idx||[];
-  const presets=[...new Set(INDEX.map(r=>r.preset).filter(Boolean))].sort();
-  for(const p of presets){const o=el("option",null,p);o.value=p;$("#f-preset").append(o)}
-  for(const id of ["f-arm","f-preset","f-pimin","f-pimax"]) $("#"+id).oninput=render;
   try{ await bench; }catch(e){}
+  // preset options: the union of the benchmark's presets (so pi_low/pi_high are
+  // offered even when no runs exist yet for them, since preset now scopes the
+  // instance selector) and whatever presets actually appear in the runs index;
+  // ordered low->mid->high, with any stray non-benchmark preset appended after.
+  const ORD={pi_low:0,pi_mid:1,pi_high:2};
+  const fp=(FROZEN&&Array.isArray(FROZEN.instances))?FROZEN.instances.map(i=>i.preset):[];
+  const presets=[...new Set([...fp,...INDEX.map(r=>r.preset)].filter(Boolean))]
+    .sort((a,b)=>((ORD[a]??99)-(ORD[b]??99))||(a<b?-1:a>b?1:0));
+  for(const p of presets){const o=el("option",null,p);o.value=p;$("#f-preset").append(o)}
+  for(const id of ["f-arm","f-instance"]) $("#"+id).oninput=render;
+  $("#f-preset").oninput=()=>{ populateInstanceOptions(); render(); };
+  populateInstanceOptions();
   for(const b of $$("#viewsw .seg")) b.onclick=()=>setView(b.dataset.view);
   for(const b of $$("#bandsw .seg")) b.onclick=()=>selectBand(b.dataset.band);
   applyView();
@@ -354,11 +379,18 @@ function loadInstance(id){
   }
   m.append(section("Associated runs ("+runs.length+")",arBox,true));
 }
+// same run<->instance matching rule as associatedRuns(): explicit instance_id
+// match, else the pre-R1 seed+preset fallback via findInstance().
+function matchesInstance(r,instId){
+  if(!instId) return true;
+  if(r.instance_id) return r.instance_id===instId;
+  let m=null;
+  try{ m=findInstance({preset:r.preset,seed:r.seed}); }catch(e){ m=null; }
+  return !!(m&&m.id===instId);
+}
 function filtered(){
-  const a=$("#f-arm").value, p=$("#f-preset").value;
-  const lo=parseFloat($("#f-pimin").value), hi=parseFloat($("#f-pimax").value);
-  return INDEX.filter(r=>(!a||r.arm===a)&&(!p||r.preset===p)
-    &&(isNaN(lo)||(r.pi!=null&&r.pi>=lo))&&(isNaN(hi)||(r.pi!=null&&r.pi<=hi)));
+  const a=$("#f-arm").value, p=$("#f-preset").value, inst=$("#f-instance").value;
+  return INDEX.filter(r=>(!a||r.arm===a)&&(!p||r.preset===p)&&matchesInstance(r,inst));
 }
 function render(){
   const list=filtered(); const box=$("#runs"); box.innerHTML="";
