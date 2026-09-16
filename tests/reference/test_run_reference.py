@@ -9,7 +9,7 @@ import json
 import sys
 
 sys.path.insert(0, "tools")
-from run_reference import merge_reference, run_cheap  # noqa: E402
+from run_reference import _align_answers, merge_reference, run_cheap  # noqa: E402
 
 from glyph.data import PRESETS, generate  # noqa: E402
 from glyph.reference.subset import paired_subset  # noqa: E402
@@ -51,3 +51,11 @@ def test_run_cheap_shape():
     assert set(out.keys()) == {"skeleton", "table", "perfect"}
     for oracle in ("skeleton", "table", "perfect"):
         assert set(out[oracle].keys()) == {"overall", "by_split", "tail", "headroom"}
+
+
+def test_align_answers_ignores_preamble():
+    reply = "Here are the answers:\n1. v_a\n2. v_b\n3. v_c"
+    assert _align_answers(reply, 3) == ["v_a", "v_b", "v_c"]
+
+    reply_missing = "1. v_a\n3. v_c"
+    assert _align_answers(reply_missing, 3) == ["v_a", "", "v_c"]

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -80,15 +81,45 @@ def _evidence_text(facts: list[tuple[str, str]]) -> str:
     return "\n".join(f"{src} = {answer}" for src, answer in facts)
 
 
+_ANSWER_LINE_RE = re.compile(r"^\s*(\d+)\.\s*(.*)$")
+
+
+def _align_answers(reply: str, n: int) -> list[str]:
+    """Parse `reply` into `n` answers, aligned by leading `N.` index -- not
+    by line position.
+
+    Each non-blank line of `reply` is matched against `^\\s*(\\d+)\\.\\s*(.*)$`;
+    a match places its text at position `idx - 1` (1-based index -> 0-based
+    slot). Lines that do not match (a preamble, an acknowledgement, trailing
+    commentary, ...) are ignored rather than shifting every later answer.
+    Any index in `1..n` that is never matched is left as `""`, so a missing
+    or garbled answer scores wrong on its own item instead of misaligning
+    the rest.
+    """
+    out = [""] * n
+    for line in reply.splitlines():
+        m = _ANSWER_LINE_RE.match(line)
+        if not m:
+            continue
+        idx = int(m.group(1))
+        if 1 <= idx <= n:
+            out[idx - 1] = m.group(2).strip()
+    return out
+
+
 def _frontier_answer_fn(model: str | None = None):
     """[API] Build a real-frontier `answer_fn` for `run_a0prime`.
 
     Sends `evidence` plus a numbered list of expressions to the teacher
-    model (via `glyph.vertex.chat`) and parses one answer per line back out,
-    in order. Imports `glyph.vertex` lazily so this module -- and the CPU
-    unit test -- import cleanly with no Vertex credentials configured.
-    Never called except from the CLI's `a0prime` branch, which itself is
-    only entered when `a0prime` is explicitly requested via `--only`.
+    model (via `glyph.vertex.chat`), requiring each answer on its own line
+    prefixed with its 1-based index (`N. <answer>`), and aligns the reply
+    back to `expr_srcs` by that index via `_align_answers` -- not by line
+    position, so a preamble or acknowledgement line from the model cannot
+    silently shift every answer by one. Imports `glyph.vertex` lazily so
+    this module -- and the CPU unit test -- import cleanly with no Vertex
+    credentials configured. Never called except from the CLI's `a0prime`
+    branch, which itself is only entered when `a0prime` is explicitly
+    requested via `--only`.
     """
     from glyph import vertex
 
@@ -97,12 +128,13 @@ def _frontier_answer_fn(model: str | None = None):
         prompt = (
             "You are given evidence about a hidden symbolic language, then a "
             "numbered list of expressions in that language. Answer each one "
-            "on its own line, in order, with nothing but the answer.\n\n"
+            "on its own line, prefixed with its number exactly like "
+            "\"1. <answer>\", with nothing else on that line and no other "
+            "text before, between, or after the answers.\n\n"
             f"Evidence:\n{evidence}\n\nExpressions:\n{numbered}"
         )
         text = vertex.chat(prompt, model=model or vertex.TEACHER)
-        lines = [ln.strip() for ln in text.strip().splitlines() if ln.strip()]
-        return lines[: len(expr_srcs)]
+        return _align_answers(text, len(expr_srcs))
 
     return answer_fn
 
