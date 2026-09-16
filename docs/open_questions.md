@@ -599,6 +599,29 @@ Whether such seeds are a valid low-difficulty region or a degenerate corner to
 exclude is open — `build_report` already records `instance.uses_binary_tables`
 per run, so the population can be filtered post hoc rather than at generation.
 
+### `final_from_student` — keep, delete, or replace?
+
+Spec §10.3 defines it as "the fraction of committed answers identical to any
+`student_infer` output for the same id," but `report.py` only *reads*
+`session.final_from_student` and nothing ever sets it — it is always `null`
+(introduced unwired in commit `2fba9aa`, the report task). The problem is deeper
+than a missing assignment: the definition is **brittle**. "Identical" catches
+only *verbatim* reuse, so an agent that leans on the student but must clean or
+reformat its output reads as ~0 — and the pilot's student produced **95 of 100
+truncated rows**, which cannot be committed as-is. Attribution is also fuzzy in
+principle: the agent manipulates files freely (Bash/Read/Write), so "which source
+produced answer X" is not recoverable from a file diff. So the flag conflates
+"did not use the student" with "used the student but had to fix its output."
+
+What Q2 actually asks — does putting knowledge in the weights pay, and does the
+agent delegate when it should — is better served by (a) scoring the trained
+checkpoint **directly on the held-out test** as a covariate (student-alone
+accuracy: a counterfactual, independent of what the agent committed), and (b)
+recording whether the committed answers agree more, per id, with the student's
+output or the frontier's. Decide later whether to wire `final_from_student` as
+specified, drop it, or replace it with (a)+(b). Deferred.
+
+
 ---
 
 ## Order
