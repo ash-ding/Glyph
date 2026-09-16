@@ -9,7 +9,8 @@ import json
 import sys
 
 sys.path.insert(0, "tools")
-from run_reference import _align_answers, merge_reference, run_cheap  # noqa: E402
+from run_reference import (_align_answers, _run_a0prime_scan,  # noqa: E402
+                            merge_reference, run_cheap)
 
 from glyph.data import PRESETS, generate  # noqa: E402
 from glyph.reference.subset import paired_subset  # noqa: E402
@@ -59,3 +60,35 @@ def test_align_answers_ignores_preamble():
 
     reply_missing = "1. v_a\n3. v_c"
     assert _align_answers(reply_missing, 3) == ["v_a", "", "v_c"]
+
+
+def test_a0prime_scan_evidence_is_cumulative():
+    """B1: evidence at a later frac must include every earlier frac's facts.
+
+    `buy_evidence` only returns the facts bought *in that call*, but the
+    scan reuses the same `inst` across fracs -- so a naive per-frac evidence
+    block would silently drop everything revealed at earlier fracs. This
+    records the `evidence` string `_run_a0prime_scan` actually hands to
+    `answer_fn` at each frac and asserts each later frac's evidence lines
+    are a strict superset of the previous frac's.
+    """
+    inst = generate(1001, PRESETS["smoke"])
+    items = paired_subset(inst, 20)
+
+    seen_evidence: list[str] = []
+
+    def recording_fn(evidence: str, expr_srcs: list[str]) -> list[str]:
+        seen_evidence.append(evidence)
+        return ["" for _ in expr_srcs]
+
+    fracs = [0.1, 0.4, 0.8]
+    _run_a0prime_scan(inst, items, recording_fn, fracs)
+
+    assert len(seen_evidence) == len(fracs)
+    lines_by_frac = [set(e.splitlines()) for e in seen_evidence]
+
+    assert lines_by_frac[0], "first frac should have bought some evidence"
+    for earlier, later in zip(lines_by_frac, lines_by_frac[1:]):
+        assert earlier <= later, "a later frac must retain every earlier fact"
+    assert len(lines_by_frac[-1]) > len(lines_by_frac[0]), (
+        "coverage should strictly grow across the scan")

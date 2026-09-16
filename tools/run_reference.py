@@ -29,7 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from glyph.data import PRESETS, generate  # noqa: E402
-from glyph.reference.a0prime import buy_evidence, run_a0prime  # noqa: E402
+from glyph.reference.a0prime import AnswerFn, buy_evidence, run_a0prime  # noqa: E402
 from glyph.reference.frozen import load_frozen  # noqa: E402
 from glyph.reference.subset import ceilings_on, paired_subset  # noqa: E402
 from glyph.reference.weights_ceiling import score_ceiling, train_student  # noqa: E402
@@ -139,6 +139,34 @@ def _frontier_answer_fn(model: str | None = None):
     return answer_fn
 
 
+def _run_a0prime_scan(inst, items, answer_fn: AnswerFn,
+                      seen_fracs: list[float]) -> dict:
+    """Run the a0prime seen-fraction scan on `inst`, cumulative evidence.
+
+    `buy_evidence(inst, entries_target)` returns only the facts purchased in
+    *that* call (its local `out`), not the facts bought so far -- but every
+    frac in the scan reuses the same `inst`, so `inst.query_log` (and thus
+    scoring, via `run_a0prime`/`inst.ceilings`) already accumulates correctly
+    on its own. Only the evidence text needs help: each frac's `facts` are
+    merged into a running `cumulative_facts` list, so the evidence handed to
+    `run_a0prime` at a given frac is the union of everything bought through
+    that frac and every frac before it -- a higher coverage point strictly
+    includes the evidence of every lower one.
+
+    Returns `{str(frac): run_a0prime(...) result}`, same shape the caller
+    previously built inline.
+    """
+    by_frac: dict = {}
+    cumulative_facts: list[tuple[str, str]] = []
+    for frac in seen_fracs:
+        entries_target = max(1, round(frac * inst.cfg.n_values))
+        facts, _revealed = buy_evidence(inst, entries_target)
+        cumulative_facts.extend(facts)
+        evidence = _evidence_text(cumulative_facts)
+        by_frac[str(frac)] = run_a0prime(inst, items, evidence, answer_fn)
+    return by_frac
+
+
 def _parse_only(only: str) -> list[str]:
     oracles = [o.strip() for o in only.split(",") if o.strip()]
     unknown = [o for o in oracles if o not in ALL_ORACLES]
@@ -205,12 +233,7 @@ def main(argv=None) -> int:
         if "a0prime" in oracles:
             # [API] only entered when explicitly requested via --only.
             answer_fn = _frontier_answer_fn()
-            by_frac = {}
-            for frac in args.seen_frac:
-                entries_target = max(1, round(frac * inst.cfg.n_values))
-                facts, _revealed = buy_evidence(inst, entries_target)
-                evidence = _evidence_text(facts)
-                by_frac[str(frac)] = run_a0prime(inst, items, evidence, answer_fn)
+            by_frac = _run_a0prime_scan(inst, items, answer_fn, args.seen_frac)
             merge_reference(args.out, instance_id, "a0prime", by_frac)
             print(f"{instance_id}: a0prime done for seen_frac={args.seen_frac}")
 
