@@ -32,7 +32,29 @@ tools). Extended-thinking *text* is redacted by the CLI, so only a per-turn
    (A plain `file://` open will not work — the viewer fetches JSON, which
    browsers block over `file://`. Any static server is fine.)
 
-## Running remotely, viewing locally
+## Running remotely, viewing locally (recommended)
+
+When runs happen on a remote box (GPU/sandbox) and you read them on your laptop,
+you do **not** need a local checkout or `scp`. Serve on the remote and forward a
+port:
+
+```bash
+# on the remote host — one command: collect + serve (re-collects on refresh)
+python tools/serve_viewer.py --port 8000 /tmp/glyph_runs      # or your out_root(s)
+
+# on your laptop — forward the port, then open the URL
+ssh -N -L 8000:localhost:8000 <remote>        # e.g. lumen1
+#   open http://localhost:8000/viewer/
+```
+
+`serve_viewer.py` binds to `127.0.0.1` only, so it is reachable solely through
+the tunnel. New runs appear when you refresh the page (each index request
+re-collects).
+
+### Alternative: copy the data down
+
+If you prefer to keep the data locally (offline, no live tunnel):
+
 
 Runs happen on the box with the GPU/sandbox; you read them on your laptop:
 

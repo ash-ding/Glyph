@@ -128,8 +128,17 @@ python -m http.server 8000                                       # from the repo
 
 The viewer is a gallery filterable by arm and π; pick a run to see its config,
 prompts, and transcript (practice→final, tool inputs/results, errors, reasoning
-collapsed by default). Running remotely? `scp -r` the `viewer/runs` folder to
-your laptop and serve it there. See [`viewer/README.md`](viewer/README.md).
+collapsed by default).
+
+**Running remotely?** Serve on the box and forward a port — no local checkout,
+no `scp`:
+
+```bash
+python tools/serve_viewer.py --port 8000 <out_root>   # on the remote: collect + serve
+ssh -N -L 8000:localhost:8000 <remote>                # on your laptop; open http://localhost:8000/viewer/
+```
+
+See [`viewer/README.md`](viewer/README.md).
 
 ## Layout
 
