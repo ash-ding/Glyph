@@ -1,0 +1,482 @@
+{
+  "low_1": {
+    "skeleton": {
+      "overall": 0.034,
+      "by_split": {
+        "iid": 0.036923076923076927,
+        "comp": 0.043478260869565216,
+        "depth": 0.0
+      },
+      "tail": 0.0,
+      "headroom": 0.0
+    },
+    "table": {
+      "overall": 0.712,
+      "by_split": {
+        "iid": 0.7046153846153846,
+        "comp": 0.7565217391304347,
+        "depth": 0.6666666666666666
+      },
+      "tail": 0.7204968944099379,
+      "headroom": 0.7018633540372671
+    },
+    "perfect": {
+      "overall": 1.0,
+      "by_split": {
+        "comp": 1.0,
+        "depth": 1.0,
+        "iid": 1.0
+      },
+      "tail": 1.0,
+      "headroom": 1.0
+    }
+  },
+  "low_2": {
+    "skeleton": {
+      "overall": 0.016,
+      "by_split": {
+        "iid": 0.009230769230769232,
+        "comp": 0.043478260869565216,
+        "depth": 0.0
+      },
+      "tail": 0.0,
+      "headroom": 0.0
+    },
+    "table": {
+      "overall": 0.65,
+      "by_split": {
+        "iid": 0.6984615384615385,
+        "comp": 0.5304347826086957,
+        "depth": 0.6166666666666667
+      },
+      "tail": 0.6605691056910569,
+      "headroom": 0.6443089430894309
+    },
+    "perfect": {
+      "overall": 1.0,
+      "by_split": {
+        "comp": 1.0,
+        "depth": 1.0,
+        "iid": 1.0
+      },
+      "tail": 1.0,
+      "headroom": 1.0
+    }
+  },
+  "low_3": {
+    "skeleton": {
+      "overall": 0.036,
+      "by_split": {
+        "iid": 0.03076923076923077,
+        "comp": 0.06086956521739131,
+        "depth": 0.016666666666666666
+      },
+      "tail": 0.0,
+      "headroom": 0.0
+    },
+    "table": {
+      "overall": 0.564,
+      "by_split": {
+        "iid": 0.5784615384615385,
+        "comp": 0.45217391304347826,
+        "depth": 0.7
+      },
+      "tail": 0.5663900414937759,
+      "headroom": 0.5477178423236514
+    },
+    "perfect": {
+      "overall": 1.0,
+      "by_split": {
+        "comp": 1.0,
+        "depth": 1.0,
+        "iid": 1.0
+      },
+      "tail": 1.0,
+      "headroom": 1.0
+    }
+  },
+  "low_4": {
+    "skeleton": {
+      "overall": 0.062,
+      "by_split": {
+        "iid": 0.052307692307692305,
+        "comp": 0.11304347826086956,
+        "depth": 0.016666666666666666
+      },
+      "tail": 0.0,
+      "headroom": 0.0
+    },
+    "table": {
+      "overall": 0.576,
+      "by_split": {
+        "iid": 0.5292307692307693,
+        "comp": 0.7217391304347827,
+        "depth": 0.55
+      },
+      "tail": 0.5948827292110874,
+      "headroom": 0.5479744136460555
+    },
+    "perfect": {
+      "overall": 1.0,
+      "by_split": {
+        "comp": 1.0,
+        "depth": 1.0,
+        "iid": 1.0
+      },
+      "tail": 1.0,
+      "headroom": 1.0
+    }
+  },
+  "low_5": {
+    "skeleton": {
+      "overall": 0.044,
+      "by_split": {
+        "iid": 0.046153846153846156,
+        "comp": 0.05217391304347826,
+        "depth": 0.016666666666666666
+      },
+      "tail": 0.0,
+      "headroom": 0.0
+    },
+    "table": {
+      "overall": 0.556,
+      "by_split": {
+        "iid": 0.52,
+        "comp": 0.6695652173913044,
+        "depth": 0.5333333333333333
+      },
+      "tail": 0.5753138075313807,
+      "headroom": 0.5355648535564854
+    },
+    "perfect": {
+      "overall": 1.0,
+      "by_split": {
+        "comp": 1.0,
+        "depth": 1.0,
+        "iid": 1.0
+      },
+      "tail": 1.0,
+      "headroom": 1.0
+    }
+  },
+  "mid_1": {
+    "skeleton": {
+      "overall": 0.266,
+      "by_split": {
+        "iid": 0.28615384615384615,
+        "comp": 0.30434782608695654,
+        "depth": 0.08333333333333333
+      },
+      "tail": 0.0,
+      "headroom": 0.0
+    },
+    "table": {
+      "overall": 0.338,
+      "by_split": {
+        "iid": 0.37538461538461537,
+        "comp": 0.3130434782608696,
+        "depth": 0.18333333333333332
+      },
+      "tail": 0.3896457765667575,
+      "headroom": 0.09809264305177114
+    },
+    "perfect": {
+      "overall": 1.0,
+      "by_split": {
+        "comp": 1.0,
+        "depth": 1.0,
+        "iid": 1.0
+      },
+      "tail": 1.0,
+      "headroom": 1.0
+    }
+  },
+  "mid_2": {
+    "skeleton": {
+      "overall": 0.294,
+      "by_split": {
+        "iid": 0.3046153846153846,
+        "comp": 0.3130434782608696,
+        "depth": 0.2
+      },
+      "tail": 0.0,
+      "headroom": 0.0
+    },
+    "table": {
+      "overall": 0.366,
+      "by_split": {
+        "iid": 0.35384615384615387,
+        "comp": 0.4434782608695652,
+        "depth": 0.2833333333333333
+      },
+      "tail": 0.43909348441926344,
+      "headroom": 0.10198300283286121
+    },
+    "perfect": {
+      "overall": 1.0,
+      "by_split": {
+        "comp": 1.0,
+        "depth": 1.0,
+        "iid": 1.0
+      },
+      "tail": 1.0,
+      "headroom": 1.0
+    }
+  },
+  "mid_3": {
+    "skeleton": {
+      "overall": 0.202,
+      "by_split": {
+        "iid": 0.2276923076923077,
+        "comp": 0.1565217391304348,
+        "depth": 0.15
+      },
+      "tail": 0.03389830508474576,
+      "headroom": 0.0
+    },
+    "table": {
+      "overall": 0.112,
+      "by_split": {
+        "iid": 0.13538461538461538,
+        "comp": 0.10434782608695652,
+        "depth": 0.0
+      },
+      "tail": 0.007263922518159807,
+      "headroom": -0.11278195488721805
+    },
+    "perfect": {
+      "overall": 1.0,
+      "by_split": {
+        "comp": 1.0,
+        "depth": 1.0,
+        "iid": 1.0
+      },
+      "tail": 1.0,
+      "headroom": 1.0
+    }
+  },
+  "mid_4": {
+    "skeleton": {
+      "overall": 0.248,
+      "by_split": {
+        "iid": 0.24,
+        "comp": 0.3826086956521739,
+        "depth": 0.03333333333333333
+      },
+      "tail": 0.0,
+      "headroom": 0.0
+    },
+    "table": {
+      "overall": 0.048,
+      "by_split": {
+        "iid": 0.046153846153846156,
+        "comp": 0.05217391304347826,
+        "depth": 0.05
+      },
+      "tail": 0.02925531914893617,
+      "headroom": -0.26595744680851063
+    },
+    "perfect": {
+      "overall": 1.0,
+      "by_split": {
+        "comp": 1.0,
+        "depth": 1.0,
+        "iid": 1.0
+      },
+      "tail": 1.0,
+      "headroom": 1.0
+    }
+  },
+  "mid_5": {
+    "skeleton": {
+      "overall": 0.352,
+      "by_split": {
+        "iid": 0.31384615384615383,
+        "comp": 0.4608695652173913,
+        "depth": 0.35
+      },
+      "tail": 0.047058823529411764,
+      "headroom": 0.0
+    },
+    "table": {
+      "overall": 0.11,
+      "by_split": {
+        "iid": 0.11076923076923077,
+        "comp": 0.1565217391304348,
+        "depth": 0.016666666666666666
+      },
+      "tail": 0.0058823529411764705,
+      "headroom": -0.3734567901234568
+    },
+    "perfect": {
+      "overall": 1.0,
+      "by_split": {
+        "comp": 1.0,
+        "depth": 1.0,
+        "iid": 1.0
+      },
+      "tail": 1.0,
+      "headroom": 1.0
+    }
+  },
+  "high_1": {
+    "skeleton": {
+      "overall": 0.656,
+      "by_split": {
+        "iid": 0.6646153846153846,
+        "comp": 0.7304347826086957,
+        "depth": 0.4666666666666667
+      },
+      "tail": 0.011494252873563218,
+      "headroom": 0.0
+    },
+    "table": {
+      "overall": 0.146,
+      "by_split": {
+        "iid": 0.1723076923076923,
+        "comp": 0.06956521739130435,
+        "depth": 0.15
+      },
+      "tail": 0.06896551724137931,
+      "headroom": -1.482558139534884
+    },
+    "perfect": {
+      "overall": 1.0,
+      "by_split": {
+        "comp": 1.0,
+        "depth": 1.0,
+        "iid": 1.0
+      },
+      "tail": 1.0,
+      "headroom": 1.0
+    }
+  },
+  "high_2": {
+    "skeleton": {
+      "overall": 0.66,
+      "by_split": {
+        "iid": 0.6738461538461539,
+        "comp": 0.782608695652174,
+        "depth": 0.35
+      },
+      "tail": 0.09574468085106383,
+      "headroom": 0.0
+    },
+    "table": {
+      "overall": 0.132,
+      "by_split": {
+        "iid": 0.14153846153846153,
+        "comp": 0.13043478260869565,
+        "depth": 0.08333333333333333
+      },
+      "tail": 0.06914893617021277,
+      "headroom": -1.5529411764705885
+    },
+    "perfect": {
+      "overall": 1.0,
+      "by_split": {
+        "comp": 1.0,
+        "depth": 1.0,
+        "iid": 1.0
+      },
+      "tail": 1.0,
+      "headroom": 1.0
+    }
+  },
+  "high_3": {
+    "skeleton": {
+      "overall": 0.756,
+      "by_split": {
+        "iid": 0.76,
+        "comp": 0.7043478260869566,
+        "depth": 0.8333333333333334
+      },
+      "tail": 0.0,
+      "headroom": 0.0
+    },
+    "table": {
+      "overall": 0.07,
+      "by_split": {
+        "iid": 0.08923076923076922,
+        "comp": 0.017391304347826087,
+        "depth": 0.06666666666666667
+      },
+      "tail": 0.01639344262295082,
+      "headroom": -2.8114754098360653
+    },
+    "perfect": {
+      "overall": 1.0,
+      "by_split": {
+        "comp": 1.0,
+        "depth": 1.0,
+        "iid": 1.0
+      },
+      "tail": 1.0,
+      "headroom": 1.0
+    }
+  },
+  "high_4": {
+    "skeleton": {
+      "overall": 0.712,
+      "by_split": {
+        "iid": 0.72,
+        "comp": 0.7565217391304347,
+        "depth": 0.5833333333333334
+      },
+      "tail": 0.0,
+      "headroom": 0.0
+    },
+    "table": {
+      "overall": 0.078,
+      "by_split": {
+        "iid": 0.06461538461538462,
+        "comp": 0.10434782608695652,
+        "depth": 0.1
+      },
+      "tail": 0.013888888888888888,
+      "headroom": -2.201388888888889
+    },
+    "perfect": {
+      "overall": 1.0,
+      "by_split": {
+        "comp": 1.0,
+        "depth": 1.0,
+        "iid": 1.0
+      },
+      "tail": 1.0,
+      "headroom": 1.0
+    }
+  },
+  "high_5": {
+    "skeleton": {
+      "overall": 0.776,
+      "by_split": {
+        "iid": 0.7446153846153846,
+        "comp": 0.8347826086956521,
+        "depth": 0.8333333333333334
+      },
+      "tail": 0.15151515151515152,
+      "headroom": 0.0
+    },
+    "table": {
+      "overall": 0.08,
+      "by_split": {
+        "iid": 0.06769230769230769,
+        "comp": 0.10434782608695652,
+        "depth": 0.1
+      },
+      "tail": 0.07575757575757576,
+      "headroom": -3.1071428571428577
+    },
+    "perfect": {
+      "overall": 1.0,
+      "by_split": {
+        "comp": 1.0,
+        "depth": 1.0,
+        "iid": 1.0
+      },
+      "tail": 1.0,
+      "headroom": 1.0
+    }
+  }
+}

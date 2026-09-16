@@ -199,6 +199,7 @@ class RunConfig:
     arm: str
     preset: str = "pi_mid"
     instance_seed: int = 1001
+    instance_id: str | None = None
     model: str = "claude-opus-4-8"
     student_model: str = "Qwen/Qwen3-1.7B"
     q_cap: int = 1000
@@ -253,6 +254,36 @@ def _make_student(rc, ledger, paths):
     )
 
 
+def resolve_run_instance(rc: RunConfig):
+    """Resolve which instance a run uses. PURE and OFFLINE -- never calls an agent/API.
+
+    If `rc.instance_id` is set, it is resolved from the frozen manifest (via
+    `glyph.reference.frozen.load_instance`, which fingerprint-verifies the regenerated
+    instance) and overrides `rc.preset`/`rc.instance_seed`. Otherwise the instance is
+    generated straight from `rc.preset`/`rc.instance_seed` (honoring `rc.n_val`, as
+    `run()` did before this existed).
+
+    Returns (inst, preset, seed, instance_id) -- `instance_id` is None when
+    `rc.instance_id` was not set, so callers can tell frozen runs from ad hoc ones.
+    """
+    if rc.instance_id:
+        from glyph.reference.frozen import frozen_entry, load_instance
+
+        e = frozen_entry(rc.instance_id)
+        inst = load_instance(rc.instance_id, entry=e)
+        return inst, e["preset"], e["seed"], rc.instance_id
+
+    from glyph.data import PRESETS, generate
+
+    cfg = PRESETS[rc.preset]
+    if rc.n_val is not None:
+        try:
+            cfg = cfg.__class__(**{**cfg.__dict__, "n_val": rc.n_val})
+        except Exception:
+            pass
+    return generate(rc.instance_seed, cfg), rc.preset, rc.instance_seed, None
+
+
 def run(rc: RunConfig) -> dict:
     """Full protocol-v2 run over the real SDK. Returns the ScoreReport dict.
 
@@ -263,7 +294,6 @@ def run(rc: RunConfig) -> dict:
     import asyncio
     import json
 
-    from glyph.data import PRESETS, generate
     from glyph.v2 import sandbox, workspace
     from glyph.v2.gateway import Gateway
     from glyph.v2.ledger import Ledger
@@ -275,18 +305,15 @@ def run(rc: RunConfig) -> dict:
 
     from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
 
-    # 1. instance
-    cfg = PRESETS[rc.preset]
-    if rc.n_val is not None:
-        try:
-            cfg = cfg.__class__(**{**cfg.__dict__, "n_val": rc.n_val})
-        except Exception:
-            pass
-    inst = generate(rc.instance_seed, cfg)
+    # 1. instance (frozen-by-id if rc.instance_id is set, else preset/seed as before)
+    inst, preset, seed, instance_id = resolve_run_instance(rc)
 
     # 2. run dir + workspace
     out_root = Path(rc.out_root) if rc.out_root else Path.cwd() / "runs"
-    run_dir = out_root / f"{rc.preset}_{rc.arm}_{rc.instance_seed}"
+    if instance_id:
+        run_dir = out_root / f"{instance_id}_{rc.arm}"
+    else:
+        run_dir = out_root / f"{preset}_{rc.arm}_{seed}"
     run_dir.mkdir(parents=True, exist_ok=True)
     paths, val_id_of, test_id_of = workspace.build_workspace(inst, run_dir)
 
@@ -299,7 +326,7 @@ def run(rc: RunConfig) -> dict:
     )
     session.val_id_of = val_id_of
     session.test_id_of = test_id_of
-    session.preset = rc.preset
+    session.preset = preset
     if rc.arm == "train":
         session.student = _make_student(rc, ledger, paths)
 
@@ -386,7 +413,8 @@ def run(rc: RunConfig) -> dict:
             run_id="%s_%s" % (run_dir.name, _t.strftime("%Y%m%d-%H%M%S")),
             created=_t.strftime("%Y-%m-%dT%H:%M:%SZ", _t.gmtime()),
             config={
-                "arm": rc.arm, "preset": rc.preset, "seed": rc.instance_seed,
+                "arm": rc.arm, "preset": preset, "seed": seed,
+                "instance_id": instance_id,
                 "model": rc.model, "q_cap": rc.q_cap, "submit_cap": rc.submit_cap,
                 "tp": rc.tp, "tf": rc.tf, "n_val": rc.n_val, "usd_line": rc.usd_line,
                 "max_turns": rc.max_turns, "effort": rc.effort,
