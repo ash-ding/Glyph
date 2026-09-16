@@ -65,6 +65,10 @@ def collect(roots, out_dir):
             summ = dict(rj.get("summary", {}))
             summ["id"] = rid
             summ["created"] = rj.get("created")
+            # carry the frozen-instance id into the index row (from summary, falling
+            # back to config for older run.json shapes); null when the run used no
+            # frozen instance, so the viewer can associate runs by id.
+            summ["instance_id"] = summ.get("instance_id") or (rj.get("config") or {}).get("instance_id")
             index.append(summ)
     index.sort(key=lambda r: (r.get("created") or ""), reverse=True)
     (out_dir / "index.json").write_text(json.dumps(index, indent=2))

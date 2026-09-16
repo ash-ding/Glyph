@@ -36,6 +36,11 @@ button.ghost:hover{background:var(--panel2)}
 @media(max-width:820px){.layout{grid-template-columns:1fr;height:auto}}
 aside{border-right:1px solid var(--line);background:var(--panel);overflow-y:auto;padding:12px}
 main{overflow-y:auto;padding:20px 24px}
+.viewsw{display:flex;gap:6px;margin-bottom:12px}
+.viewsw .seg{flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--ink);
+  border-radius:7px;padding:6px 8px;cursor:pointer;font-size:12px;font-weight:600}
+.viewsw .seg:hover{border-color:var(--accent)}
+.viewsw .seg.active{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
 .filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
 .filters label{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
 .filters select,.filters input{background:var(--bg);color:var(--ink);border:1px solid var(--line);
@@ -110,25 +115,42 @@ details.narr .t{font-size:13px;white-space:pre-wrap;margin:6px 0;padding-left:8p
 </header>
 <div class="layout">
   <aside>
-    <div class="filters">
-      <label>arm
-        <select id="f-arm"><option value="">all</option><option>no_train</option><option>train</option></select>
-      </label>
-      <label>preset
-        <select id="f-preset"><option value="">all</option></select>
-      </label>
-      <label>π ≥ <input class="pi" id="f-pimin" type="number" step="0.05" min="0" max="1" placeholder="0"></label>
-      <label>π ≤ <input class="pi" id="f-pimax" type="number" step="0.05" min="0" max="1" placeholder="1"></label>
+    <div class="viewsw" id="viewsw">
+      <button class="seg" data-view="runs">Runs</button>
+      <button class="seg" data-view="instances">Instances</button>
     </div>
-    <div class="count" id="count"></div>
-    <div id="runs"></div>
+    <div id="runs-block">
+      <div class="filters">
+        <label>arm
+          <select id="f-arm"><option value="">all</option><option>no_train</option><option>train</option></select>
+        </label>
+        <label>preset
+          <select id="f-preset"><option value="">all</option></select>
+        </label>
+        <label>π ≥ <input class="pi" id="f-pimin" type="number" step="0.05" min="0" max="1" placeholder="0"></label>
+        <label>π ≤ <input class="pi" id="f-pimax" type="number" step="0.05" min="0" max="1" placeholder="1"></label>
+      </div>
+      <div class="count" id="count"></div>
+      <div id="runs"></div>
+    </div>
+    <div id="instances-block" style="display:none">
+      <div class="viewsw" id="bandsw">
+        <button class="seg" data-band="low">low</button>
+        <button class="seg" data-band="mid">mid</button>
+        <button class="seg" data-band="high">high</button>
+      </div>
+      <div class="count" id="inst-count"></div>
+      <div id="instances"></div>
+    </div>
   </aside>
   <main id="detail"><div class="empty">Loading runs…</div></main>
 </div>
 <script>
-const $=s=>document.querySelector(s), el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)], el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
 const GLYPH_TOOLS=new Set(["query","submit","check_answers","finish_practice","build_dataset","train","student_infer","final_answer"]);
 let INDEX=[], CURRENT=null, FROZEN=null, CEILINGS=null;
+let VIEW="runs", BAND="low", CURRENT_INSTANCE=null;
+try{ const v=localStorage.getItem("glyph-view"); if(v==="instances"||v==="runs") VIEW=v; }catch(e){}
 
 // theme toggle
 (function(){ let t=null; try{t=localStorage.getItem("glyph-theme")}catch(e){} if(t)document.documentElement.setAttribute("data-theme",t);
@@ -158,11 +180,11 @@ function refRow(table,label,ov,ta,isRun){
   tr.append(el("td",null,label),el("td",null,num(ov,3)),el("td",null,num(ta,3)));
   table.append(tr);
 }
-function buildReference(rj){
-  const cfg=rj.config||{}, s=rj.summary||{}, rep=rj.report||{};
+// shared battery-rendering core: used both for a run's own reference card
+// (runOverall/runTail from that run) and for the instance-catalog detail view
+// (runOverall/runTail=null, so the "this run" row shows "—" — no run selected).
+function referenceCard(inst,ceil,runOverall,runTail){
   const card=el("div","card refcard");
-  let inst=null;
-  try{ inst=findInstance(cfg); }catch(e){ inst=null; }
   if(!inst){
     card.append(el("div","k","reference"));
     card.append(el("div","v","not a frozen instance"));
@@ -172,9 +194,7 @@ function buildReference(rj){
   card.append(el("div","facts","measured π "+num(inst.measured_pi,3)+"  ·  binary tables "+(inst.uses_binary_tables?"yes":"no")));
   const table=el("table","reftable");
   const hd=el("tr"); hd.append(el("th",null,""),el("th",null,"overall"),el("th",null,"tail")); table.append(hd);
-  refRow(table,"this run",s.overall,rep.tail,true);
-  let ceil=null;
-  try{ ceil=CEILINGS&&CEILINGS[inst.id]; }catch(e){ ceil=null; }
+  refRow(table,"this run",runOverall,runTail,true);
   if(ceil){
     for(const k of ["skeleton","table","perfect"]){
       const v=ceil[k]; if(v) refRow(table,k,v.overall,v.tail,false);
@@ -192,6 +212,15 @@ function buildReference(rj){
   if(!ceil) card.append(el("div","hint","no reference ceilings for this instance"));
   return card;
 }
+function buildReference(rj){
+  const cfg=rj.config||{}, s=rj.summary||{}, rep=rj.report||{};
+  let inst=null;
+  try{ inst=findInstance(cfg); }catch(e){ inst=null; }
+  if(!inst) return referenceCard(null,null,null,null);
+  let ceil=null;
+  try{ ceil=CEILINGS&&CEILINGS[inst.id]; }catch(e){ ceil=null; }
+  return referenceCard(inst,ceil,s.overall,rep.tail);
+}
 
 async function boot(){
   let idx;
@@ -203,8 +232,127 @@ async function boot(){
   for(const p of presets){const o=el("option",null,p);o.value=p;$("#f-preset").append(o)}
   for(const id of ["f-arm","f-preset","f-pimin","f-pimax"]) $("#"+id).oninput=render;
   try{ await bench; }catch(e){}
-  render();
-  if(INDEX.length) load(filtered()[0]?.id||INDEX[0].id);
+  for(const b of $$("#viewsw .seg")) b.onclick=()=>setView(b.dataset.view);
+  for(const b of $$("#bandsw .seg")) b.onclick=()=>selectBand(b.dataset.band);
+  applyView();
+}
+// view switch: "runs" (default, existing behavior) or "instances" (band -> id catalog).
+// Persisted in localStorage so a reload keeps the last-picked view.
+function applyView(preferredRunId){
+  for(const b of $$("#viewsw .seg")) b.classList.toggle("active",b.dataset.view===VIEW);
+  $("#runs-block").style.display=VIEW==="runs"?"":"none";
+  $("#instances-block").style.display=VIEW==="instances"?"":"none";
+  if(VIEW==="runs"){
+    render();
+    const id=preferredRunId||CURRENT||(filtered()[0]&&filtered()[0].id)||(INDEX[0]&&INDEX[0].id);
+    if(id) load(id); else $("#detail").innerHTML='<div class="empty">No runs.</div>';
+  } else {
+    selectBand(BAND);
+  }
+}
+function setView(v){
+  VIEW=(v==="instances")?"instances":"runs";
+  try{localStorage.setItem("glyph-view",VIEW)}catch(e){}
+  applyView();
+}
+// switches to the Runs view and opens `id` (used by an instance's associated-runs list)
+function goToRun(id){
+  VIEW="runs";
+  try{localStorage.setItem("glyph-view","runs")}catch(e){}
+  applyView(id);
+}
+function instancesForBand(band){
+  try{
+    if(!FROZEN||!Array.isArray(FROZEN.instances))return [];
+    return FROZEN.instances.filter(i=>i.band===band)
+      .slice().sort((a,b)=>(a.measured_pi??0)-(b.measured_pi??0));
+  }catch(e){ return []; }
+}
+function selectBand(band){
+  BAND=band;
+  for(const b of $$("#bandsw .seg")) b.classList.toggle("active",b.dataset.band===band);
+  renderInstances();
+  if(!FROZEN||!Array.isArray(FROZEN.instances)){
+    CURRENT_INSTANCE=null;
+    $("#detail").innerHTML='<div class="empty">Benchmark data not available.</div>';
+    return;
+  }
+  const list=instancesForBand(band);
+  if(CURRENT_INSTANCE&&list.some(i=>i.id===CURRENT_INSTANCE)){
+    loadInstance(CURRENT_INSTANCE);
+  } else if(list.length){
+    loadInstance(list[0].id);
+  } else {
+    CURRENT_INSTANCE=null;
+    $("#detail").innerHTML='<div class="empty">No instances in this band.</div>';
+  }
+}
+function renderInstances(){
+  const box=$("#instances"); box.innerHTML="";
+  if(!FROZEN||!Array.isArray(FROZEN.instances)){
+    $("#inst-count").textContent="";
+    box.append(el("div","empty","Benchmark data not available."));
+    return;
+  }
+  const list=instancesForBand(BAND);
+  $("#inst-count").textContent=list.length+" instance"+(list.length===1?"":"s")+" in "+BAND;
+  if(!list.length){ box.append(el("div","empty","No instances in this band.")); return; }
+  for(const inst of list){
+    const card=el("div","run"+(CURRENT_INSTANCE===inst.id?" active":"")); card.dataset.id=inst.id;
+    const top=el("div","top");
+    top.append(el("span","chip",inst.id));
+    top.append(el("span","chip pi","π "+num(inst.measured_pi,3)));
+    if(inst.uses_binary_tables) top.append(el("span","chip","tables"));
+    card.append(top);
+    card.onclick=()=>{ CURRENT_INSTANCE=inst.id; loadInstance(inst.id); };
+    box.append(card);
+  }
+}
+// runs associated with a frozen instance: explicit instance_id match, else the
+// pre-R1 seed+preset fallback via findInstance() so older runs still associate.
+function associatedRuns(instId){
+  try{
+    return INDEX.filter(r=>{
+      if(r.instance_id) return r.instance_id===instId;
+      let m=null;
+      try{ m=findInstance({preset:r.preset,seed:r.seed}); }catch(e){ m=null; }
+      return !!(m&&m.id===instId);
+    });
+  }catch(e){ return []; }
+}
+function loadInstance(id){
+  CURRENT_INSTANCE=id; renderInstances();
+  const m=$("#detail"); m.innerHTML="";
+  if(!FROZEN||!Array.isArray(FROZEN.instances)){ m.append(el("div","empty","Benchmark data not available.")); return; }
+  const inst=FROZEN.instances.find(i=>i.id===id);
+  if(!inst){ m.append(el("div","empty","Instance not found: "+id)); return; }
+  m.append(el("h1","title",inst.id));
+  m.append(el("div","meta",(inst.band||"?")+"  ·  "+(inst.preset||"?")+"  ·  π "+num(inst.measured_pi,3)+
+    "  ·  uses_binary_tables: "+(inst.uses_binary_tables?"true":"false")));
+  const cards=el("div","cards");
+  let ceil=null;
+  try{ ceil=CEILINGS&&CEILINGS[inst.id]; }catch(e){ ceil=null; }
+  try{ cards.append(referenceCard(inst,ceil,null,null)); }catch(e){ /* never blank the page over a benchmark lookup */ }
+  m.append(cards);
+  const runs=associatedRuns(inst.id);
+  const arBox=el("div");
+  if(!runs.length){
+    arBox.append(el("div","hint","no recorded runs yet for this instance"));
+  } else {
+    for(const r of runs){
+      const card=el("div","run"); card.dataset.id=r.id;
+      const top=el("div","top");
+      top.append(el("span","chip arm-"+(r.arm||""),r.arm||"?"));
+      top.append(el("span","chip","seed "+(r.seed??"?")));
+      if(r.overall!=null) top.append(el("span","chip score",num(r.overall,3)));
+      top.append(el("span","chip","$"+num(r.spent_usd,2)));
+      card.append(top);
+      card.append(el("div","id",r.id));
+      card.onclick=()=>goToRun(r.id);
+      arBox.append(card);
+    }
+  }
+  m.append(section("Associated runs ("+runs.length+")",arBox,true));
 }
 function filtered(){
   const a=$("#f-arm").value, p=$("#f-preset").value;
