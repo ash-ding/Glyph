@@ -72,3 +72,94 @@ tokens dominate under `effort=high`; caching keeps input near zero.
 
 GPU cost and time, whether the agent actually trains a student, and whether its
 turn/cost profile differs enough to warrant different caps.
+
+## train / pi_mid / 1001 — 2026-09-15/16, lumen1 (gpu0)
+
+```
+python -m glyph.v2 run --arm train --preset pi_mid --seed 1001
+```
+Same config as the no_train run (`effort=high`, `Q=1000`, `T_p=100`, `T_f=30`,
+`n_val=5000`, `usd_line=300`, `max_turns=200`), plus `student_model =
+Qwen/Qwen3-1.7B` on `CUDA_VISIBLE_DEVICES=0`.
+
+| metric | value |
+|---|---|
+| overall | **0.4197** |
+| by split (iid / comp / depth) | 0.424 / 0.508 / **0.228** |
+| headroom (overall / tail) | 0.228 / 0.225 |
+| q_used | **1000 (= Q cap)** |
+| submissions (legal) | 9 |
+| turns_practice / turns_final | 449 / 7 |
+| spent | **$25.71** (output 11.10, cache_read 9.55, cache_write 4.89, input 0.18) |
+| **gpu_seconds** | **train 35.8 + infer 211.8 = 247.6** (~4 GPU-min) |
+| wall time | 96 min (5768 s) |
+| final_commit / final_from_student | agent / **null** (see caveat) |
+
+### train vs no_train (pi_mid / 1001, paired on the instance)
+
+| | no_train | train | Δ |
+|---|---|---|---|
+| overall | 0.4015 | 0.4197 | **+0.018** |
+| iid / comp / depth | .41 / .49 / .20 | .42 / .51 / .23 | small, all splits |
+| q_used | 1000 | 1000 | Q bound both |
+| turns_practice | 421 | 449 | — |
+| spent | $22.46 | $25.71 | +$3.25 |
+| GPU | none | 247.6 s | — |
+
+**This instance is not a test of whether training helps.** Its measured
+**π = 0.44** (skeleton 44% / table 56% of the difficulty; skeleton ceiling
+0.249 vs table ceiling 0.305) is near the middle, only marginally table-leaning.
+Training's regime is **low π** (table-dominated). At π≈0.44 neither arm is
+strongly advantaged, so the **+0.018 near-tie is expected and not diagnostic**;
+and it is one seed (single-arm SE is large). The arm comparison belongs on
+`pi_low` and swept across π, paired over seeds 1001–1005 (spec §10.4).
+
+### What the agent did with the student (the point of running train)
+
+The train-arm machinery all fired in a real run:
+
+- **`build_dataset` ×5.** The first two pointed at the query log
+  (`work/task/queries.jsonl`) and returned **0 examples** — the log is
+  `{expr, out}` but `build_dataset` expects `{expr, answer}`, so nothing
+  parsed. The agent then built from `demos.jsonl` (ds3, 30 rows) and its own
+  assembled `train_data.jsonl` (ds5, 160 rows = 30 demos + 130 reformatted).
+  *(Friction worth noting: purchased query results cannot be fed to
+  `build_dataset` directly; the key names differ.)*
+- **`train` ×2**, iterating on data and hyperparameters:
+
+  | call | dataset | epochs | lr | size | final_loss | gpu_s |
+  |---|---|---|---|---|---|---|
+  | #1 | ds3 (demos) | 3 | 1e-3 | 30 | 7.16 (bad) | 20.1 |
+  | #2 | ds5 (160) | 10 | 5e-4 | 160 | **1.73** | 15.7 |
+
+- **`student_infer` ×4** to probe the checkpoints. Output quality was poor:
+  ck1 truncated **5/5** rows; ck2 on a 100-row probe truncated **95/100**. The
+  student was rambling past the answer, not producing clean values.
+- **`final_answer`** committed `work/test_out.jsonl` — **not** any
+  `student_infer` output path — so the committed answers were the agent's own,
+  not the student's raw output.
+
+**Reading:** even given the student, the agent could not get a usable model out
+of it at this scale — tiny datasets (30–160 rows), few epochs (3–10), and heavily
+truncated inference. So the train arm's 0.42 reflects the **frontier's** answers
+(having spent some turns and ~4 GPU-min training a student it did not commit
+from), not a weights win. Whether a low-π instance, more student data, or better
+inference formatting changes this is the real train-arm question — untouched by
+this calibration run.
+
+### `final_from_student` caveat
+
+`final_from_student` reads `null` here, but that is **not** evidence the agent
+avoided the student: the covariate is never set (unwired since commit
+`2fba9aa`) and its verbatim-identity definition would read ~0 anyway when the
+student output has to be cleaned. See the open question of the same name.
+
+### Calibration deltas from no_train
+
+- **GPU is cheap and well under caps.** 247.6 GPU-s total (train 35.8 / call,
+  infer 211.8) vs the caps of 1800 s/call and 7200 s/practice — no pressure.
+  Infer dominates (vLLM engine load), not training.
+- **Cost ≈ +15%** over no_train ($25.71 vs $22.46) — the build/train/infer turns
+  add frontier calls; GPU itself is a rounding error in USD.
+- **All other caps identical to no_train**: Q binds, `T_p` does not, `T_f` /
+  `submit_cap` / `usd_line` generous.
