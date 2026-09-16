@@ -4,14 +4,14 @@
 Each protocol-v2 run writes a self-contained `run.json` into its run dir. This
 gathers them for the browser viewer:
 
-    python tools/collect_runs.py --out viewer/runs /tmp/glyph_pilot_train /path/to/runs
+    python tools/collect_runs.py --out glyph-viewer/runs /tmp/glyph_pilot_train /path/to/runs
 
 It copies every `run.json` found under the given roots to `<out>/<id>.json` and
 writes `<out>/index.json` (one summary row per run, newest first). Idempotent —
 re-run it whenever new runs finish. Then serve the repo and open the viewer:
 
     python -m http.server 8000        # from the repo root
-    # open http://localhost:8000/viewer/
+    # open http://localhost:8000/glyph-viewer/
 """
 import argparse
 import json
@@ -50,7 +50,7 @@ def collect(roots, out_dir):
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Collect run.json files for the viewer.")
     ap.add_argument("roots", nargs="+", help="directories to scan for run.json (recursively)")
-    ap.add_argument("--out", default="viewer/runs", help="output dir (default: viewer/runs)")
+    ap.add_argument("--out", default="glyph-viewer/runs", help="output dir (default: glyph-viewer/runs)")
     args = ap.parse_args(argv)
     index = collect(args.roots, args.out)
     print("collected %d run(s) into %s" % (len(index), args.out))

@@ -1,4 +1,4 @@
-# Run viewer (`viewer/`)
+# Run viewer (`glyph-viewer/`)
 
 A static browser viewer for protocol-v2 runs. No build step, no dependencies —
 plain HTML/CSS/JS that reads the `run.json` each run produces.
@@ -15,19 +15,19 @@ tools). Extended-thinking *text* is redacted by the CLI, so only a per-turn
 
 ## Viewing runs
 
-1. **Collect** the runs you want to look at into `viewer/runs/`:
+1. **Collect** the runs you want to look at into `glyph-viewer/runs/`:
 
    ```bash
-   python tools/collect_runs.py --out viewer/runs /path/to/your/out_root
+   python tools/collect_runs.py --out glyph-viewer/runs /path/to/your/out_root
    ```
    Point it at one or more directories (it finds every `run.json` under them)
-   and it writes `viewer/runs/<id>.json` plus `viewer/runs/index.json`.
+   and it writes `glyph-viewer/runs/<id>.json` plus `glyph-viewer/runs/index.json`.
 
 2. **Serve** the repo and open the viewer:
 
    ```bash
    python -m http.server 8000        # from the repo root
-   # then open http://localhost:8000/viewer/
+   # then open http://localhost:8000/glyph-viewer/
    ```
    (A plain `file://` open will not work — the viewer fetches JSON, which
    browsers block over `file://`. Any static server is fine.)
@@ -44,7 +44,7 @@ python tools/serve_viewer.py --port 8000 /tmp/glyph_runs      # or your out_root
 
 # on your laptop — forward the port, then open the URL
 ssh -N -L 8000:localhost:8000 <remote>        # e.g. lumen1
-#   open http://localhost:8000/viewer/
+#   open http://localhost:8000/glyph-viewer/
 ```
 
 `serve_viewer.py` binds to `127.0.0.1` only, so it is reachable solely through
@@ -60,12 +60,12 @@ Runs happen on the box with the GPU/sandbox; you read them on your laptop:
 
 ```bash
 # on the remote host, after some runs:
-python tools/collect_runs.py --out viewer/runs /tmp/glyph_runs   # or your out_root
+python tools/collect_runs.py --out glyph-viewer/runs /tmp/glyph_runs   # or your out_root
 
 # on your laptop:
-scp -r you@remote:~/code/Glyph/viewer/runs viewer/runs
+scp -r you@remote:~/code/Glyph/glyph-viewer/runs glyph-viewer/runs
 python -m http.server 8000
-# open http://localhost:8000/viewer/
+# open http://localhost:8000/glyph-viewer/
 ```
 
 ## The interface

@@ -121,9 +121,9 @@ the full turn-by-turn transcript (its visible reasoning, every tool call and
 result). A static browser viewer reads them:
 
 ```bash
-python tools/collect_runs.py --out viewer/runs <your out_root>   # gather run.json files
+python tools/collect_runs.py --out glyph-viewer/runs <your out_root>   # gather run.json files
 python -m http.server 8000                                       # from the repo root
-# open http://localhost:8000/viewer/
+# open http://localhost:8000/glyph-viewer/
 ```
 
 The viewer is a gallery filterable by arm and π; pick a run to see its config,
@@ -135,10 +135,10 @@ no `scp`:
 
 ```bash
 python tools/serve_viewer.py --port 8000 <out_root>   # on the remote: collect + serve
-ssh -N -L 8000:localhost:8000 <remote>                # on your laptop; open http://localhost:8000/viewer/
+ssh -N -L 8000:localhost:8000 <remote>                # on your laptop; open http://localhost:8000/glyph-viewer/
 ```
 
-See [`viewer/README.md`](viewer/README.md).
+See [`glyph-viewer/README.md`](glyph-viewer/README.md).
 
 ## Layout
 
