@@ -58,14 +58,20 @@ def frozen_entry(instance_id, *, manifest_path="docs/benchmark/frozen_instances.
 
 
 def load_instance(instance_id, *, manifest_path="docs/benchmark/frozen_instances.json",
-                   verify=True):
+                   verify=True, entry=None):
     """Regenerate the frozen instance for `instance_id` from the manifest.
 
     By default (`verify=True`) asserts the regenerated instance's fingerprint still matches
     the frozen `fingerprint_sha256`, so callers get exactly the frozen data or a clear error
     on drift.
+
+    `entry`: an already-fetched manifest entry (e.g. from a prior `frozen_entry(instance_id,
+    ...)` call) to reuse instead of reloading/reparsing the manifest here -- for callers, like
+    `resolve_run_instance`, that also need the entry's own fields. Must be the entry for
+    `instance_id`; when omitted (the default), it's looked up the normal way.
     """
-    entry = frozen_entry(instance_id, manifest_path=manifest_path)
+    if entry is None:
+        entry = frozen_entry(instance_id, manifest_path=manifest_path)
     from glyph.data import PRESETS, generate
 
     inst = generate(entry["seed"], PRESETS[entry["preset"]])

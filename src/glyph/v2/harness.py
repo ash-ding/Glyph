@@ -270,7 +270,7 @@ def resolve_run_instance(rc: RunConfig):
         from glyph.reference.frozen import frozen_entry, load_instance
 
         e = frozen_entry(rc.instance_id)
-        inst = load_instance(rc.instance_id)
+        inst = load_instance(rc.instance_id, entry=e)
         return inst, e["preset"], e["seed"], rc.instance_id
 
     from glyph.data import PRESETS, generate
