@@ -40,3 +40,41 @@ def load_frozen(path="docs/benchmark/frozen_instances.json") -> list[dict]:
     with p.open() as f:
         manifest = json.load(f)
     return manifest["instances"]
+
+
+def frozen_entry(instance_id, *, manifest_path="docs/benchmark/frozen_instances.json") -> dict:
+    """Return the manifest metadata dict for a frozen instance id (band/preset/seed/
+    measured_pi/uses_binary_tables/fingerprint_sha256).
+
+    Raises KeyError (listing the available ids) if `instance_id` is not in the manifest.
+    """
+    entries = load_frozen(manifest_path)
+    for e in entries:
+        if e["id"] == instance_id:
+            return e
+    raise KeyError(
+        f"no frozen instance {instance_id!r}; available: {sorted(e['id'] for e in entries)}"
+    )
+
+
+def load_instance(instance_id, *, manifest_path="docs/benchmark/frozen_instances.json",
+                   verify=True):
+    """Regenerate the frozen instance for `instance_id` from the manifest.
+
+    By default (`verify=True`) asserts the regenerated instance's fingerprint still matches
+    the frozen `fingerprint_sha256`, so callers get exactly the frozen data or a clear error
+    on drift.
+    """
+    entry = frozen_entry(instance_id, manifest_path=manifest_path)
+    from glyph.data import PRESETS, generate
+
+    inst = generate(entry["seed"], PRESETS[entry["preset"]])
+    if verify:
+        actual = fingerprint(inst)
+        expected = entry["fingerprint_sha256"]
+        if actual != expected:
+            raise ValueError(
+                f"fingerprint drift for frozen instance {instance_id!r}: "
+                f"expected {expected}, got {actual}"
+            )
+    return inst

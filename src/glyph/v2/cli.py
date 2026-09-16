@@ -21,6 +21,7 @@ def build_run_config(args: argparse.Namespace) -> RunConfig:
         arm=args.arm,
         preset=args.preset,
         instance_seed=args.seed,
+        instance_id=getattr(args, "instance_id", None),
         model=args.model,
         q_cap=args.q,
         submit_cap=args.submit_cap,
@@ -44,24 +45,40 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 
 def cmd_grid(args: argparse.Namespace) -> int:
-    """A simple sweep: loop run() over every (arm, preset, seed) tuple."""
+    """A simple sweep: loop run() over every (arm, preset, seed) tuple, or, when
+    `--instance-ids` is given, over every (arm, instance_id) pair instead (each frozen
+    id overrides preset/seed via the harness's `resolve_run_instance`)."""
     from glyph.v2 import harness
 
     out_root = Path(args.out_root) if args.out_root else Path.cwd() / "runs"
     n = 0
-    for arm in args.arms:
-        for preset in args.presets:
-            for seed in args.seeds:
+    if args.instance_ids:
+        for arm in args.arms:
+            for instance_id in args.instance_ids:
                 rc = RunConfig(
-                    arm=arm, preset=preset, instance_seed=seed, model=args.model,
+                    arm=arm, instance_id=instance_id, model=args.model,
                     q_cap=args.q, submit_cap=args.submit_cap, tp=args.tp, tf=args.tf,
                     usd_line=args.usd_line, n_val=args.n_val, max_turns=args.max_turns,
                     out_root=args.out_root,
                 )
                 harness.run(rc)
-                run_dir = out_root / f"{preset}_{arm}_{seed}"
+                run_dir = out_root / f"{instance_id}_{arm}"
                 print(str(run_dir / "report.json"))
                 n += 1
+    else:
+        for arm in args.arms:
+            for preset in args.presets:
+                for seed in args.seeds:
+                    rc = RunConfig(
+                        arm=arm, preset=preset, instance_seed=seed, model=args.model,
+                        q_cap=args.q, submit_cap=args.submit_cap, tp=args.tp, tf=args.tf,
+                        usd_line=args.usd_line, n_val=args.n_val, max_turns=args.max_turns,
+                        out_root=args.out_root,
+                    )
+                    harness.run(rc)
+                    run_dir = out_root / f"{preset}_{arm}_{seed}"
+                    print(str(run_dir / "report.json"))
+                    n += 1
     print(f"{n} run(s) complete")
     return 0
 
@@ -79,6 +96,8 @@ def _add_run_args(s: argparse.ArgumentParser) -> None:
     s.add_argument("--max-turns", type=int, default=60,
                     help="SDK ClaudeAgentOptions.max_turns (agent-loop cap)")
     s.add_argument("--out-root", default=None)
+    s.add_argument("--instance-id", default=None,
+                    help="frozen instance id (e.g. high_3); overrides --preset/--seed")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -103,6 +122,9 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--n-val", type=int, default=5000)
     g.add_argument("--max-turns", type=int, default=60)
     g.add_argument("--out-root", default=None)
+    g.add_argument("--instance-ids", nargs="+", default=None,
+                    help="frozen instance ids (e.g. high_3 low_1); when given, expands to "
+                         "one run per (arm, id), overriding --presets/--seeds")
     g.set_defaults(fn=cmd_grid)
 
     return p
