@@ -9,3 +9,6 @@ venv/
 runs/
 /data/
 *.jsonl
+
+# collected run.json data for the viewer (generated per-user)
+viewer/runs/

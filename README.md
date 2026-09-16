@@ -113,6 +113,24 @@ accounting are enforced around it:
   bills every request, pins the model (a non-pinned model is 403'd), and
   injects the Vertex credentials so the sandbox holds none.
 
+## Viewing runs
+
+Every `python -m glyph.v2 run` writes a self-contained `run.json` into its run
+dir — config, the measurement prompts, the task the agent saw, the report, and
+the full turn-by-turn transcript (its visible reasoning, every tool call and
+result). A static browser viewer reads them:
+
+```bash
+python tools/collect_runs.py --out viewer/runs <your out_root>   # gather run.json files
+python -m http.server 8000                                       # from the repo root
+# open http://localhost:8000/viewer/
+```
+
+The viewer is a gallery filterable by arm and π; pick a run to see its config,
+prompts, and transcript (practice→final, tool inputs/results, errors, reasoning
+collapsed by default). Running remotely? `scp -r` the `viewer/runs` folder to
+your laptop and serve it there. See [`viewer/README.md`](viewer/README.md).
+
 ## Layout
 
 ```
