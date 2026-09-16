@@ -83,19 +83,25 @@ Seeds landing in a gap `(0.35,0.40)` or `(0.55,0.60)`, or outside `[0.20,0.80)`,
 are discarded. Each band is drawn from its matching preset so that config knobs
 other than π (e.g. `unary_coupling`) stay consistent **within** a band.
 
-### 4.2 Selection algorithm
+### 4.2 Selection — oversample a pool, then choose from the distribution
 
-For each band, scan seeds `1001, 1002, …` from the band's preset; for each seed:
+Generation is cheap (a 10^4-item instance takes 1.5-11 s; π is measured on a
+1500-item sample), so we **oversample and decide from the whole distribution**
+rather than taking the first few in-band seeds:
 
-1. `generate(seed, preset)` and compute `measured_pi()["pi"]` (CPU, cheap —
-   measured on a fixed 1500-item internal sample).
-2. **Filter out** any seed that is degenerate or out-of-band:
-   - measured π outside the band's range (the drift filter);
-   - `instance.uses_binary_tables == False` (the deferred `pi_low`-without-binary
-     corner — a test set needing no binary entries is excluded);
-   - generation raised the short-test guard (an instance whose test set could not
-     be filled).
-3. Keep the first **5** surviving seeds per band.
+1. **Scan a candidate pool.** For each preset, generate a fixed, generous number
+   of seeds (default 60 per preset, more if a band is thin) and record *every*
+   candidate's metrics to a committed `docs/benchmark/candidates.json`: seed,
+   preset, the full measured-π block (`pi` + components), `uses_binary_tables`,
+   and the CPU ceilings. Committing the pool makes the final choice auditable.
+2. **Filter** degenerate candidates: `uses_binary_tables == False` (the deferred
+   `pi_low`-without-binary corner), or generation hitting the short-test guard.
+3. **Choose the final set from the distribution.** First report the measured-π
+   histogram per preset (to confirm or adjust the 4.1 cutoffs). Then select
+   **N per band** — default **5**, giving the fixed **15**, and adjustable once
+   the distribution is seen — from the surviving candidates whose measured π sits
+   in the band's range, preferring a spread across the band over a cluster at one
+   edge. Both N and the cutoffs are recorded in the manifest.
 
 ### 4.3 The manifest
 
@@ -121,8 +127,10 @@ Commit `docs/benchmark/frozen_instances.json` (git-tracked, human-readable):
 
 ### 4.4 Tooling
 
-- `tools/select_instances.py` — runs the scan/filter, writes the manifest,
-  prints the chosen 15 with their measured π.
+- `tools/scan_instances.py` — scans the candidate pool, writes
+  `candidates.json`, and prints the per-preset measured-π histogram.
+- `tools/select_instances.py` — chooses N per band from `candidates.json` and
+  writes the frozen manifest.
 - `glyph.data` helper `load_frozen()` → the list of `(id, band, preset, seed)`
   so eval code and the harness can iterate the fixed set.
 
