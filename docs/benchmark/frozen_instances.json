@@ -1,0 +1,155 @@
+{
+  "created": "2026-09-16",
+  "band_cutoffs": {
+    "low": [
+      0.2,
+      0.35
+    ],
+    "mid": [
+      0.4,
+      0.55
+    ],
+    "high": [
+      0.6,
+      0.8
+    ]
+  },
+  "n_per_band": 5,
+  "instances": [
+    {
+      "id": "low_1",
+      "band": "low",
+      "preset": "pi_low",
+      "seed": 1068,
+      "measured_pi": 0.20371419782070188,
+      "uses_binary_tables": true,
+      "fingerprint_sha256": "52c2e68bcee3d7e0860e5387ab3552b0ec1ac41977b6bb41637c463fde04cb57"
+    },
+    {
+      "id": "low_2",
+      "band": "low",
+      "preset": "pi_low",
+      "seed": 1035,
+      "measured_pi": 0.23464765492442494,
+      "uses_binary_tables": true,
+      "fingerprint_sha256": "d30b558131684f75f5641055fdef068234279b85aaa50a4c26222e7b5a44a81e"
+    },
+    {
+      "id": "low_3",
+      "band": "low",
+      "preset": "pi_low",
+      "seed": 1006,
+      "measured_pi": 0.26132084137044076,
+      "uses_binary_tables": true,
+      "fingerprint_sha256": "8e4e20df33403e08f18aa5d72b7c6225fd81c3bfd5b5abd6557e9dbe9e58c403"
+    },
+    {
+      "id": "low_4",
+      "band": "low",
+      "preset": "pi_low",
+      "seed": 1057,
+      "measured_pi": 0.2810621901823439,
+      "uses_binary_tables": true,
+      "fingerprint_sha256": "a830892248af49c874a81370703dae539d8ede5b692345dd859ce7dcd4cdf522"
+    },
+    {
+      "id": "low_5",
+      "band": "low",
+      "preset": "pi_low",
+      "seed": 1036,
+      "measured_pi": 0.3104104648500113,
+      "uses_binary_tables": true,
+      "fingerprint_sha256": "3c70aafb5ba6477642a26c040b87e1500491e8fba10606860aa0c0c1f4590eba"
+    },
+    {
+      "id": "mid_1",
+      "band": "mid",
+      "preset": "pi_mid",
+      "seed": 1034,
+      "measured_pi": 0.4017235466893289,
+      "uses_binary_tables": true,
+      "fingerprint_sha256": "a3e6cd4ba2ba9c21043be7833f07144713369eedacb9bf41fe1012b08dd0b297"
+    },
+    {
+      "id": "mid_2",
+      "band": "mid",
+      "preset": "pi_low",
+      "seed": 1058,
+      "measured_pi": 0.43373636269690097,
+      "uses_binary_tables": true,
+      "fingerprint_sha256": "c35b6162b98df550a3e56ba4a8364c7d1ba00ccf715b111a97209ebff0973dc3"
+    },
+    {
+      "id": "mid_3",
+      "band": "mid",
+      "preset": "pi_mid",
+      "seed": 1068,
+      "measured_pi": 0.46003541644594415,
+      "uses_binary_tables": true,
+      "fingerprint_sha256": "cadc1b3f1401c015d8a34ea3a3481934d83e77be62605554786b79404a2751e0"
+    },
+    {
+      "id": "mid_4",
+      "band": "mid",
+      "preset": "pi_mid",
+      "seed": 1027,
+      "measured_pi": 0.5113183653008994,
+      "uses_binary_tables": true,
+      "fingerprint_sha256": "ef97b0c06f246113af1aa6019fd27e2d3f81620a2683786f265c3767dd4dad03"
+    },
+    {
+      "id": "mid_5",
+      "band": "mid",
+      "preset": "pi_mid",
+      "seed": 1021,
+      "measured_pi": 0.5472956321305865,
+      "uses_binary_tables": true,
+      "fingerprint_sha256": "c79bd95178ee7b69aec90105ada935e037a22a3c693de2743968ab46ab39a817"
+    },
+    {
+      "id": "high_1",
+      "band": "high",
+      "preset": "pi_mid",
+      "seed": 1022,
+      "measured_pi": 0.6018312387791751,
+      "uses_binary_tables": true,
+      "fingerprint_sha256": "db41df35e53ddb7208b03c7fe9638c614251ff4cb22415c307a8dbea16334bff"
+    },
+    {
+      "id": "high_2",
+      "band": "high",
+      "preset": "pi_high",
+      "seed": 1069,
+      "measured_pi": 0.647518673897473,
+      "uses_binary_tables": true,
+      "fingerprint_sha256": "aed747c66df51856f78f3c583649789231b59307ae53481d8f39e9f3f647e924"
+    },
+    {
+      "id": "high_3",
+      "band": "high",
+      "preset": "pi_high",
+      "seed": 1006,
+      "measured_pi": 0.6857272809969986,
+      "uses_binary_tables": true,
+      "fingerprint_sha256": "ad9435731a59b2d826bac6767da6d6a317d2d897bf0ec38878d2ff50f1cf8115"
+    },
+    {
+      "id": "high_4",
+      "band": "high",
+      "preset": "pi_high",
+      "seed": 1012,
+      "measured_pi": 0.7240531920455938,
+      "uses_binary_tables": true,
+      "fingerprint_sha256": "646c023d41c0ab525b324cc1ac3800bc40d514fc9285e0ba5f32bd80a78e4bc2"
+    },
+    {
+      "id": "high_5",
+      "band": "high",
+      "preset": "pi_high",
+      "seed": 1059,
+      "measured_pi": 0.7953406593406595,
+      "uses_binary_tables": true,
+      "fingerprint_sha256": "6b45ca26e41728c80914aa833f8dc53a3b4d471b9713b174ef2998211c7c4bec"
+    }
+  ]
+}
