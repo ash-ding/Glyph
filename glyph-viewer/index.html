@@ -70,6 +70,7 @@ h1.title{font-size:20px;margin:0 0 2px}
 .reftable th{color:var(--muted);font-weight:600;text-transform:uppercase;font-size:10px;letter-spacing:.04em}
 .reftable th:first-child,.reftable td:first-child{text-align:left;color:var(--muted);font-weight:400;text-transform:none}
 .reftable tr.runrow td{font-weight:700;color:var(--accent)}
+.reftable tr.splitrow td{text-align:left;color:var(--muted);font-size:11px;font-weight:400;padding-top:0;padding-bottom:5px}
 details.sec{border:1px solid var(--line);border-radius:10px;margin-bottom:8px;background:var(--panel);overflow:hidden}
 details.sec>summary{cursor:pointer;padding:9px 12px;font-weight:600;font-size:13px;list-style:none}
 details.sec>summary::-webkit-details-marker{display:none}
@@ -191,9 +192,24 @@ function populateInstanceOptions(){
   }
   sel.value="";
 }
-function refRow(table,label,ov,ta,isRun){
+function refRow(table,label,ov,ta,hr,isRun){
   const tr=el("tr",isRun?"runrow":null);
-  tr.append(el("td",null,label),el("td",null,num(ov,3)),el("td",null,num(ta,3)));
+  tr.append(el("td",null,label),el("td",null,num(ov,3)),el("td",null,num(ta,3)),el("td",null,num(hr,3)));
+  table.append(tr);
+}
+// compact muted sub-row under an oracle row, showing its by_split breakdown
+// (iid/comp/depth first, then any other split keys alphabetically). No-op
+// when by_split is missing/empty — caller never renders it for the run row.
+function splitRow(table,bySplit){
+  if(!bySplit||typeof bySplit!=="object")return;
+  const keys=Object.keys(bySplit);
+  if(!keys.length)return;
+  const pref=["iid","comp","depth"];
+  const ordered=[...pref.filter(k=>keys.includes(k)),...keys.filter(k=>!pref.includes(k)).sort()];
+  const tr=el("tr","splitrow");
+  const td=el("td",null,ordered.map(k=>k+" "+num(bySplit[k],3)).join(" · "));
+  td.colSpan=4;
+  tr.append(td);
   table.append(tr);
 }
 // shared battery-rendering core: used both for a run's own reference card
@@ -209,17 +225,17 @@ function referenceCard(inst,ceil,runOverall,runTail){
   card.append(el("div","k","reference — "+inst.id+" ("+inst.band+")"));
   card.append(el("div","facts","measured π "+num(inst.measured_pi,3)+"  ·  binary tables "+(inst.uses_binary_tables?"yes":"no")));
   const table=el("table","reftable");
-  const hd=el("tr"); hd.append(el("th",null,""),el("th",null,"overall"),el("th",null,"tail")); table.append(hd);
-  refRow(table,"this run",runOverall,runTail,true);
+  const hd=el("tr"); hd.append(el("th",null,""),el("th",null,"overall"),el("th",null,"tail"),el("th",null,"headroom")); table.append(hd);
+  refRow(table,"this run",runOverall,runTail,null,true);
   if(ceil){
     for(const k of ["skeleton","table","perfect"]){
-      const v=ceil[k]; if(v) refRow(table,k,v.overall,v.tail,false);
+      const v=ceil[k]; if(v){ refRow(table,k,v.overall,v.tail,v.headroom,false); splitRow(table,v.by_split); }
     }
     for(const k of ["weights","a0prime"]){
       const block=ceil[k];
       if(block&&typeof block==="object"){
         for(const frac of Object.keys(block).sort()){
-          const v=block[frac]; if(v) refRow(table,k+" @"+frac,v.overall,v.tail,false);
+          const v=block[frac]; if(v){ refRow(table,k+" @"+frac,v.overall,v.tail,v.headroom,false); splitRow(table,v.by_split); }
         }
       }
     }
