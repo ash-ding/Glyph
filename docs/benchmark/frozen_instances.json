@@ -29,64 +29,64 @@
       "id": "low_2",
       "band": "low",
       "preset": "pi_low",
-      "seed": 1035,
-      "measured_pi": 0.23464765492442494,
+      "seed": 1044,
+      "measured_pi": 0.22562135429875682,
       "uses_binary_tables": true,
-      "fingerprint_sha256": "d30b558131684f75f5641055fdef068234279b85aaa50a4c26222e7b5a44a81e"
+      "fingerprint_sha256": "15e732448ba4487fc72c247c4f9752e01298a40637c8eb3e0fe4ad7dd94a1796"
     },
     {
       "id": "low_3",
       "band": "low",
       "preset": "pi_low",
-      "seed": 1006,
-      "measured_pi": 0.26132084137044076,
+      "seed": 1009,
+      "measured_pi": 0.2493322010345089,
       "uses_binary_tables": true,
-      "fingerprint_sha256": "8e4e20df33403e08f18aa5d72b7c6225fd81c3bfd5b5abd6557e9dbe9e58c403"
+      "fingerprint_sha256": "20e95568a25f71eeca5f57f10e30646a19a693d412bf70065596f6a3a4f8d521"
     },
     {
       "id": "low_4",
       "band": "low",
       "preset": "pi_low",
-      "seed": 1057,
-      "measured_pi": 0.2810621901823439,
+      "seed": 1050,
+      "measured_pi": 0.2723663353135502,
       "uses_binary_tables": true,
-      "fingerprint_sha256": "a830892248af49c874a81370703dae539d8ede5b692345dd859ce7dcd4cdf522"
+      "fingerprint_sha256": "c2b7e750f573e807fc5df1665fb29f7ddf5dc48e987042e178423bd346cc69c6"
     },
     {
       "id": "low_5",
       "band": "low",
       "preset": "pi_low",
-      "seed": 1036,
-      "measured_pi": 0.3104104648500113,
+      "seed": 1020,
+      "measured_pi": 0.29649882505948577,
       "uses_binary_tables": true,
-      "fingerprint_sha256": "3c70aafb5ba6477642a26c040b87e1500491e8fba10606860aa0c0c1f4590eba"
+      "fingerprint_sha256": "1b71d01644c7b606edb11cfd6103978d3088a1e0428ebd839714f07f5c8d101a"
     },
     {
       "id": "mid_1",
-      "band": "mid",
-      "preset": "pi_mid",
-      "seed": 1034,
-      "measured_pi": 0.4017235466893289,
-      "uses_binary_tables": true,
-      "fingerprint_sha256": "a3e6cd4ba2ba9c21043be7833f07144713369eedacb9bf41fe1012b08dd0b297"
-    },
-    {
-      "id": "mid_2",
-      "band": "mid",
-      "preset": "pi_low",
-      "seed": 1058,
-      "measured_pi": 0.43373636269690097,
-      "uses_binary_tables": true,
-      "fingerprint_sha256": "c35b6162b98df550a3e56ba4a8364c7d1ba00ccf715b111a97209ebff0973dc3"
-    },
-    {
-      "id": "mid_3",
       "band": "mid",
       "preset": "pi_mid",
       "seed": 1068,
       "measured_pi": 0.46003541644594415,
       "uses_binary_tables": true,
       "fingerprint_sha256": "cadc1b3f1401c015d8a34ea3a3481934d83e77be62605554786b79404a2751e0"
+    },
+    {
+      "id": "mid_2",
+      "band": "mid",
+      "preset": "pi_mid",
+      "seed": 1048,
+      "measured_pi": 0.4699485256925225,
+      "uses_binary_tables": true,
+      "fingerprint_sha256": "af4575040d6b351b61c5ff9fecd3822e4ca5a484b96094f08ed906c628de244d"
+    },
+    {
+      "id": "mid_3",
+      "band": "mid",
+      "preset": "pi_mid",
+      "seed": 1017,
+      "measured_pi": 0.49362226753283683,
+      "uses_binary_tables": true,
+      "fingerprint_sha256": "ecc33252f85ed02456dd019ec4772b1fa5f86a034a2b31ba57573c39498f1d63"
     },
     {
       "id": "mid_4",
@@ -101,46 +101,46 @@
       "id": "mid_5",
       "band": "mid",
       "preset": "pi_mid",
-      "seed": 1021,
-      "measured_pi": 0.5472956321305865,
+      "seed": 1066,
+      "measured_pi": 0.5297175562178277,
       "uses_binary_tables": true,
-      "fingerprint_sha256": "c79bd95178ee7b69aec90105ada935e037a22a3c693de2743968ab46ab39a817"
+      "fingerprint_sha256": "0ce6cae4dd8008c4d8a16e9f7ea326a0165673772d2b05f4a3a7d35eeb38e2e9"
     },
     {
       "id": "high_1",
       "band": "high",
-      "preset": "pi_mid",
-      "seed": 1022,
-      "measured_pi": 0.6018312387791751,
+      "preset": "pi_high",
+      "seed": 1038,
+      "measured_pi": 0.7049360146252289,
       "uses_binary_tables": true,
-      "fingerprint_sha256": "db41df35e53ddb7208b03c7fe9638c614251ff4cb22415c307a8dbea16334bff"
+      "fingerprint_sha256": "88ddfd298e324f4a20e69214ed728a705d7d02fab5c7beb6c2c2d3227daf2583"
     },
     {
       "id": "high_2",
-      "band": "high",
-      "preset": "pi_high",
-      "seed": 1069,
-      "measured_pi": 0.647518673897473,
-      "uses_binary_tables": true,
-      "fingerprint_sha256": "aed747c66df51856f78f3c583649789231b59307ae53481d8f39e9f3f647e924"
-    },
-    {
-      "id": "high_3",
-      "band": "high",
-      "preset": "pi_high",
-      "seed": 1006,
-      "measured_pi": 0.6857272809969986,
-      "uses_binary_tables": true,
-      "fingerprint_sha256": "ad9435731a59b2d826bac6767da6d6a317d2d897bf0ec38878d2ff50f1cf8115"
-    },
-    {
-      "id": "high_4",
       "band": "high",
       "preset": "pi_high",
       "seed": 1012,
       "measured_pi": 0.7240531920455938,
       "uses_binary_tables": true,
       "fingerprint_sha256": "646c023d41c0ab525b324cc1ac3800bc40d514fc9285e0ba5f32bd80a78e4bc2"
+    },
+    {
+      "id": "high_3",
+      "band": "high",
+      "preset": "pi_high",
+      "seed": 1023,
+      "measured_pi": 0.7501653691548362,
+      "uses_binary_tables": true,
+      "fingerprint_sha256": "dae292717f67586e6e0698e8494b8eaf3e1803b04dda79987e80b4adc895f994"
+    },
+    {
+      "id": "high_4",
+      "band": "high",
+      "preset": "pi_high",
+      "seed": 1043,
+      "measured_pi": 0.7780538230337566,
+      "uses_binary_tables": true,
+      "fingerprint_sha256": "f3b818a7ac96f114756162251446eabba0b1beb7655ff44b69cec93a576f61bf"
     },
     {
       "id": "high_5",
