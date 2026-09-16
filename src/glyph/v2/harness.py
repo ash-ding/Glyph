@@ -377,6 +377,35 @@ def run(rc: RunConfig) -> dict:
     committed = getattr(session, "final_commit_path", None)
     report = build_report(session, committed, test_id_of)
     (run_dir / "report.json").write_text(json.dumps(report, indent=2))
+
+    # Self-contained run.json for the run viewer. Never fail the run over it.
+    try:
+        import time as _t
+        from glyph.v2.export import build_run_json
+        run_json = build_run_json(
+            run_id="%s_%s" % (run_dir.name, _t.strftime("%Y%m%d-%H%M%S")),
+            created=_t.strftime("%Y-%m-%dT%H:%M:%SZ", _t.gmtime()),
+            config={
+                "arm": rc.arm, "preset": rc.preset, "seed": rc.instance_seed,
+                "model": rc.model, "q_cap": rc.q_cap, "submit_cap": rc.submit_cap,
+                "tp": rc.tp, "tf": rc.tf, "n_val": rc.n_val, "usd_line": rc.usd_line,
+                "max_turns": rc.max_turns, "effort": rc.effort,
+                "student_model": rc.student_model,
+            },
+            task_readme=paths.readme.read_text(),
+            prompts={
+                "system": prompts.system_prompt(rc.arm),
+                "practice_opener": prompts.practice_opener(paths),
+                "final_opener": prompts.final_opener(paths),
+            },
+            report=report,
+            run_dir=run_dir,
+        )
+        (run_dir / "run.json").write_text(json.dumps(run_json, indent=2))
+    except Exception as _e:
+        import sys as _sys
+        _sys.stderr.write("run.json export failed: %r\n" % _e)
+
     trace.emit("report", overall=report["overall"],
                final_commit=report["covariates"]["final_commit"])
     trace.close()
