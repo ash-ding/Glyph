@@ -163,6 +163,89 @@ def test_select_uses_default_selection_spec():
         assert cutoff_lo <= win_lo and win_hi <= cutoff_hi
 
 
+def _nearest_spread_reference(group, targets):
+    """Independent re-implementation of select_instances._spread_pick's
+    greedy nearest-unclaimed assignment, used only to compute an EXPECTED
+    pick set for a given list of target pi values, so tests don't have to
+    hand-derive expected floats. ``group`` is a list of dicts with 'pi' and
+    'seed'; must already be in the same deterministic order select() uses
+    (sorted by (pi, seed))."""
+    used = set()
+    chosen_idxs = []
+    for target in targets:
+        best_idx = None
+        best_key = None
+        for i, c in enumerate(group):
+            if i in used:
+                continue
+            key = (abs(c["pi"] - target), c["seed"])
+            if best_key is None or key < best_key:
+                best_key = key
+                best_idx = i
+        used.add(best_idx)
+        chosen_idxs.append(best_idx)
+    return [group[i] for i in sorted(chosen_idxs)]
+
+
+def test_select_targets_anchor_to_declared_window_not_pool_range():
+    """Regression for the window-vs-pool-anchoring bug: target positions for
+    the spread must be computed from the band's DECLARED window (win_lo,
+    win_hi), not from the min/max pi actually observed among the surviving
+    candidates. Build a pool whose pi values are all clustered well inside
+    the window (window [0.20, 0.30) but candidates only span 0.240-0.270),
+    so window-anchored and pool-anchored spreads give different targets --
+    and therefore, for the middle picks, different candidates."""
+    win_lo, win_hi = 0.20, 0.30
+    selection = {
+        "low": {"preset": "pi_low", "window": (win_lo, win_hi)},
+        "mid": {"preset": "pi_mid", "window": (0.40, 0.55)},
+        "high": {"preset": "pi_high", "window": (0.60, 0.80)},
+    }
+
+    cands = []
+    seed = 2001
+    # 9 pure pi_low candidates, all inside the window but clustered in
+    # [0.240, 0.270] -- well off the window's own [0.20, 0.30) extremes.
+    for i in range(9):
+        pi = 0.240 + 0.00375 * i
+        cands.append(_mk(seed, "pi_low", pi))
+        seed += 1
+
+    n = 5
+    chosen = select(cands, n_per_band=n, selection=selection)
+    low_picks = sorted((c["measured_pi"] for c in chosen if c["band"] == "low"))
+
+    # Reproduce the candidate filter + deterministic ordering select() uses.
+    group = sorted(
+        [c for c in cands if c["preset"] == "pi_low" and win_lo <= c["pi"] < win_hi],
+        key=lambda c: (c["pi"], c["seed"]),
+    )
+    group = [{"pi": c["pi"], "seed": c["seed"]} for c in group]
+    assert len(group) > n  # otherwise _spread_pick can't exercise the spread logic
+
+    window_targets = [win_lo + (win_hi - win_lo) * k / (n - 1) for k in range(n)]
+    pool_lo, pool_hi = group[0]["pi"], group[-1]["pi"]
+    pool_targets = [pool_lo + (pool_hi - pool_lo) * k / (n - 1) for k in range(n)]
+
+    expected_window_anchored = sorted(
+        p["pi"] for p in _nearest_spread_reference(group, window_targets)
+    )
+    expected_pool_anchored = sorted(
+        p["pi"] for p in _nearest_spread_reference(group, pool_targets)
+    )
+
+    # Sanity: the pool is genuinely offset inside the window, so the two
+    # anchoring strategies must actually disagree -- otherwise this test
+    # wouldn't discriminate the bug at all.
+    assert expected_window_anchored != expected_pool_anchored
+
+    # The real fix: select() must match the WINDOW-anchored spread...
+    assert low_picks == expected_window_anchored
+    # ...and must NOT match what a pool-min/max-anchored (buggy) spread
+    # would have produced.
+    assert low_picks != expected_pool_anchored
+
+
 def test_write_manifest_shape(tmp_path):
     cands = _synthetic_candidates()
     chosen = select(cands, n_per_band=2, selection=_TEST_SELECTION)

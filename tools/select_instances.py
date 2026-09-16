@@ -44,25 +44,29 @@ DEFAULT_SELECTION = {
 }
 
 
-def _spread_pick(group: list[dict], n: int) -> list[dict]:
-    """Pick n candidates from group spread evenly by pi, without reuse.
+def _spread_pick(group: list[dict], n: int, win_lo: float, win_hi: float) -> list[dict]:
+    """Pick n candidates from group spread evenly across [win_lo, win_hi), without reuse.
 
     ``group`` must already be sorted deterministically (by pi, ties by seed).
-    Places n equidistant target pi values across the group's own span and
+    Places n equidistant target pi values across the DECLARED WINDOW
+    ``[win_lo, win_hi)`` -- not the observed min/max of ``group`` -- and
     greedily assigns each target the nearest not-yet-chosen candidate,
-    breaking distance ties by seed ascending.
+    breaking distance ties by seed ascending. Anchoring to the window (rather
+    than the candidate pool's own span) is what keeps picks tied to the
+    archetype window regardless of where the surviving candidates happen to
+    cluster; the top target equals win_hi (the exclusive bound), which is
+    fine since the nearest-candidate rule picks the closest survivor
+    strictly below it.
     """
     if not group:
         return []
     if len(group) <= n:
         return list(group)
 
-    lo = group[0]["pi"]
-    hi = group[-1]["pi"]
     if n <= 1:
-        targets = [lo]
+        targets = [win_lo]
     else:
-        targets = [lo + (hi - lo) * k / (n - 1) for k in range(n)]
+        targets = [win_lo + (win_hi - win_lo) * k / (n - 1) for k in range(n)]
 
     chosen_idxs: list[int] = []
     used: set[int] = set()
@@ -107,7 +111,7 @@ def select(candidates: list[dict], cutoffs=DEFAULT_CUTOFFS, n_per_band: int = 5,
         # Deterministic order: sort by pi, ties by seed ascending.
         group = sorted(survivors, key=lambda c: (c["pi"], c["seed"]))
 
-        picks = _spread_pick(group, n_per_band)
+        picks = _spread_pick(group, n_per_band, win_lo, win_hi)
 
         for k, c in enumerate(picks, start=1):
             chosen.append({
