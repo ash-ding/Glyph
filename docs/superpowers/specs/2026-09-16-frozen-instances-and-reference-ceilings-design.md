@@ -204,16 +204,23 @@ The CPU oracles (skeleton/table ceiling) are cheap enough to recompute; the GPU
 reused. A `--only` flag lets a costly oracle be filled in later without rerunning
 the cheap ones.
 
-## 6. Part C — evaluating agents against the references
+## 6. Part C — reading agent runs against the references (lightweight)
+
+This is **not** a forced computation step. Once Part B's reference table exists,
+every agent run is naturally comparable to it — a run already records the exact
+instance it used (seed, band, measured pi, in `run.json`). The only work is to
+**surface that instance's reference metrics in the viewer**, beside the run:
 
 - Agent runs (`train` / `no_train`) use the frozen set: `--seed` comes from the
   manifest; the grid iterates all 15.
-- `build_report` gains a `reference` block: for the run's instance, attach the
-  committed reference row and derive interpretable ratios, e.g.
-  `overall / weights_ceiling@0.10`, `tail / weights_tail`, and the agent's
-  position between `skeleton_ceiling` (0) and `weights_ceiling` (1).
-- The run viewer overlays the reference band on the run's stat cards (the ceiling
-  values and where the agent's score falls).
+- The **run viewer**, given a run's instance seed/band, loads that instance's row
+  from `reference_ceilings.json` and shows the reference battery next to the
+  run's stat cards — skeleton/table ceiling, the weights training-ceiling at each
+  `seen_frac`, and A0-prime — so the agent's `overall` / `tail` sits in context
+  (a 0.42 read against a 0.50 training ceiling and a 0.25 skeleton floor). The
+  instance's own facts (band, measured pi, `uses_binary_tables`) are shown too.
+- Deriving explicit ratios in `build_report` is an **optional** convenience, not
+  required — the numbers side by side already answer the question.
 
 ## 7. Non-goals / out of scope
 
