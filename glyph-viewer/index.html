@@ -244,11 +244,18 @@ async function boot(){
   try{ idx=await (await fetch("runs/index.json",{cache:"no-store"})).json(); }
   catch(e){ $("#detail").innerHTML=""; const d=el("div","empty"); d.innerHTML="Could not load <code>runs/index.json</code>.<br>Run <code>python tools/collect_runs.py --out viewer/runs &lt;out_root&gt;</code>, then serve the repo with <code>python -m http.server</code> and open <code>/viewer/</code>."; $("#detail").append(d); return; }
   INDEX=idx||[];
-  const presets=[...new Set(INDEX.map(r=>r.preset).filter(Boolean))].sort();
+  try{ await bench; }catch(e){}
+  // preset options: the union of the benchmark's presets (so pi_low/pi_high are
+  // offered even when no runs exist yet for them, since preset now scopes the
+  // instance selector) and whatever presets actually appear in the runs index;
+  // ordered low->mid->high, with any stray non-benchmark preset appended after.
+  const ORD={pi_low:0,pi_mid:1,pi_high:2};
+  const fp=(FROZEN&&Array.isArray(FROZEN.instances))?FROZEN.instances.map(i=>i.preset):[];
+  const presets=[...new Set([...fp,...INDEX.map(r=>r.preset)].filter(Boolean))]
+    .sort((a,b)=>((ORD[a]??99)-(ORD[b]??99))||(a<b?-1:a>b?1:0));
   for(const p of presets){const o=el("option",null,p);o.value=p;$("#f-preset").append(o)}
   for(const id of ["f-arm","f-instance"]) $("#"+id).oninput=render;
   $("#f-preset").oninput=()=>{ populateInstanceOptions(); render(); };
-  try{ await bench; }catch(e){}
   populateInstanceOptions();
   for(const b of $$("#viewsw .seg")) b.onclick=()=>setView(b.dataset.view);
   for(const b of $$("#bandsw .seg")) b.onclick=()=>selectBand(b.dataset.band);
