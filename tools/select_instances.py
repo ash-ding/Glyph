@@ -1,9 +1,21 @@
 #!/usr/bin/env python3
 """Select the frozen benchmark instances from a scanned candidate pool.
 
-Filters candidates down to those usable for the benchmark (binary-table
-support, measured pi inside a defined band), then spreads a fixed number of
-picks across each band's pi range rather than clustering near one edge:
+Each band is selected **preset-pure** and **within a narrow archetype
+window** of measured pi (a strict subset of the band's regime cutoffs from
+``glyph.reference.frozen.DEFAULT_CUTOFFS``), so that:
+
+  - every instance in a band comes from that band's matching preset (no
+    cross-preset drift, e.g. a ``pi_mid`` seed landing in the ``high`` band),
+  - every instance sits near the archetype center of its regime rather than
+    at a band edge, so the three bands are maximally separated in pi-space.
+
+For each band, candidates are filtered to ``preset == <band's preset>``,
+``uses_binary_tables is True``, and measured pi inside the band's window.
+Five equidistant target positions are placed across the window and the
+nearest not-yet-chosen candidate is picked for each target (ties broken by
+seed ascending), so picks are spread across the window rather than
+clustered, deterministically and without reuse.
 
     python tools/select_instances.py --candidates docs/benchmark/candidates.json \
         --out docs/benchmark/frozen_instances.json --n-per-band 5
@@ -20,32 +32,82 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from glyph.reference.frozen import DEFAULT_CUTOFFS, band_of  # noqa: E402
 
+# Per-band selection spec: required source preset + narrow archetype window
+# (measured pi, half-open [lo, hi)). Each window is a strict subset of the
+# corresponding regime cutoff in DEFAULT_CUTOFFS, chosen to sit near the
+# center of the band so selected instances are clean, well-separated
+# exemplars of their regime rather than borderline cases at a band edge.
+DEFAULT_SELECTION = {
+    "low": {"preset": "pi_low", "window": (0.20, 0.30)},
+    "mid": {"preset": "pi_mid", "window": (0.45, 0.53)},
+    "high": {"preset": "pi_high", "window": (0.70, 0.80)},
+}
 
-def select(candidates: list[dict], cutoffs=DEFAULT_CUTOFFS, n_per_band: int = 5) -> list[dict]:
-    """Filter, band, and spread-select candidates into frozen manifest entries."""
-    survivors = [c for c in candidates if c.get("uses_binary_tables")]
 
-    by_band: dict[str, list[dict]] = {name: [] for name in cutoffs}
-    for c in survivors:
-        band = band_of(c["pi"], cutoffs)
-        if band is None:
-            continue
-        by_band[band].append(c)
+def _spread_pick(group: list[dict], n: int) -> list[dict]:
+    """Pick n candidates from group spread evenly by pi, without reuse.
 
+    ``group`` must already be sorted deterministically (by pi, ties by seed).
+    Places n equidistant target pi values across the group's own span and
+    greedily assigns each target the nearest not-yet-chosen candidate,
+    breaking distance ties by seed ascending.
+    """
+    if not group:
+        return []
+    if len(group) <= n:
+        return list(group)
+
+    lo = group[0]["pi"]
+    hi = group[-1]["pi"]
+    if n <= 1:
+        targets = [lo]
+    else:
+        targets = [lo + (hi - lo) * k / (n - 1) for k in range(n)]
+
+    chosen_idxs: list[int] = []
+    used: set[int] = set()
+    for target in targets:
+        best_idx = None
+        best_key = None
+        for i, c in enumerate(group):
+            if i in used:
+                continue
+            key = (abs(c["pi"] - target), c["seed"])
+            if best_key is None or key < best_key:
+                best_key = key
+                best_idx = i
+        used.add(best_idx)
+        chosen_idxs.append(best_idx)
+
+    return [group[i] for i in sorted(chosen_idxs)]
+
+
+def select(candidates: list[dict], cutoffs=DEFAULT_CUTOFFS, n_per_band: int = 5,
+           selection: dict = DEFAULT_SELECTION) -> list[dict]:
+    """Filter, band, and window-select candidates into frozen manifest entries.
+
+    ``selection`` maps band name -> {"preset": str, "window": (lo, hi)}.
+    Each band's candidates are restricted to that band's required preset and
+    to the band's archetype window (a strict subset of that band's regime
+    cutoff in ``cutoffs``), then ``n_per_band`` are picked spread across the
+    window, deterministically and without reuse.
+    """
     chosen = []
     for band in cutoffs:
-        group = sorted(by_band[band], key=lambda c: c["pi"])
-        n = len(group)
-        if n == 0:
-            continue
-        if n <= n_per_band:
-            picks = group
-        else:
-            if n_per_band <= 1:
-                idxs = [0]
-            else:
-                idxs = sorted({round(k * (n - 1) / (n_per_band - 1)) for k in range(n_per_band)})
-            picks = [group[i] for i in idxs]
+        spec = selection[band]
+        required_preset = spec["preset"]
+        win_lo, win_hi = spec["window"]
+
+        survivors = [
+            c for c in candidates
+            if c.get("uses_binary_tables")
+            and c.get("preset") == required_preset
+            and win_lo <= c["pi"] < win_hi
+        ]
+        # Deterministic order: sort by pi, ties by seed ascending.
+        group = sorted(survivors, key=lambda c: (c["pi"], c["seed"]))
+
+        picks = _spread_pick(group, n_per_band)
 
         for k, c in enumerate(picks, start=1):
             chosen.append({
@@ -88,7 +150,7 @@ def main(argv=None):
         manifest = json.load(f)
     candidates = manifest["candidates"]
 
-    chosen = select(candidates, DEFAULT_CUTOFFS, args.n_per_band)
+    chosen = select(candidates, DEFAULT_CUTOFFS, args.n_per_band, DEFAULT_SELECTION)
     write_manifest(chosen, DEFAULT_CUTOFFS, args.n_per_band, args.out)
 
     by_band: dict[str, list[dict]] = {}

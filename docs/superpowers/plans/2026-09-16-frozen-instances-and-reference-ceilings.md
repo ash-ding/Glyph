@@ -97,11 +97,11 @@
 
 **Interfaces:**
 - Consumes: `candidates.json`, `frozen.band_of`.
-- Produces: `select(candidates, cutoffs, n_per_band) -> list[dict]` (filters `uses_binary_tables False`; keeps in-band; picks N spread across the band by π); writes `docs/benchmark/frozen_instances.json` with `band_cutoffs`, `n_per_band`, and the chosen instances.
+- Produces: `select(candidates, cutoffs, n_per_band, selection) -> list[dict]` where `selection` is a per-band spec of `{preset, window}` (default `DEFAULT_SELECTION`: low → `pi_low`/`[0.20,0.30)`, mid → `pi_mid`/`[0.45,0.53)`, high → `pi_high`/`[0.70,0.80)`, each window a strict subset of that band's cutoff). Per band: filters to `uses_binary_tables True`, `preset == <band's required preset>`, and measured π inside the band's window; picks N spread across the window (equidistant targets, nearest not-yet-chosen candidate per target, ties by seed ascending, no reuse) — **preset-pure and archetype-window selection**, not preset-blind/full-band. Writes `docs/benchmark/frozen_instances.json` with `band_cutoffs` (the unchanged 4.1 regime cutoffs), `n_per_band`, and the chosen instances.
 
-- [ ] **Step 1: Failing test** — `test_select_from_synthetic`: given a synthetic candidate list spanning π 0..1 (some with `uses_binary_tables False`, some in gaps), `select(..., n_per_band=2)` returns exactly 2 per band, all in-band, none degenerate, and the two per band are not both at the same π.
+- [ ] **Step 1: Failing test** — `test_select_from_synthetic`: given a synthetic candidate list spanning π 0..1 across all three presets (some with `uses_binary_tables False`, some in gaps, some the wrong preset for their numeric window), `select(..., n_per_band=2)` returns exactly 2 per band, every instance's preset matches its band's required preset, every measured π lies inside that band's window, none degenerate, none reused, and the two per band are not both at the same π. Also assert determinism (two calls give identical ids).
 - [ ] **Step 2: Run to confirm fail.**
-- [ ] **Step 3: Implement** the filter + per-band spread selection (sort in-band candidates by π, pick evenly spaced N). Manifest write.
+- [ ] **Step 3: Implement** the preset + window filter, then per-band spread selection without reuse (sort in-band-and-in-window candidates by π then seed, pick evenly spaced N via nearest-target-without-reuse). Manifest write.
 - [ ] **Step 4: Green.**
 - [ ] **Step 5: Commit.**
 
@@ -113,7 +113,7 @@
 - Create (data): `docs/benchmark/candidates.json`, `docs/benchmark/frozen_instances.json`
 - Create: `tests/test_frozen_instances.py` (integrity gate)
 
-- [ ] **Step 1: Integrity test first** — `test_manifest_reproduces`: for every entry in `frozen_instances.json`, `generate(seed, PRESETS[preset])` reproduces `fingerprint_sha256`, its measured π is inside its band's cutoffs, and `uses_binary_tables` is True. `test_manifest_shape`: 3 bands present, `n_per_band` entries each.
+- [ ] **Step 1: Integrity test first** — `test_manifest_reproduces`: for every entry in `frozen_instances.json`, `generate(seed, PRESETS[preset])` reproduces `fingerprint_sha256`, its measured π is inside its band's cutoffs, and `uses_binary_tables` is True. `test_manifest_shape`: 3 bands present, `n_per_band` entries each. `test_manifest_is_preset_pure_and_in_window`: every entry's `preset` matches its band's required preset and its measured π lies inside that band's `DEFAULT_SELECTION` window (Task 4).
 - [ ] **Step 2: Run the scan** across the three presets (default 60 seeds each), commit `candidates.json`, and print the histogram for the record.
 - [ ] **Step 3: Select** N=5 per band (adjust cutoffs only if the histogram clearly requires it — record any change), write and commit `frozen_instances.json`.
 - [ ] **Step 4: Run the integrity test — green.**

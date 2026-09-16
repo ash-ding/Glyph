@@ -83,7 +83,7 @@ Seeds landing in a gap `(0.35,0.40)` or `(0.55,0.60)`, or outside `[0.20,0.80)`,
 are discarded. Each band is drawn from its matching preset so that config knobs
 other than π (e.g. `unary_coupling`) stay consistent **within** a band.
 
-### 4.2 Selection — oversample a pool, then choose from the distribution
+### 4.2 Selection — oversample a pool, then choose preset-pure within a narrow archetype window
 
 Generation is cheap (a 10^4-item instance takes 1.5-11 s; π is measured on a
 1500-item sample), so we **oversample and decide from the whole distribution**
@@ -96,12 +96,36 @@ rather than taking the first few in-band seeds:
    and the CPU ceilings. Committing the pool makes the final choice auditable.
 2. **Filter** degenerate candidates: `uses_binary_tables == False` (the deferred
    `pi_low`-without-binary corner), or generation hitting the short-test guard.
-3. **Choose the final set from the distribution.** First report the measured-π
-   histogram per preset (to confirm or adjust the 4.1 cutoffs). Then select
-   **N per band** — default **5**, giving the fixed **15**, and adjustable once
-   the distribution is seen — from the surviving candidates whose measured π sits
-   in the band's range, preferring a spread across the band over a cluster at one
-   edge. Both N and the cutoffs are recorded in the manifest.
+3. **Choose the final set preset-pure, within a narrow archetype window per band.**
+   First report the measured-π histogram per preset (to confirm or adjust the 4.1
+   cutoffs). Then, per band, restrict to candidates whose `preset` matches that
+   band's preset (4.1's "drawn from preset" column) **and** whose measured π falls
+   inside a narrow window near the center of the band's cutoff — a strict subset of
+   the 4.1 range, not the full band:
+
+   | band | required preset | selection window (measured π) |
+   |---|---|---|
+   | **low**  | `pi_low`  | `[0.20, 0.30)` |
+   | **mid**  | `pi_mid`  | `[0.45, 0.53)` |
+   | **high** | `pi_high` | `[0.70, 0.80)` |
+
+   From that preset-pure, in-window pool, select **N per band** — default **5**,
+   giving the fixed **15** — spread across the window (equidistant target
+   positions across the window, nearest surviving candidate per target, no
+   reuse) rather than clustered at one edge. Both N and the windows are recorded
+   in the manifest, separately from the 4.1 regime cutoffs.
+
+   **Why preset-pure + narrow window, not preset-blind + full band:** measured π
+   drifts from its preset (4.2 point 2 in the Motivation above), so a handful of
+   `pi_mid` seeds land inside `pi_high`'s cutoff and vice versa; selecting
+   preset-blind across the whole band let those drifted seeds in, mixing config
+   knobs (e.g. `unary_coupling`) that should stay consistent within a band, and
+   an equidistant spread across the *full* band put weak, borderline exemplars at
+   the edges (a "barely high" instance at π≈0.60). Restricting each band to its
+   own preset and to a window near the archetype center keeps every instance a
+   clean exemplar of its regime and **maximizes separation between the three
+   regimes in π-space**; N=5 remains replication near that archetype, not a
+   spread across the whole regime.
 
 ### 4.3 The manifest
 
@@ -129,7 +153,8 @@ Commit `docs/benchmark/frozen_instances.json` (git-tracked, human-readable):
 
 - `tools/scan_instances.py` — scans the candidate pool, writes
   `candidates.json`, and prints the per-preset measured-π histogram.
-- `tools/select_instances.py` — chooses N per band from `candidates.json` and
+- `tools/select_instances.py` — chooses N per band, preset-pure and within each
+  band's archetype window (`DEFAULT_SELECTION`), from `candidates.json` and
   writes the frozen manifest.
 - `glyph.data` helper `load_frozen()` → the list of `(id, band, preset, seed)`
   so eval code and the harness can iterate the fixed set.
