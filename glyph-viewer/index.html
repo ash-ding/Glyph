@@ -59,6 +59,13 @@ h1.title{font-size:20px;margin:0 0 2px}
 .card{border:1px solid var(--line);border-radius:10px;padding:9px 11px;background:var(--panel)}
 .card .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
 .card .v{font-size:16px;font-weight:600;font-variant-numeric:tabular-nums}
+.refcard{grid-column:1/-1}
+.refcard .facts{color:var(--muted);font-size:12px;margin:3px 0 8px}
+.reftable{width:100%;border-collapse:collapse;margin-top:2px;font-size:12px}
+.reftable th,.reftable td{padding:3px 8px;text-align:right;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+.reftable th{color:var(--muted);font-weight:600;text-transform:uppercase;font-size:10px;letter-spacing:.04em}
+.reftable th:first-child,.reftable td:first-child{text-align:left;color:var(--muted);font-weight:400;text-transform:none}
+.reftable tr.runrow td{font-weight:700;color:var(--accent)}
 details.sec{border:1px solid var(--line);border-radius:10px;margin-bottom:8px;background:var(--panel);overflow:hidden}
 details.sec>summary{cursor:pointer;padding:9px 12px;font-weight:600;font-size:13px;list-style:none}
 details.sec>summary::-webkit-details-marker{display:none}
@@ -121,7 +128,7 @@ details.narr .t{font-size:13px;white-space:pre-wrap;margin:6px 0;padding-left:8p
 <script>
 const $=s=>document.querySelector(s), el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
 const GLYPH_TOOLS=new Set(["query","submit","check_answers","finish_practice","build_dataset","train","student_infer","final_answer"]);
-let INDEX=[], CURRENT=null;
+let INDEX=[], CURRENT=null, FROZEN=null, CEILINGS=null;
 
 // theme toggle
 (function(){ let t=null; try{t=localStorage.getItem("glyph-theme")}catch(e){} if(t)document.documentElement.setAttribute("data-theme",t);
@@ -131,14 +138,71 @@ let INDEX=[], CURRENT=null;
 function num(x,d){return (x==null||isNaN(x))?"—":Number(x).toFixed(d)}
 function fmtJSON(v){try{return typeof v==="string"?v:JSON.stringify(v,null,2)}catch(e){return String(v)}}
 
+// benchmark reference data (frozen instances + their cheap/expensive reference
+// ceilings), copied by tools/collect_runs.py next to runs/index.json. Both are
+// optional — a run viewer with no benchmark files must still work normally.
+async function loadBenchmark(){
+  try{ FROZEN=await (await fetch("runs/frozen_instances.json",{cache:"no-store"})).json(); }
+  catch(e){ FROZEN=null; }
+  try{ CEILINGS=await (await fetch("runs/reference_ceilings.json",{cache:"no-store"})).json(); }
+  catch(e){ CEILINGS=null; }
+}
+function findInstance(cfg){
+  try{
+    if(!FROZEN||!Array.isArray(FROZEN.instances))return null;
+    return FROZEN.instances.find(ins=>String(ins.seed)===String(cfg.seed)&&ins.preset===cfg.preset)||null;
+  }catch(e){ return null; }
+}
+function refRow(table,label,ov,ta,isRun){
+  const tr=el("tr",isRun?"runrow":null);
+  tr.append(el("td",null,label),el("td",null,num(ov,3)),el("td",null,num(ta,3)));
+  table.append(tr);
+}
+function buildReference(rj){
+  const cfg=rj.config||{}, s=rj.summary||{}, rep=rj.report||{};
+  const card=el("div","card refcard");
+  let inst=null;
+  try{ inst=findInstance(cfg); }catch(e){ inst=null; }
+  if(!inst){
+    card.append(el("div","k","reference"));
+    card.append(el("div","v","not a frozen instance"));
+    return card;
+  }
+  card.append(el("div","k","reference — "+inst.id+" ("+inst.band+")"));
+  card.append(el("div","facts","measured π "+num(inst.measured_pi,3)+"  ·  binary tables "+(inst.uses_binary_tables?"yes":"no")));
+  const table=el("table","reftable");
+  const hd=el("tr"); hd.append(el("th",null,""),el("th",null,"overall"),el("th",null,"tail")); table.append(hd);
+  refRow(table,"this run",s.overall,rep.tail,true);
+  let ceil=null;
+  try{ ceil=CEILINGS&&CEILINGS[inst.id]; }catch(e){ ceil=null; }
+  if(ceil){
+    for(const k of ["skeleton","table","perfect"]){
+      const v=ceil[k]; if(v) refRow(table,k,v.overall,v.tail,false);
+    }
+    for(const k of ["weights","a0prime"]){
+      const block=ceil[k];
+      if(block&&typeof block==="object"){
+        for(const frac of Object.keys(block).sort()){
+          const v=block[frac]; if(v) refRow(table,k+" @"+frac,v.overall,v.tail,false);
+        }
+      }
+    }
+  }
+  card.append(table);
+  if(!ceil) card.append(el("div","hint","no reference ceilings for this instance"));
+  return card;
+}
+
 async function boot(){
   let idx;
+  const bench=loadBenchmark(); // kick off in parallel; loadBenchmark never throws
   try{ idx=await (await fetch("runs/index.json",{cache:"no-store"})).json(); }
   catch(e){ $("#detail").innerHTML=""; const d=el("div","empty"); d.innerHTML="Could not load <code>runs/index.json</code>.<br>Run <code>python tools/collect_runs.py --out viewer/runs &lt;out_root&gt;</code>, then serve the repo with <code>python -m http.server</code> and open <code>/viewer/</code>."; $("#detail").append(d); return; }
   INDEX=idx||[];
   const presets=[...new Set(INDEX.map(r=>r.preset).filter(Boolean))].sort();
   for(const p of presets){const o=el("option",null,p);o.value=p;$("#f-preset").append(o)}
   for(const id of ["f-arm","f-preset","f-pimin","f-pimax"]) $("#"+id).oninput=render;
+  try{ await bench; }catch(e){}
   render();
   if(INDEX.length) load(filtered()[0]?.id||INDEX[0].id);
 }
@@ -196,6 +260,7 @@ function renderRun(rj){
   cards.append(stat("spent",("$"+num(s.spent_usd,2))));
   cards.append(stat("turns",s.n_turns??"—"));
   const gpu=(rep.ledger||{}).gpu_seconds; if(gpu&&gpu._total!=null)cards.append(stat("gpu sec",num(gpu._total,1)));
+  try{ cards.append(buildReference(rj)); }catch(e){ /* never blank the page over a benchmark lookup */ }
   m.append(cards);
   // collapsibles: config, prompts, task
   const cfgPre=el("pre",null,fmtJSON(cfg)); m.append(section("Configuration",cfgPre));

@@ -8,15 +8,39 @@ gathers them for the browser viewer:
 
 It copies every `run.json` found under the given roots to `<out>/<id>.json` and
 writes `<out>/index.json` (one summary row per run, newest first). Idempotent —
-re-run it whenever new runs finish. Then serve the repo and open the viewer:
+re-run it whenever new runs finish. It also copies the frozen-instance benchmark
+files (`docs/benchmark/frozen_instances.json`, `docs/benchmark/reference_ceilings.json`)
+into `<out>/` when they exist, so the viewer can show each run's reference
+ceilings alongside it. Then serve the repo and open the viewer:
 
     python -m http.server 8000        # from the repo root
     # open http://localhost:8000/glyph-viewer/
 """
 import argparse
 import json
+import shutil
 import sys
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+BENCHMARK_DIR = REPO_ROOT / "docs" / "benchmark"
+BENCHMARK_FILES = ("frozen_instances.json", "reference_ceilings.json")
+
+
+def copy_benchmark(out_dir):
+    """Copy the frozen-instance benchmark files into `out_dir`, if present.
+
+    Copies `frozen_instances.json` and `reference_ceilings.json` from
+    `BENCHMARK_DIR` (docs/benchmark) into `out_dir`, next to the collected
+    run files and `index.json`. Any file that doesn't exist yet is skipped
+    silently — the viewer degrades gracefully when it's missing.
+    """
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for name in BENCHMARK_FILES:
+        src = BENCHMARK_DIR / name
+        if src.exists():
+            shutil.copy(src, out_dir / name)
 
 
 def collect(roots, out_dir):
@@ -44,6 +68,7 @@ def collect(roots, out_dir):
             index.append(summ)
     index.sort(key=lambda r: (r.get("created") or ""), reverse=True)
     (out_dir / "index.json").write_text(json.dumps(index, indent=2))
+    copy_benchmark(out_dir)
     return index
 
 
