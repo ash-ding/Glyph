@@ -100,6 +100,11 @@ def test_build_run_json_shape(tmp_path):
 
 
 def test_attach_thinking_joins_by_tool_use_id():
+    # Capture order is REVERSED relative to turn/action order: captures[0]
+    # carries turn1's action id and captures[1] carries turn0's action id.
+    # A positional implementation (captures[i] -> turns[i], ignoring
+    # tool_use_ids) would attach the wrong text to each turn and fail this;
+    # only a real id-keyed join passes.
     rows = [
         _asst(_tu("query", "a1", {})),
         _results(("a1", "r1", False)),
@@ -108,15 +113,39 @@ def test_attach_thinking_joins_by_tool_use_id():
     ]
     turns = normalize_transcript(rows)
     assert len(turns) == 2
+    assert turns[0]["actions"][0]["id"] == "a1"
+    assert turns[1]["actions"][0]["id"] == "a2"
     captures = [
-        {"thinking": ["reasoning for a1"], "redacted": 1, "tool_use_ids": ["a1"], "text_preview": ""},
         {"thinking": ["reasoning for a2"], "redacted": 1, "tool_use_ids": ["a2"], "text_preview": ""},
+        {"thinking": ["reasoning for a1"], "redacted": 1, "tool_use_ids": ["a1"], "text_preview": ""},
     ]
     attach_thinking(turns, captures)
     assert turns[0]["thinking_texts"] == ["reasoning for a1"]
     assert turns[1]["thinking_texts"] == ["reasoning for a2"]
     # each capture attached to exactly one turn; no cross-contamination
     assert turns[0]["thinking_texts"] != turns[1]["thinking_texts"]
+
+
+def test_attach_thinking_capture_not_double_assigned_on_id_contention():
+    # Two turns whose actions share the same tool_use id, and a single
+    # capture whose tool_use_ids matches that shared id. The capture must
+    # attach to exactly one turn, never both, and must not be duplicated
+    # via the sequential fallback afterward.
+    turns = [
+        {"turn": 1, "phase": "practice", "text": [], "actions": [{"id": "dup1", "name": "query"}],
+         "thinking_redacted": 0},
+        {"turn": 2, "phase": "practice", "text": [], "actions": [{"id": "dup1", "name": "query"}],
+         "thinking_redacted": 0},
+    ]
+    captures = [
+        {"thinking": ["shared reasoning"], "redacted": 1, "tool_use_ids": ["dup1"], "text_preview": ""},
+    ]
+    attach_thinking(turns, captures)
+    matched = [t for t in turns if t["thinking_texts"]]
+    assert len(matched) == 1
+    assert matched[0]["thinking_texts"] == ["shared reasoning"]
+    unmatched = [t for t in turns if not t["thinking_texts"]]
+    assert len(unmatched) == 1
 
 
 def test_attach_thinking_sequential_fallback_for_text_only_turn():
