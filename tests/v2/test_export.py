@@ -1,4 +1,8 @@
-from glyph.v2.export import normalize_transcript, build_run_json
+import json
+
+from glyph.v2.export import (
+    normalize_transcript, build_run_json, attach_thinking, _read_thinking_capture,
+)
 
 
 def _asst(*blocks):
@@ -93,3 +97,109 @@ def test_build_run_json_shape(tmp_path):
     assert rj["summary"]["overall"] == 0.42 and rj["summary"]["pi"] == 0.44
     assert rj["summary"]["arm"] == "train" and rj["summary"]["n_turns"] == 1
     assert len(rj["transcript"]) == 1
+
+
+def test_attach_thinking_joins_by_tool_use_id():
+    # Capture order is REVERSED relative to turn/action order: captures[0]
+    # carries turn1's action id and captures[1] carries turn0's action id.
+    # A positional implementation (captures[i] -> turns[i], ignoring
+    # tool_use_ids) would attach the wrong text to each turn and fail this;
+    # only a real id-keyed join passes.
+    rows = [
+        _asst(_tu("query", "a1", {})),
+        _results(("a1", "r1", False)),
+        _asst(_tu("query", "a2", {})),
+        _results(("a2", "r2", False)),
+    ]
+    turns = normalize_transcript(rows)
+    assert len(turns) == 2
+    assert turns[0]["actions"][0]["id"] == "a1"
+    assert turns[1]["actions"][0]["id"] == "a2"
+    captures = [
+        {"thinking": ["reasoning for a2"], "redacted": 1, "tool_use_ids": ["a2"], "text_preview": ""},
+        {"thinking": ["reasoning for a1"], "redacted": 1, "tool_use_ids": ["a1"], "text_preview": ""},
+    ]
+    attach_thinking(turns, captures)
+    assert turns[0]["thinking_texts"] == ["reasoning for a1"]
+    assert turns[1]["thinking_texts"] == ["reasoning for a2"]
+    # each capture attached to exactly one turn; no cross-contamination
+    assert turns[0]["thinking_texts"] != turns[1]["thinking_texts"]
+
+
+def test_attach_thinking_capture_not_double_assigned_on_id_contention():
+    # Two turns whose actions share the same tool_use id, and a single
+    # capture whose tool_use_ids matches that shared id. The capture must
+    # attach to exactly one turn, never both, and must not be duplicated
+    # via the sequential fallback afterward.
+    turns = [
+        {"turn": 1, "phase": "practice", "text": [], "actions": [{"id": "dup1", "name": "query"}],
+         "thinking_redacted": 0},
+        {"turn": 2, "phase": "practice", "text": [], "actions": [{"id": "dup1", "name": "query"}],
+         "thinking_redacted": 0},
+    ]
+    captures = [
+        {"thinking": ["shared reasoning"], "redacted": 1, "tool_use_ids": ["dup1"], "text_preview": ""},
+    ]
+    attach_thinking(turns, captures)
+    matched = [t for t in turns if t["thinking_texts"]]
+    assert len(matched) == 1
+    assert matched[0]["thinking_texts"] == ["shared reasoning"]
+    unmatched = [t for t in turns if not t["thinking_texts"]]
+    assert len(unmatched) == 1
+
+
+def test_attach_thinking_drops_captures_with_no_tool_use_ids():
+    # A capture with no tool_use_ids (e.g. emitted by a background
+    # small-model / context-compaction call the gateway also proxies) must
+    # NOT be guessed onto any turn via a positional fallback -- it is simply
+    # dropped, since there is no id evidence linking it to a real turn.
+    rows = [_asst(_text("Final answer text."))]
+    turns = normalize_transcript(rows)
+    assert len(turns) == 1
+    assert turns[0]["actions"] == []
+    captures = [{"thinking": ["thought with no tool_use_ids"], "redacted": 1,
+                 "tool_use_ids": [], "text_preview": "Final answer"}]
+    attach_thinking(turns, captures)
+    assert turns[0]["thinking_texts"] == []
+
+
+def test_attach_thinking_drops_captures_with_unmatched_tool_use_id():
+    # A capture whose tool_use_ids don't match any turn's action id (e.g. a
+    # background call the gateway proxied that this transcript never saw) is
+    # dropped, not attached to the nearest turn.
+    rows = [_asst(_tu("query", "a1", {})), _results(("a1", "r1", False))]
+    turns = normalize_transcript(rows)
+    assert len(turns) == 1
+    captures = [{"thinking": ["reasoning for an unrelated call"], "redacted": 1,
+                 "tool_use_ids": ["zzz-not-a-real-id"], "text_preview": ""}]
+    attach_thinking(turns, captures)
+    assert turns[0]["thinking_texts"] == []
+
+
+def test_attach_thinking_backward_compatible_with_no_captures():
+    rows = [_asst(_tu("Read", "r1", {})), _results(("r1", "x", False))]
+    turns = normalize_transcript(rows)
+    before = json.loads(json.dumps(turns))
+    attach_thinking(turns, [])
+    assert all(t["thinking_texts"] == [] for t in turns)
+    for b, a in zip(before, turns):
+        for k in b:
+            assert a[k] == b[k]
+
+
+def test_read_thinking_capture_missing_file(tmp_path):
+    assert _read_thinking_capture(tmp_path) == []
+
+
+def test_read_thinking_capture_skips_blank_and_malformed_lines(tmp_path):
+    p = tmp_path / "thinking.jsonl"
+    p.write_text(
+        '{"thinking": ["a"], "redacted": 1, "tool_use_ids": ["a1"], "text_preview": ""}\n'
+        '\n'
+        'not json\n'
+        '{"thinking": ["b"], "redacted": 0, "tool_use_ids": [], "text_preview": "b"}\n'
+    )
+    captures = _read_thinking_capture(p.parent)
+    assert len(captures) == 2
+    assert captures[0]["thinking"] == ["a"]
+    assert captures[1]["thinking"] == ["b"]

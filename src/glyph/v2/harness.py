@@ -337,7 +337,8 @@ def run(rc: RunConfig) -> dict:
     #    log_path persists a per-request audit log alongside the run's artifacts.
     gw_sock = run_dir / "gw.sock"
     gateway = Gateway(ledger, pinned_model=rc.model, allowed_models={rc.model},
-                       log_path=str(run_dir / "gateway_log.jsonl"))
+                       log_path=str(run_dir / "gateway_log.jsonl"),
+                       thinking_log_path=str(run_dir / "thinking.jsonl"))
 
     # 5. trace + MCP server
     trace = RunTrace(run_dir)

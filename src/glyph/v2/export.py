@@ -6,10 +6,13 @@ the agent was measured on, the task README it saw, the final report, and a
 normalized turn-by-turn transcript.
 
 Note on thinking: the persisted CLI transcript redacts extended-thinking text
-(only a signature remains), so the raw chain-of-thought is not recoverable. What
-is captured per turn is the agent's *visible* text (its narration), every tool
-call with its input, and every tool result -- the full observable trajectory.
-Redacted thinking blocks are counted so the viewer can show a marker.
+(only a signature remains), so the raw chain-of-thought is not recoverable
+from the CLI transcript alone. Redacted thinking blocks are counted so the
+viewer can show a marker. Separately, the gateway (see T1) can capture the
+actual thinking text it observes and write it to `run_dir/thinking.jsonl`;
+when present, `build_run_json` joins that captured text onto the matching
+turn (`thinking_texts`) so the viewer can show real reasoning instead of just
+a redacted count.
 """
 from __future__ import annotations
 
@@ -37,7 +40,7 @@ def _opener_text(row):
 def normalize_transcript(rows, final_opener=None):
     """Turn the CLI transcript rows into an ordered list of turns.
 
-    Each turn: {turn, phase, text: [str], actions: [{name, input, result,
+    Each turn: {turn, phase, text: [str], actions: [{id, name, input, result,
     is_error}], thinking_redacted: int}. A turn is a run of assistant blocks up
     to the tool-results that answer them; a user tool-result row closes it.
     Phase flips to "final" at the turn following the user opener that matches
@@ -88,8 +91,9 @@ def normalize_transcript(rows, final_opener=None):
                         ensure(); cur["text"].append(txt)
                 elif bt == "tool_use":
                     ensure()
-                    act = {"name": b.get("name"), "input": b.get("input"),
-                           "result": None, "is_error": False}
+                    act = {"id": b.get("id"), "name": b.get("name"),
+                           "input": b.get("input"), "result": None,
+                           "is_error": False}
                     cur["actions"].append(act)
                     if b.get("id"):
                         id_to_action[b["id"]] = act
@@ -126,11 +130,85 @@ def _read_cli_transcript(run_dir):
     return rows
 
 
+def _read_thinking_capture(run_dir):
+    """Read the gateway-captured thinking records from `run_dir/thinking.jsonl`.
+
+    One JSON object per line: {"thinking": [str,...], "redacted": int,
+    "tool_use_ids": [str,...], "text_preview": str}. Missing file, blank
+    lines, and malformed lines are all tolerated -- this never raises.
+    """
+    path = Path(run_dir) / "thinking.jsonl"
+    if not path.exists():
+        return []
+    try:
+        text = path.read_text()
+    except OSError:
+        return []
+    captures = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rec = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(rec, dict):
+            captures.append(rec)
+    return captures
+
+
+def attach_thinking(turns, captures):
+    """Join captured thinking text (from `_read_thinking_capture`) onto turns.
+
+    Mutates and returns `turns`, adding a `thinking_texts: [str]` field to
+    every turn. Join is by tool_use id ONLY: a capture whose `tool_use_ids`
+    intersects a turn's action ids is attached to that turn (its `thinking`
+    strings appended, in capture file order). Each capture is consumed at
+    most once, even if it shares an id with several turns' actions.
+
+    Captures that match no turn -- no `tool_use_ids` at all, or ids that
+    aren't any turn's action id -- are dropped, not guessed at. The gateway
+    proxies every model call the CLI makes, including background small-model
+    / context-compaction calls, so an id-less or unmatched capture may not
+    even belong to this agent's visible trajectory; a positional/sequential
+    fallback risks silently attaching the wrong reasoning to a real turn, so
+    there is deliberately no fallback here. Every real agent turn issues a
+    tool call and therefore has a tool_use id to join on.
+
+    Backward compatible: with no captures, every turn just gets
+    `thinking_texts: []` and nothing else changes.
+    """
+    for t in turns:
+        t["thinking_texts"] = []
+    if not captures:
+        return turns
+
+    consumed = [False] * len(captures)
+    id_to_idx = {}
+    for i, cap in enumerate(captures):
+        for tid in (cap.get("tool_use_ids") or []):
+            if tid and tid not in id_to_idx:
+                id_to_idx[tid] = i
+
+    for t in turns:
+        action_ids = [a.get("id") for a in t.get("actions", []) if a.get("id")]
+        cap_idxs = sorted({id_to_idx[aid] for aid in action_ids if aid in id_to_idx})
+        for i in cap_idxs:
+            if not consumed[i]:
+                t["thinking_texts"].extend(captures[i].get("thinking") or [])
+                consumed[i] = True
+
+    return turns
+
+
 def build_run_json(*, run_id, created, config, task_readme, prompts, report,
                    run_dir):
     """Assemble the self-contained run.json dict."""
     rows = _read_cli_transcript(run_dir)
     transcript = normalize_transcript(rows, final_opener=prompts.get("final_opener"))
+    captures = _read_thinking_capture(run_dir)
+    attach_thinking(transcript, captures)
     inst = report.get("instance", {}) if isinstance(report, dict) else {}
     return {
         "id": run_id,
