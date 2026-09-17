@@ -622,6 +622,52 @@ output or the frontier's. Decide later whether to wire `final_from_student` as
 specified, drop it, or replace it with (a)+(b). Deferred.
 
 
+### the train arm cannot obtain enough data to train a usable student
+
+The pilot train run (`pi_mid`/1001) never produced a usable student. Root cause,
+measured from the transcript and the code:
+
+- `train` sets `steps = ceil(|dataset| / batch=32) x epochs` (`sft.py:160`). The
+  agent's two trainings were **ck1** (30 demos, 3 epochs -> **3 steps**) and
+  **ck2** (160 examples, 10 epochs -> **50 steps**). Fifty gradient steps on
+  Qwen3-1.7B is not enough to learn even the output *format*: `student_infer`
+  produced runaway generations that hit the 96-token cap (ck1 5/5 truncated,
+  ck2 95/100 truncated, `infer.py:117` `max_new_tokens=96`). The agent abandoned
+  the student and committed a hand-written symbolic solver (0.4152 val).
+- The weights-ceiling oracle (`weights_ceiling.py`) trains **6000 steps x batch
+  128** (768k views) over **atomic cells** with a uniform short-output form --
+  ~120x more steps. Even at `seen_frac = 0.02` its pool is ~966k cells
+  (binary-dominated), so it never hits the train arm's data/step starvation.
+- The train arm is structurally starved: bare atomic queries are illegal (atomic
+  ops are reachable only through a structural op, list length >= 2), so the agent
+  can only buy **expression-level** (variable-output, entangled) data; `q_cap =
+  1000` caps how much; and `train`'s step count is tied to dataset size. Reaching
+  the oracle's 6000-step budget would need ~19k examples -- infeasible under those
+  constraints.
+
+Consequences / to decide:
+
+- The train arm and the weights ceiling do **not** train the student on the same
+  thing (expression-level & tiny vs atomic-cell & 6000 steps), so they are not
+  directly comparable as "the same knowledge in weights". A train-arm result
+  under-reports what training can reach for reasons of data access and budget,
+  not because training cannot work. Relates to the A0'/weights standardization
+  cluster and [#15](https://github.com/ash-ding/Glyph/issues/15) (the query cap Q).
+- Decide: (a) a min-steps floor, or decouple `train`'s step count from dataset
+  size; (b) widen the training-data budget (larger `q_cap`, or a cheaper
+  bulk-cell channel) so the agent *can* build a table-scale dataset; (c) whether
+  the arm should expose atomic-cell access at all, given bare-atomic queries are
+  deliberately illegal.
+- Empirical check still to run **[GPU], deferred**: at `seen_frac` 0.02 / 0.05,
+  does the weights student produce **valid, terminating** outputs (failure = wrong
+  value) or does low data also break the *format* (truncation)? This separates a
+  training-budget/format failure (the train arm's) from coverage-limited accuracy
+  (the oracle's). Run `tools/run_reference.py --only weights --seen-frac 0.02 0.05`
+  on a frozen instance and report parse-rate / truncation-rate / accuracy
+  separately.
+
+Deferred.
+
 ---
 
 ## Order
