@@ -469,7 +469,7 @@ function renderRun(rj){
   // transcript
   const tr=rj.transcript||[]; let phase=null;
   const th=el("h2"); th.style.margin="20px 0 4px"; th.textContent="Transcript"; m.append(th);
-  m.append(Object.assign(el("div","hint"),{textContent:"Raw extended-thinking text is redacted by the CLI; shown per turn are the agent's visible reasoning, its tool calls, and results."}));
+  m.append(Object.assign(el("div","hint"),{textContent:"Reasoning is shown per turn when captured; turns marked 'thinking ×N (redacted)' had encrypted/older thinking the CLI did not retain."}));
   for(const t of tr){
     if(t.kind==="compaction"){ m.append(Object.assign(el("div","compact"),{textContent:"context compacted"})); continue; }
     if(t.phase!==phase){ phase=t.phase; const h=el("div","phasehdr"); h.append(document.createTextNode((phase||"").toUpperCase()+" phase")); m.append(h); }
@@ -481,8 +481,14 @@ function renderTurn(t){
   const hd=el("div","hd");
   hd.append(el("span","badge "+(t.phase||""),t.phase||""));
   hd.append(el("span","n","turn "+t.turn));
-  if(t.thinking_redacted)hd.append(el("span","think","💭 thinking ×"+t.thinking_redacted+" (redacted)"));
+  const hasThinkingText=(t.thinking_texts||[]).length>0;
+  if(!hasThinkingText&&t.thinking_redacted)hd.append(el("span","think","💭 thinking ×"+t.thinking_redacted+" (redacted)"));
   box.append(hd);
+  if(hasThinkingText){
+    const td=el("details","narr"); td.append(el("summary"));
+    for(const tx of t.thinking_texts) td.append(el("div","t",tx));
+    box.append(td);
+  }
   if((t.text||[]).length){
     const d=el("details","narr"); d.append(el("summary"));
     for(const tx of t.text) d.append(el("div","t",tx));
