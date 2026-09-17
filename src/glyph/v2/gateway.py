@@ -133,6 +133,8 @@ def _parse_thinking(body_text: str) -> dict:
         from content_block_start/content_block_delta events by block index.
 
     Never raises: malformed/non-JSON input or unexpected shapes just yield an empty-ish record.
+    Empty/whitespace-only thinking strings (e.g. a "thinking" block that started but received no
+    thinking_delta) are dropped from "thinking" so they never pass the caller's persistence gate.
     """
     rec: dict = {"thinking": [], "redacted": 0, "tool_use_ids": [], "text_preview": ""}
 
@@ -162,6 +164,7 @@ def _parse_thinking(body_text: str) -> dict:
                         rec["tool_use_ids"].append(tid)
                 elif btype == "text":
                     text_parts.append(block.get("text", "") or "")
+        rec["thinking"] = [t for t in rec["thinking"] if t and t.strip()]
         rec["text_preview"] = "".join(text_parts)[:200]
         return rec
 
@@ -211,6 +214,7 @@ def _parse_thinking(body_text: str) -> dict:
     for idx in sorted(thinking_buffers.keys()):
         if index_type.get(idx) == "thinking":
             rec["thinking"].append(thinking_buffers[idx])
+    rec["thinking"] = [t for t in rec["thinking"] if t and t.strip()]
     rec["text_preview"] = "".join(text_parts)[:200]
     return rec
 

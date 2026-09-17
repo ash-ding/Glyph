@@ -246,7 +246,7 @@ def test_parse_thinking_redacted_non_streamed():
     body = _json.dumps({"type": "message", "content": [{"type": "redacted_thinking", "data": "encrypted-blob"}]})
     rec = _parse_thinking(body)
     assert rec["thinking"] == []
-    assert rec["redacted"] >= 1
+    assert rec["redacted"] == 1
 
 
 def test_parse_thinking_redacted_streamed():
@@ -262,7 +262,7 @@ def test_parse_thinking_redacted_streamed():
     )
     rec = _parse_thinking(body)
     assert rec["thinking"] == []
-    assert rec["redacted"] >= 1
+    assert rec["redacted"] == 1
 
 
 def test_parse_thinking_malformed_body_does_not_raise():
@@ -358,3 +358,173 @@ def test_gateway_writes_nothing_when_no_thinking(tmp_path):
     anyio.run(run)
 
     assert not thinking_path.exists()
+
+
+def test_parse_thinking_streamed_sse_multiple_indices_in_order():
+    """Thinking blocks at non-adjacent indices (0 and 2), with deltas interleaved out of
+    index order, must still be reassembled per-index and returned in index order."""
+    from glyph.v2.gateway import _parse_thinking
+
+    lines = [
+        'data: {"type":"message_start","message":{"id":"msg_1"}}',
+        '',
+        'data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking"}}',
+        '',
+        'data: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_mid"}}',
+        '',
+        'data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"first-block "}}',
+        '',
+        'data: {"type":"content_block_start","index":2,"content_block":{"type":"thinking"}}',
+        '',
+        'data: {"type":"content_block_delta","index":2,"delta":{"type":"thinking_delta","thinking":"third-block "}}',
+        '',
+        'data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"continued"}}',
+        '',
+        'data: {"type":"content_block_delta","index":2,"delta":{"type":"thinking_delta","thinking":"continued-too"}}',
+        '',
+        'data: {"type":"content_block_stop","index":2}',
+        '',
+    ]
+    body = "\n".join(lines)
+    rec = _parse_thinking(body)
+    assert rec["thinking"] == ["first-block continued", "third-block continued-too"]
+    assert rec["tool_use_ids"] == ["toolu_mid"]
+
+
+def test_parse_thinking_streamed_sse_signature_delta_ignored():
+    """A signature_delta (the encrypted signature over a thinking block) must never be
+    appended to the reassembled thinking text."""
+    from glyph.v2.gateway import _parse_thinking
+
+    lines = [
+        'data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking"}}',
+        '',
+        'data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"reasoning text"}}',
+        '',
+        'data: {"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"abcdef=="}}',
+        '',
+        'data: {"type":"content_block_stop","index":0}',
+        '',
+    ]
+    body = "\n".join(lines)
+    rec = _parse_thinking(body)
+    assert rec["thinking"] == ["reasoning text"]
+
+
+def test_parse_thinking_non_streamed_empty_thinking_block_dropped():
+    """A "thinking" block with empty/whitespace-only text must not appear in "thinking" --
+    otherwise a genuinely-empty capture would still pass the caller's persistence gate."""
+    import json as _json
+    from glyph.v2.gateway import _parse_thinking
+
+    body = _json.dumps({"type": "message", "content": [{"type": "thinking", "thinking": "   "}]})
+    rec = _parse_thinking(body)
+    assert rec["thinking"] == []
+    assert rec["redacted"] == 0
+
+
+def test_parse_thinking_streamed_empty_thinking_block_dropped():
+    """A "thinking" content_block_start with no thinking_delta ever received (block index
+    never accumulates text) must not appear in "thinking"."""
+    from glyph.v2.gateway import _parse_thinking
+
+    body = "\n".join(
+        [
+            'data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking"}}',
+            '',
+            'data: {"type":"content_block_stop","index":0}',
+            '',
+        ]
+    )
+    rec = _parse_thinking(body)
+    assert rec["thinking"] == []
+    assert rec["redacted"] == 0
+
+
+def test_thinking_capture_exception_is_swallowed_monkeypatched(monkeypatch, tmp_path):
+    """The brief makes 'any exception inside capture+write must be swallowed' a hard
+    requirement. Force _parse_thinking itself to raise and assert handle_request still
+    returns normally and billing/usage is completely unaffected."""
+    import json as _json
+    import anyio
+
+    import glyph.v2.gateway as gw_mod
+    from glyph.v2.gateway import Gateway
+    from glyph.v2.ledger import Ledger
+
+    def _boom(body_text):
+        raise ValueError("simulated parse bug in thinking capture")
+
+    monkeypatch.setattr(gw_mod, "_parse_thinking", _boom)
+
+    ledger = Ledger()
+    thinking_path = tmp_path / "thinking.jsonl"
+
+    async def fwd(method, url, headers, body):
+        return (
+            200,
+            {},
+            _json.dumps({"type": "message", "usage": {"input_tokens": 3, "output_tokens": 4}}).encode(),
+        )
+
+    gw = Gateway(
+        ledger, pinned_model="claude-opus-4-8", forward_fn=fwd, thinking_log_path=str(thinking_path)
+    )
+
+    async def run():
+        path = "/projects/p/locations/global/publishers/anthropic/models/claude-opus-4-8:streamRawPredict"
+        status, _h, _b = await gw.handle_request("POST", path, {}, b"{}")
+        assert status == 200
+
+    anyio.run(run)
+
+    # billing/return behaviour must be completely unaffected by the capture bug
+    assert gw.records[-1]["allowed"] is True
+    assert gw.records[-1]["input_tokens"] == 3
+    k = ledger.summary()["usd_by_kind"]
+    assert k["input"] > 0 and k["output"] > 0
+    assert not thinking_path.exists()  # capture never got to write anything
+
+
+def test_thinking_capture_exception_is_swallowed_unwritable_path(tmp_path):
+    """Same guarantee, exercised via a genuinely unwritable thinking_log_path (a directory,
+    which raises IsADirectoryError on open(..., "a")) instead of a monkeypatch."""
+    import json as _json
+    import anyio
+
+    from glyph.v2.gateway import Gateway
+    from glyph.v2.ledger import Ledger
+
+    ledger = Ledger()
+    bad_path = tmp_path / "thinking_as_a_directory"
+    bad_path.mkdir()
+
+    async def fwd(method, url, headers, body):
+        return (
+            200,
+            {},
+            _json.dumps(
+                {
+                    "type": "message",
+                    "usage": {"input_tokens": 2, "output_tokens": 5},
+                    "content": [{"type": "thinking", "thinking": "some real thinking text"}],
+                }
+            ).encode(),
+        )
+
+    gw = Gateway(
+        ledger, pinned_model="claude-opus-4-8", forward_fn=fwd, thinking_log_path=str(bad_path)
+    )
+
+    async def run():
+        path = "/projects/p/locations/global/publishers/anthropic/models/claude-opus-4-8:streamRawPredict"
+        status, _h, _b = await gw.handle_request("POST", path, {}, b"{}")
+        assert status == 200
+
+    anyio.run(run)
+
+    assert gw.records[-1]["allowed"] is True
+    assert gw.records[-1]["input_tokens"] == 2
+    k = ledger.summary()["usd_by_kind"]
+    assert k["input"] > 0 and k["output"] > 0
+
