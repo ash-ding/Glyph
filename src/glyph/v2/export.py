@@ -162,16 +162,20 @@ def attach_thinking(turns, captures):
     """Join captured thinking text (from `_read_thinking_capture`) onto turns.
 
     Mutates and returns `turns`, adding a `thinking_texts: [str]` field to
-    every turn. Join rule:
-      1. By tool_use id: a capture whose `tool_use_ids` intersects a turn's
-         action ids is attached to that turn (its `thinking` strings
-         appended, in capture file order). Each capture is consumed at most
-         once, even if it shares an id with several turns' actions.
-      2. Fallback: any capture left unconsumed (typically one with no
-         `tool_use_ids`, e.g. thinking that preceded only a final text
-         answer) is assigned, in file order, to the next turn (in turn
-         order) that has no `thinking_texts` yet and was not matched in
-         step 1.
+    every turn. Join is by tool_use id ONLY: a capture whose `tool_use_ids`
+    intersects a turn's action ids is attached to that turn (its `thinking`
+    strings appended, in capture file order). Each capture is consumed at
+    most once, even if it shares an id with several turns' actions.
+
+    Captures that match no turn -- no `tool_use_ids` at all, or ids that
+    aren't any turn's action id -- are dropped, not guessed at. The gateway
+    proxies every model call the CLI makes, including background small-model
+    / context-compaction calls, so an id-less or unmatched capture may not
+    even belong to this agent's visible trajectory; a positional/sequential
+    fallback risks silently attaching the wrong reasoning to a real turn, so
+    there is deliberately no fallback here. Every real agent turn issues a
+    tool call and therefore has a tool_use id to join on.
+
     Backward compatible: with no captures, every turn just gets
     `thinking_texts: []` and nothing else changes.
     """
@@ -187,31 +191,13 @@ def attach_thinking(turns, captures):
             if tid and tid not in id_to_idx:
                 id_to_idx[tid] = i
 
-    matched_turn = [False] * len(turns)
-    for ti, t in enumerate(turns):
+    for t in turns:
         action_ids = [a.get("id") for a in t.get("actions", []) if a.get("id")]
         cap_idxs = sorted({id_to_idx[aid] for aid in action_ids if aid in id_to_idx})
         for i in cap_idxs:
             if not consumed[i]:
                 t["thinking_texts"].extend(captures[i].get("thinking") or [])
                 consumed[i] = True
-                matched_turn[ti] = True
-
-    # Deterministic sequential fallback for remaining captures (typically
-    # ones with no tool_use_ids at all): assign each, in file order, to the
-    # next turn (in order) that has no thinking_texts yet and wasn't matched
-    # by id above.
-    ti = 0
-    for i, cap in enumerate(captures):
-        if consumed[i]:
-            continue
-        while ti < len(turns) and (matched_turn[ti] or turns[ti]["thinking_texts"]):
-            ti += 1
-        if ti >= len(turns):
-            break
-        turns[ti]["thinking_texts"].extend(cap.get("thinking") or [])
-        consumed[i] = True
-        ti += 1
 
     return turns
 

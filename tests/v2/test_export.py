@@ -148,15 +148,32 @@ def test_attach_thinking_capture_not_double_assigned_on_id_contention():
     assert len(unmatched) == 1
 
 
-def test_attach_thinking_sequential_fallback_for_text_only_turn():
+def test_attach_thinking_drops_captures_with_no_tool_use_ids():
+    # A capture with no tool_use_ids (e.g. emitted by a background
+    # small-model / context-compaction call the gateway also proxies) must
+    # NOT be guessed onto any turn via a positional fallback -- it is simply
+    # dropped, since there is no id evidence linking it to a real turn.
     rows = [_asst(_text("Final answer text."))]
     turns = normalize_transcript(rows)
     assert len(turns) == 1
     assert turns[0]["actions"] == []
-    captures = [{"thinking": ["thought before final text"], "redacted": 1,
+    captures = [{"thinking": ["thought with no tool_use_ids"], "redacted": 1,
                  "tool_use_ids": [], "text_preview": "Final answer"}]
     attach_thinking(turns, captures)
-    assert turns[0]["thinking_texts"] == ["thought before final text"]
+    assert turns[0]["thinking_texts"] == []
+
+
+def test_attach_thinking_drops_captures_with_unmatched_tool_use_id():
+    # A capture whose tool_use_ids don't match any turn's action id (e.g. a
+    # background call the gateway proxied that this transcript never saw) is
+    # dropped, not attached to the nearest turn.
+    rows = [_asst(_tu("query", "a1", {})), _results(("a1", "r1", False))]
+    turns = normalize_transcript(rows)
+    assert len(turns) == 1
+    captures = [{"thinking": ["reasoning for an unrelated call"], "redacted": 1,
+                 "tool_use_ids": ["zzz-not-a-real-id"], "text_preview": ""}]
+    attach_thinking(turns, captures)
+    assert turns[0]["thinking_texts"] == []
 
 
 def test_attach_thinking_backward_compatible_with_no_captures():
