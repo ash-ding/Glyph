@@ -117,6 +117,104 @@ def _parse_usage(body_text: str) -> dict:
     return usage
 
 
+def _parse_thinking(body_text: str) -> dict:
+    """Extract extended-thinking text (and related joinable ids) from a response body.
+
+    Returns one capture record for the assistant message in this response:
+        {"thinking": [<str>, ...],      # full text of each thinking block, in order
+         "redacted": <int>,             # count of redacted_thinking blocks (text unrecoverable)
+         "tool_use_ids": [<str>, ...],  # id of each tool_use block in this message
+         "text_preview": <str>}         # first ~200 chars of visible assistant text
+
+    Handles both shapes seen from Vertex/Anthropic (same distinction as `_parse_usage`):
+      * non-streamed: the whole body is one Messages response object, content blocks under
+        "content" (or "message"."content").
+      * streamed (SSE): a series of "data: {...}\n\n" chunks; content blocks are reassembled
+        from content_block_start/content_block_delta events by block index.
+
+    Never raises: malformed/non-JSON input or unexpected shapes just yield an empty-ish record.
+    """
+    rec: dict = {"thinking": [], "redacted": 0, "tool_use_ids": [], "text_preview": ""}
+
+    try:
+        obj = json.loads(body_text)
+    except (json.JSONDecodeError, TypeError):
+        obj = None
+
+    if isinstance(obj, dict) and (isinstance(obj.get("content"), list) or "error" in obj):
+        content = obj.get("content")
+        if not isinstance(content, list):
+            msg = obj.get("message")
+            content = msg.get("content") if isinstance(msg, dict) else None
+        text_parts = []
+        if isinstance(content, list):
+            for block in content:
+                if not isinstance(block, dict):
+                    continue
+                btype = block.get("type")
+                if btype == "thinking":
+                    rec["thinking"].append(block.get("thinking", "") or "")
+                elif btype == "redacted_thinking":
+                    rec["redacted"] += 1
+                elif btype == "tool_use":
+                    tid = block.get("id")
+                    if tid:
+                        rec["tool_use_ids"].append(tid)
+                elif btype == "text":
+                    text_parts.append(block.get("text", "") or "")
+        rec["text_preview"] = "".join(text_parts)[:200]
+        return rec
+
+    # streamed SSE: reassemble per content-block index.
+    index_type: dict = {}
+    thinking_buffers: dict = {}
+    text_parts = []
+    for line in body_text.splitlines():
+        line = line.strip()
+        if not line.startswith("data:"):
+            continue
+        payload = line[5:].strip()
+        if not payload or payload == "[DONE]":
+            continue
+        try:
+            chunk = json.loads(payload)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if not isinstance(chunk, dict):
+            continue
+        ctype = chunk.get("type")
+        if ctype == "content_block_start":
+            idx = chunk.get("index")
+            cb = chunk.get("content_block")
+            if isinstance(cb, dict) and idx is not None:
+                btype = cb.get("type")
+                index_type[idx] = btype
+                if btype == "tool_use":
+                    tid = cb.get("id")
+                    if tid:
+                        rec["tool_use_ids"].append(tid)
+                elif btype == "redacted_thinking":
+                    rec["redacted"] += 1
+                elif btype == "thinking":
+                    thinking_buffers.setdefault(idx, "")
+        elif ctype == "content_block_delta":
+            idx = chunk.get("index")
+            delta = chunk.get("delta")
+            if isinstance(delta, dict) and idx is not None:
+                dtype = delta.get("type")
+                if dtype == "thinking_delta":
+                    thinking_buffers[idx] = thinking_buffers.get(idx, "") + (delta.get("thinking", "") or "")
+                elif dtype == "text_delta":
+                    text_parts.append(delta.get("text", "") or "")
+        # signature_delta / input_json_delta / other event types: ignored on purpose.
+
+    for idx in sorted(thinking_buffers.keys()):
+        if index_type.get(idx) == "thinking":
+            rec["thinking"].append(thinking_buffers[idx])
+    rec["text_preview"] = "".join(text_parts)[:200]
+    return rec
+
+
 class Gateway:
     """Metering gateway between the sandboxed CLI and Vertex AI."""
 
@@ -130,12 +228,14 @@ class Gateway:
         forward_fn: Optional[ForwardFn] = None,
         token_provider: Optional[TokenProvider] = None,
         log_path: Optional[str] = None,
+        thinking_log_path: Optional[str] = None,
     ) -> None:
         self.ledger = ledger
         self.pinned_model = pinned_model
         self.allowed_models = set(allowed_models) if allowed_models is not None else {pinned_model}
         self.upstream_base = upstream_base.rstrip("/")
         self.log_path = log_path
+        self.thinking_log_path = thinking_log_path
         self._token_provider = token_provider
         self._forward_fn = forward_fn or self._default_forward
         self._records: list = []
@@ -236,6 +336,16 @@ class Gateway:
                     "cache_creation_input_tokens": usage.get("cache_creation_input_tokens", 0),
                 }
             )
+            # Thinking capture is a side effect only: it must never change billing/return
+            # behaviour, so any failure here (parse bug, disk issue, ...) is swallowed.
+            if self.thinking_log_path:
+                try:
+                    thinking_rec = _parse_thinking(resp_body.decode("utf-8", "replace"))
+                    if thinking_rec["thinking"] or thinking_rec["redacted"]:
+                        with open(self.thinking_log_path, "a") as f:
+                            f.write(json.dumps(thinking_rec) + "\n")
+                except Exception:
+                    pass
         else:
             self._record({"model": model, "path": path, "allowed": True, "status": status})
 
