@@ -11,7 +11,7 @@
 > A note up front: there is **no statistical p-value** anywhere in this system. The instance-level
 > quantity is **π** (the skeleton's share of difficulty, see Data Generation §7); every arm and
 > oracle reports accuracy-style metrics (`overall`, `by_split`, `tail`, `headroom`). Code is on
-> `lumen1` under `~/code/Glyph-v2`; citations are `file:line`.
+> `lumen1` under `~/code/Glyph`; citations are `file:line`.
 
 ## 1. The metrics
 

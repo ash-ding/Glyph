@@ -6,7 +6,7 @@
 > the value space, the configuration knobs, the three presets, the generation flow, and how the
 > instance's difficulty (π) is measured.
 >
-> Code is on `lumen1` under `~/code/Glyph-v2`. Citations are `file:line`.
+> Code is on `lumen1` under `~/code/Glyph`. Citations are `file:line`.
 
 ## 1. What an instance is
 
