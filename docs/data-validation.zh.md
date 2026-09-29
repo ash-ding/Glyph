@@ -9,7 +9,7 @@
 >
 > 先说清楚：这个系统里**没有任何统计 p 值**。实例级的量是 **π**（skeleton 占难度的份额，见
 > 数据生成 §7）；每个 arm 和 oracle 报的都是准确率类指标（`overall`、`by_split`、`tail`、
-> `headroom`）。代码在 `lumen1` 的 `~/code/Glyph-v2`；引用格式 `file:line`。
+> `headroom`）。代码在 `lumen1` 的 `~/code/Glyph`；引用格式 `file:line`。
 
 ## 1. 指标
 

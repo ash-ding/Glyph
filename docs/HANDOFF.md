@@ -9,7 +9,8 @@ project. Read this top-to-bottom once, then the doc map in §9 as needed.
 
 - **What it is:** a *controlled synthetic* benchmark that measures **when an agent should train a
   specialist model vs. solve a task in-context** — parameterized by a measured knob **π**.
-- **Repo:** `~/code/Glyph-v2` on host **lumen1** (SSH). Branch `main` @ `77ee46e`. No open PRs.
+- **Repo:** `~/code/Glyph` on hosts **lumen1 / lumen2 / lumen3** (SSH); on **penguin** at
+  `/export/scratch/large/dimcode/Glyph`. Branch `main` (all four hosts synced). No open PRs.
 - **Env:** conda env `glyph` (python at `~/miniforge3/envs/glyph/bin/python`, pytest 9.1.1).
 - **Run tests:** `~/miniforge3/envs/glyph/bin/python -m pytest -q -m "not slow"` → ~265 pass, 6 slow deselected (~10 min). The `slow` marker gates GPU/API/sweeps.
 - **Viewer:** static server is UP on lumen1:8000; restart the local SSH tunnel to see it (see §2).
@@ -49,8 +50,11 @@ and ICL-vs-FT empirical studies. None occupy our exact intersection (controlled 
 
 ## 2. Repo, environment, infra
 
-- **Host:** all work is on **lumen1** over SSH. Repo `~/code/Glyph-v2`. The local machine
-  (`/Users/asherding`) is NOT the repo — drive everything via `ssh lumen1 '...'`.
+- **Hosts:** the codebase is checked out on **lumen1 / lumen2 / lumen3** at `~/code/Glyph`, and on
+  **penguin** (`cs-foundations`) at `/export/scratch/large/dimcode/Glyph` (penguin has 4× L40S; its
+  conda env is a prefix env at `/export/scratch/large/dimcode/envs/glyph`, with caches on scratch — its
+  `/tmp` is only ~3 G). Primary work host is **lumen1**; the local machine (`/Users/asherding`) is NOT
+  the repo — drive everything via `ssh <host> '...'`. All four are on `main` and kept in sync.
 - **SSH gotcha (important):** always use `ssh -o ServerAliveInterval=0 -o ConnectTimeout=30 lumen1`.
   `exit 255` on a reachable host = aggressive keepalive under load, just retry. Wholesale
   unreachability = idle GPU/host reclaim (recovers on its own or after a restart) — not hardware failure.
@@ -64,7 +68,7 @@ and ICL-vs-FT empirical studies. None occupy our exact intersection (controlled 
   (a blocking `ssh` launched with run_in_background), which notifies on completion.
 - **Viewer (run browser):**
   - Static server on lumen1: `~/miniforge3/envs/glyph/bin/python -m http.server 8000 --bind 127.0.0.1`
-    from `~/code/Glyph-v2` (serves `glyph-viewer/`; it was UP as of this handoff).
+    from `~/code/Glyph` (serves `glyph-viewer/`; it was UP as of this handoff).
   - Alternative that re-collects runs: `tools/serve_viewer.py --port 8000 <run-roots>`.
   - Local tunnel (from the user's laptop): `ssh -f -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -L 8000:localhost:8000 lumen1`, then open **http://localhost:8000/glyph-viewer/**.
   - The tunnel drops periodically (lumen connection behavior); "can't see the viewer" almost always = dead tunnel, just restart it. Benchmark JSONs live under `glyph-viewer/runs/`.
@@ -187,7 +191,7 @@ Also flagged for the user earlier (now effectively settled): the selection-by-me
   "Generated with Claude Code" line.
 - **SDD:** larger features were built subagent-per-task with a review after each + a whole-branch
   review before merge, using the superpowers `subagent-driven-development` skill. Ledgers were kept
-  under `~/code/Glyph-v2/.superpowers/sdd/**` (git-ignored scratch) — useful history if resuming a
+  under `~/code/Glyph/.superpowers/sdd/**` (git-ignored scratch) — useful history if resuming a
   half-done feature.
 - **Determinism is sacred:** data generation must stay single-RNG, no torch/global-random; the
   integrity test + fingerprints enforce it. Don't break reproducibility.

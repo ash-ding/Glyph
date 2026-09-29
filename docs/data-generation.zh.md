@@ -5,7 +5,7 @@
 > 测试集、一个验证集。本文讲清楚值空间、配置旋钮、三个 preset、生成流程，以及实例难度 π
 > 是怎么测的。
 >
-> 代码在 `lumen1` 的 `~/code/Glyph-v2`。引用格式为 `file:line`。
+> 代码在 `lumen1` 的 `~/code/Glyph`。引用格式为 `file:line`。
 
 ## 1. 什么是一个 instance
 
