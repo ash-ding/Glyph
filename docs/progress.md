@@ -3605,3 +3605,47 @@ re-measurement (`--only weights --seen-frac 0.02 0.05 0.10`); per-op ceilings
 
 Ran on lumen1: `pytest -q -m "not slow"` → **294 passed, 6 deselected (0:13:29)**
 (290 after PR B; 4 new tests).
+
+## 2026-09-29 — capacity self-check #5 re-run: Qwen3-0.6B passes (with a fresh 1.7B control)
+
+**Result: PASS on both tasks — 0.6B is admissible as the student.** The 0.6B
+gap to 1.7B is 2–3 points of held-out exact match, on both halves.
+
+### How it was run
+
+`scripts/capacity_check.py`, current-config defaults (letter_sep, 17³,
+`binary_coupling=0.25`, digit-wise unary at 0.25), cap5 hyper-parameters
+(`--steps 4000 --batch 128 --lr 1e-5`, held-out 1-in-10, eval 1000, greedy).
+Host **node09** (ai-innovation-h100-09-preserve), GPUs 2–5 in parallel, ~10 min
+each. A fresh 1.7B control ran in the same batch because the 2026-08-27
+numbers were measured under the old config (pi_low tables, `underscore`) and
+are not comparable.
+
+```
+CUDA_VISIBLE_DEVICES=<g> python scripts/capacity_check.py \
+  --task {unary|binary} --model Qwen/Qwen3-{0.6B|1.7B} \
+  --steps 4000 --lr 1e-5 --out ~/glyph_runs/cap5_06b/<run>.json
+```
+
+### Numbers (exact match; digit accuracy in parentheses)
+
+| task | model | fit (seen) | reach (held-out) | verdict |
+|---|---|---|---|---|
+| unary | 0.6B | **1.000** (1.000) | **0.619** (0.846) | LEARNABLE |
+| unary | 1.7B | 1.000 (1.000) | 0.643 (0.856) | LEARNABLE |
+| binary | 0.6B | **0.636** (0.864) | **0.640** (0.865) | LEARNABLE |
+| binary | 1.7B | 0.656 (0.871) | 0.666 (0.873) | LEARNABLE |
+
+mode baseline: unary 0.014 / binary 0.009 exact; chance 0.0002. Raw JSON +
+logs: node09 `~/glyph_runs/cap5_06b/`.
+
+### Read
+
+- **Capacity is not the binding constraint at 0.6B.** Unary fit is a perfect
+  1.000 (the whole seen table is held), and binary fit ≈ reach for both models
+  (~0.64 vs ~0.66) — binary is generalization-limited, not capacity-limited,
+  and equally so at both sizes.
+- The 0.6B student is ~4× cheaper/faster to train and within 2–3 points of
+  1.7B everywhere measured. Whether the arm should default to it is a
+  separate decision (the weights re-measurement can now be run at either or
+  both sizes via `--student-model`).
