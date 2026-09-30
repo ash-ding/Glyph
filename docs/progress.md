@@ -3571,3 +3571,37 @@ Ran on lumen1: `pytest -q -m "not slow"` → **290 passed, 6 deselected (0:11:00
 (285 after PR C; 5 new tests). No real fine-tune was run — the lineage
 contract is pinned by fake-backend tests; the first continued-training GPU run
 will exercise `init_checkpoint` for real.
+
+## 2026-09-29 — PR D: reference side — public-syntax oracle, per-op ceilings, student-model parameter
+
+Per the spec (§D), three reference-side changes:
+
+1. **The weights oracle trains and answers in the public syntax** —
+   `prompt_unary`/`prompt_binary` now render bare atomic applications
+   (`u0(v_…) =`) instead of the private `"u0 v_… ="` (CLAUDE.md rule 7).
+   **Comparability break:** every weights number measured under the old
+   format, including the published 0.498, must be re-measured before any
+   comparison. Those runs were deferred [GPU] anyway.
+2. **Per-op specialist ceilings** — `train_student(..., ops=[...])` restricts
+   the stream to given atomic ops (unknown names fail fast, before any GPU
+   work); `score_probes` scores a student on one op's probe items with a
+   seen/unseen split by the TRAINING hash (`seen_u`/`seen_b`) — the
+   reference-side analogue of the agent report's `probe.by_op`. Runner:
+   `tools/run_reference.py --only weights-per-op`, merged as `weights_per_op`.
+3. **Student base model is a parameter end-to-end** — `--student-model` on
+   `run_reference.py` and on the v2 CLI (`run` and `grid` →
+   `RunConfig.student_model`; the harness already used it). Candidate small
+   student Qwen3-0.6B is gated on re-running capacity self-check #5
+   (`scripts/capacity_check.py --model Qwen/Qwen3-0.6B` — the script already
+   takes `--model`; no code change needed there).
+
+open_questions starvation item updated: option (c) decided — bare-atomic
+access opened (PRs #49–#52); what remains there is the steps∝dataset-size
+coupling and the Q budget (#15).
+
+Unlocked [GPU] runs, all user-gated: 0.6B capacity check; weights
+re-measurement (`--only weights --seen-frac 0.02 0.05 0.10`); per-op ceilings
+(`--only weights-per-op`).
+
+Ran on lumen1: `pytest -q -m "not slow"` → **294 passed, 6 deselected (0:13:29)**
+(290 after PR B; 4 new tests).
