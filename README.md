@@ -30,7 +30,7 @@ only ever a value, a structural operator, or an atomic operator:
 
 | half | what it is | where it comes from | can you write it down? |
 |---|---|---|---|
-| **skeleton** | the semantics of `s0…s7` | sampled from a finite combinator grammar | **yes** — finitely many rules, by construction |
+| **skeleton** | the semantics of `s0…s11` | sampled from a finite combinator grammar | **yes** — finitely many rules, by construction |
 | **table** | the semantics of `u*` / `b*` | digit embeddings + frozen random MLPs | **no** — you would be transcribing weight matrices |
 
 That asymmetry is the whole design. The skeleton is *cheap to buy and exact to

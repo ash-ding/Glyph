@@ -59,8 +59,10 @@ than a cost — and is what `headroom` exists to divide out.
 Re-measured under the current sampler; the earlier sweep predated
 `depth_stop_prob` and the unary rebuild.
 
-Side effect: `pi_low` and `pi_mid` now share `n_structural` and differ only in
-`atomic_ratio`, transform depth, guard probability and expression depth.
+Since 2026-09-30 `n_structural` is 5/7/9 (`pi_low`/`pi_mid`/`pi_high`) and
+`demo_max_depth` is 2 on all three, so every preset knob is either shared by all
+three or different on all three; 5 stays the floor for the reason above. See
+`progress.md` for the measurements.
 
 ### ~~[#2](https://github.com/ash-ding/Glyph/issues/2) — condition or sampler?~~ · settled
 
