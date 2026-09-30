@@ -100,7 +100,8 @@ def _default_backend():
             self._student.close()
 
     class _RealBackend:
-        def train_fn(self, examples, hp, base_model, out_dir, ledger):
+        def train_fn(self, examples, hp, base_model, out_dir, ledger,
+                     init_checkpoint=None):
             import time
             from glyph.train import sft
 
@@ -110,7 +111,8 @@ def _default_backend():
             # protocol -- pass None and measure wall-clock instead, rather
             # than let an unrelated interface mismatch crash training.
             rec = sft.train(examples, hp, base_model=base_model,
-                             out_dir=out_dir, ledger=None)
+                             out_dir=out_dir, ledger=None,
+                             init_checkpoint=init_checkpoint)
             rec = dict(rec)
             rec.setdefault("gpu_seconds", time.monotonic() - t0)
             return rec
