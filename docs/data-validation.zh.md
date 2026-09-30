@@ -75,9 +75,19 @@ arm 和 oracle 都用 `.strip()` 后的**精确字符串匹配**评分（`answer
 (key·2654435761) % 100000 < frac·100000`，其中 `seen_u(i)` 以输入值为键、`seen_b(i,j)` 以
 `i·7919+j` 为键（`weights_ceiling.py:41-50`）。
 
-**数据粒度 —— 原子 cell。** 每条训练样本就是一次查表：`"u0 <值> ="` → `"<输出>"`（binary 为
-`"b0 <值> <值> ="`）（`weights_ceiling.py:53-58`）。每个 seen 的 cell 一条，覆盖全部 3 个 unary
-+ 2 个 binary 算子。student 记住原子 cell；值嵌入里的数字结构让它能外推到没见过的 cell。
+**数据粒度 —— 原子 cell，公共语法。** 每条训练样本就是一次查表，写成裸原子应用：
+`"u0(<值>) ="` → `"<输出>"`（binary 为 `"b0(<值>, <值>) ="`）——和 agent 用的是同一种表面形式
+（CLAUDE.md 规则 7；自 PR A 起合法）。每个 seen 的 cell 一条，覆盖全部 3 个 unary + 2 个
+binary 算子。student 记住原子 cell；值嵌入里的数字结构让它能外推到没见过的 cell。
+**可比性注记**：在 2026-09-29 之前的私有格式（`"u0 <值> ="`）下测出的数字（包括已发布的
+0.498）与新 run 不可比，必须重测。
+
+**Per-op 专家（`--only weights-per-op`）。**每个原子算子单独训一个 student（只喂该算子的
+cell，同一 `seen_frac` 哈希），在该算子的探针题（`probe_set`）上打分，seen/unseen 由训练哈希
+判定——正是 agent report 里 `probe.by_op` 块的 reference 侧对照，也是多专家 train arm 的标尺。
+合并进 `reference_ceilings.json` 的 `weights_per_op`。student 基座模型处处可参数化
+（`--student-model`；v2 CLI 同）：更小的候选（Qwen3-0.6B）必须先通过 capacity 自检 #5
+（`scripts/capacity_check.py --model ...`）才有资格上岗。
 
 **评分 —— 只测表。** `score_ceiling` 用**真** skeleton 组合在 *student* 学到的表之上
 （`weights_ceiling.py:258-282`）。所以组合是精确给定的；这个 oracle 只隔离"student 能从

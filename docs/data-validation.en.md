@@ -86,10 +86,22 @@ progression (which would be an artificially easy region): `is_seen(key) = (key·
 100000 < frac·100000`, with `seen_u(i)` keyed on the input value and `seen_b(i,j)` on `i·7919+j`
 (`weights_ceiling.py:41-50`).
 
-**Data granularity — atomic cells.** Each training example is a single table lookup:
-`"u0 <val> ="` → `"<output>"` (and `"b0 <val> <val> ="` for binary) (`weights_ceiling.py:53-58`).
-One example per seen cell, across all 3 unary + 2 binary operators. The student memorizes atomic
-cells; digit-structure in the value embeddings lets it extrapolate to unseen cells.
+**Data granularity — atomic cells, in the public syntax.** Each training example is a single
+table lookup written as a bare atomic application: `"u0(<val>) ="` → `"<output>"` (and
+`"b0(<val>, <val>) ="` for binary) — the same surface form the agent uses (CLAUDE.md rule 7;
+legal since PR A). One example per seen cell, across all 3 unary + 2 binary operators. The
+student memorizes atomic cells; digit-structure in the value embeddings lets it extrapolate to
+unseen cells. **Comparability note:** numbers measured under the pre-2026-09-29 private format
+(`"u0 <val> ="`), including the published 0.498, are not comparable with new runs and must be
+re-measured.
+
+**Per-op specialists (`--only weights-per-op`).** One student per atomic op, trained on that
+op's cells only (same `seen_frac` hash), scored on that op's probe items (`probe_set`) with a
+seen/unseen split decided by the training hash — the reference-side analogue of the agent
+report's `probe.by_op` block, and the yardstick for a multi-specialist train arm. Merged into
+`reference_ceilings.json` as `weights_per_op`. The student base model is a parameter everywhere
+(`--student-model`; v2 CLI likewise): a smaller candidate (Qwen3-0.6B) is admissible only after
+capacity self-check #5 passes for it (`scripts/capacity_check.py --model ...`).
 
 **Scoring — table-only.** `score_ceiling` runs the **true** skeleton over the *student's* learned
 tables (`weights_ceiling.py:258-282`). So composition is given exactly; the oracle isolates "how

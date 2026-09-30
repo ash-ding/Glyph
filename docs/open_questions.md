@@ -658,6 +658,14 @@ Consequences / to decide:
   bulk-cell channel) so the agent *can* build a table-scale dataset; (c) whether
   the arm should expose atomic-cell access at all, given bare-atomic queries are
   deliberately illegal.
+- **(c) is decided — opened (2026-09-29, PRs #49–#52).** Bare atomic
+  applications are legal expressions; the agent buys clean cells at 1 query
+  each (Q unchanged, so [#15](https://github.com/ash-ding/Glyph/issues/15)
+  stays open). The weights oracle now trains in the same public surface form,
+  so the oracle↔arm data-KIND mismatch above is closed; what remains of this
+  item is (a) the steps∝dataset-size coupling and (b) the Q budget. Weights
+  numbers measured under the old private format (incl. the published 0.498)
+  are no longer comparable and need re-measuring.
 - Empirical check still to run **[GPU], deferred**: at `seen_frac` 0.02 / 0.05,
   does the weights student produce **valid, terminating** outputs (failure = wrong
   value) or does low data also break the *format* (truncation)? This separates a

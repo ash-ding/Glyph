@@ -115,3 +115,12 @@ def test_parser_construction_does_not_error():
     p = build_parser()
     args = p.parse_args(["run", "--arm", "no_train"])
     assert args.fn.__name__ == "cmd_run"
+
+
+def test_cli_exposes_student_model():
+    p = build_parser()
+    args = p.parse_args(
+        ["run", "--arm", "no_train", "--student-model", "Qwen/Qwen3-0.6B"])
+    assert args.student_model == "Qwen/Qwen3-0.6B"
+    rc = build_run_config(args)
+    assert rc.student_model == "Qwen/Qwen3-0.6B"

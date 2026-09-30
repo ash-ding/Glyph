@@ -23,8 +23,8 @@ from __future__ import annotations
 import collections
 import time
 
-from ..data.grammar import (binary_names, parse, render_list, render_value,
-                            unary_names)
+from ..data.grammar import (AtomApp, binary_names, parse, render, render_list,
+                            render_value, unary_names)
 from ..data.interp import Interpreter
 from ..seal import headroom as _headroom
 
@@ -50,12 +50,16 @@ def seen_b(i: int, j: int, frac: float) -> bool:
     return is_seen(i * 7919 + j, frac)
 
 
+# The training/answering surface form is the PUBLIC syntax (bare atomic
+# applications, legal since PR A) -- CLAUDE.md rule 7: one surface form for
+# everyone.  The pre-2026-09-29 private format ("u0 v_a_b_c =") makes earlier
+# weights numbers (e.g. the published 0.498) incomparable with new ones.
 def prompt_unary(op: str, i: int, cfg) -> str:
-    return f"{op} {render_value(i, cfg)} ="
+    return render(AtomApp(op, (i,)), cfg) + " ="
 
 
 def prompt_binary(op: str, i: int, j: int, cfg) -> str:
-    return f"{op} {render_value(i, cfg)} {render_value(j, cfg)} ="
+    return render(AtomApp(op, (i, j)), cfg) + " ="
 
 
 class StudentTables:
@@ -154,20 +158,30 @@ def _score_on(inst, student_tables, items) -> dict:
 
 
 def train_student(inst, seen_frac, *, model="Qwen/Qwen3-1.7B", lr=1e-4,
-                  steps=6000, batch=128, device="cuda"):
+                  steps=6000, batch=128, device="cuda", ops=None):
     """Train one student model on a `seen_frac` slice of `inst`'s tables.
+
+    `ops` restricts the training stream to the given atomic operators (e.g.
+    `ops=["u0"]` trains a per-op specialist); None trains on all of them.
 
     [GPU] The training loop from `table_ceiling.py::main` (its `stream`/`pad`/
     optimizer section). Not exercised by the CPU unit test -- `torch` and
     `transformers` are imported here, not at module scope, so importing this
     module never requires a GPU or those packages to be importable.
     """
+    cfg = inst.cfg
+    us, bs = unary_names(cfg), binary_names(cfg)
+    if ops is not None:
+        unknown = [o for o in ops if o not in us + bs]
+        if unknown:
+            raise ValueError(f"unknown atomic op(s) {unknown!r}")
+        us = [o for o in us if o in ops]
+        bs = [o for o in bs if o in ops]
+
     import numpy as np
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    cfg = inst.cfg
-    us, bs = unary_names(cfg), binary_names(cfg)
     n = cfg.n_values
 
     def stream(rng, tok):
@@ -175,7 +189,7 @@ def train_student(inst, seen_frac, *, model="Qwen/Qwen3-1.7B", lr=1e-4,
         while True:
             ids, labels = [], []
             while len(ids) < batch:
-                if rng.random() < 0.5 and us:
+                if (rng.random() < 0.5 and us) or not bs:
                     op = us[int(rng.integers(len(us)))]
                     i = int(rng.integers(n))
                     if not seen_u(i, seen_frac):
@@ -282,3 +296,53 @@ def score_ceiling(inst, model, tok, items, *, device="cuda") -> dict:
         need_u, need_b, cfg)
 
     return _score_on(inst, student_tables, items)
+
+
+def score_probes(inst, probe_items, seen_frac, answer_unary, answer_binary) -> dict:
+    """Score a student on bare-atomic probe items, split seen/unseen by the
+    TRAINING hash (`seen_u`/`seen_b`) -- the reference-side analogue of the
+    agent report's LookupLog split. CPU-pure via the answer-callable seam."""
+    cfg = inst.cfg
+    need_u, need_b = set(), set()
+    for t in probe_items:
+        need_u |= set(t.needs_u)
+        need_b |= set(t.needs_b)
+    tables = _student_tables_from(answer_unary, answer_binary, need_u, need_b, cfg)
+
+    def _is_seen(t) -> bool:
+        for (_, i) in t.needs_u:
+            return seen_u(i, seen_frac)
+        for (_, i, j) in t.needs_b:
+            return seen_b(i, j, seen_frac)
+        return False
+
+    seen = [t for t in probe_items if _is_seen(t)]
+    unseen = [t for t in probe_items if not _is_seen(t)]
+
+    def _acc(sub):
+        return _score_on(inst, tables, sub)["overall"] if sub else None
+
+    return {
+        "overall": _acc(probe_items),
+        "n": len(probe_items),
+        "seen": {"n": len(seen), "acc": _acc(seen)},
+        "unseen": {"n": len(unseen), "acc": _acc(unseen)},
+    }
+
+
+def score_probes_model(inst, model, tok, probe_items, seen_frac, *,
+                       device="cuda") -> dict:
+    """[GPU] `score_probes` with the callables built from one batched
+    `generate_answers` pass per operator kind."""
+    cfg = inst.cfg
+    need_u, need_b = set(), set()
+    for t in probe_items:
+        need_u |= set(t.needs_u)
+        need_b |= set(t.needs_b)
+    nu, nb = sorted(need_u), sorted(need_b)
+    au = generate_answers(model, tok, cfg, [prompt_unary(o, i, cfg) for o, i in nu], device)
+    ab = generate_answers(model, tok, cfg, [prompt_binary(o, i, j, cfg) for o, i, j in nb], device)
+    u_ans, b_ans = dict(zip(nu, au)), dict(zip(nb, ab))
+    return score_probes(inst, probe_items, seen_frac,
+                        lambda name, i: u_ans.get((name, i), -1),
+                        lambda name, i, j: b_ans.get((name, i, j), -1))
