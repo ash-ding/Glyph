@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .config import GlyphConfig
-from .grammar import App, Expr, Lit, STRUCT_SHAPES, Val
+from .grammar import App, AtomApp, Expr, Lit, STRUCT_SHAPES, Val
 from .semantics import (ARG_K, GEven, GFirstEqLast, GLenGt, StructSem, TDedup,
                         TDrop, TIdent, TMapAll, TMapSkip, TReverse, TRotate,
                         TSeq, TTake, Transform)
@@ -59,6 +59,10 @@ class Interpreter:
             return e.idx
         if isinstance(e, Lit):
             return list(e.items)
+        if isinstance(e, AtomApp):
+            if len(e.args) == 1:
+                return self._u(e.op, e.args[0], log)
+            return self._b(e.op, e.args[0], e.args[1], log)
         shape = self._shape[e.op]
         sem = self.skeleton[e.op]
 

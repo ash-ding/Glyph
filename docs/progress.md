@@ -3517,3 +3517,18 @@ v1 把一次运行切成 explore（买 query）→ prepare（造 artifact）→ 
 ## 删掉的东西（Task 19）
 
 移除整个 v1 prepare/seal 协议：`src/glyph/{arms,agent,worker.py,sandbox.py,budget.py,cli.py}` 及对应测试；`seal.py` 裁到只剩 `headroom` + `score_answers`。存活的真实代码是 `src/glyph/v2/` 与 data 层。审查发现一处被重写的测试退化成重言式（`test_report_json_round_trips_the_instance_block`），已换成对真实 `build_report()` 输出做 JSON 往返的检查。
+
+## 2026-09-29 — PR A: bare atomic expressions
+
+Per the spec (`docs/superpowers/specs/2026-09-29-bare-atomics-multistudent-probes-design.md`,
+§A): bare atomic applications — `u*(value)`, `b*(value, value)`, value-literal
+arguments only — are now legal expressions. New AST node `AtomApp` in
+`data/grammar.py` (parser, printer, `check`, `result_type`, `syntax_spec`);
+`data/interp.py` evaluates it as a single table lookup recorded in `LookupLog`,
+so tail derivation and purchased-set accounting work unchanged. One cell costs
+one query; `query_violation` accepts the form under both policies.
+
+Ran: `~/miniforge3/envs/glyph/bin/python -m pytest -q -m "not slow"` on lumen1
+→ **274 passed, 6 deselected (0:14:56)**. Generation untouched;
+`test_frozen_instances.py` passed unmodified — the 15 frozen instances,
+fingerprints, and measured π all stand.

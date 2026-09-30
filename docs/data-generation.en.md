@@ -54,6 +54,10 @@ table operators (`grammar.py:42-47`).
 **Atomic operators** (the tables): `n_unary = 3` (`u0, u1, u2`) and `n_binary = 2` (`b0, b1`)
 by default (`grammar.py:49-54`).
 
+Bare atomic applications are legal expressions: `u*(value)` and `b*(value, value)`, with
+value-literal arguments only (no nesting, no lists). Generation never emits them — they exist so
+an agent can buy individual table cells at query time. One cell costs one query.
+
 **Table sizes** (`tables.py:6-8`) — a table is a function, not a stored array:
 
 | kind | signature | entries if you tabulated it | per instance |

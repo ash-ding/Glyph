@@ -95,3 +95,17 @@ def test_identity_table_still_exercises_the_skeleton():
                             IdentityTables()).eval(parse(t.expr_src, inst.cfg))
                 for t in inst.test[:200])
     assert diffs > 0
+
+
+def test_atomapp_eval_is_one_logged_lookup():
+    from glyph.data import PRESETS, generate
+    from glyph.data.grammar import AtomApp
+    inst = generate(31, PRESETS["smoke"])
+    interp, cfg = inst.P, inst.cfg
+    i, j = 5 % cfg.n_values, 7 % cfg.n_values   # stay in range on any preset
+    out, log = interp.eval_logged(AtomApp("u0", (i,)))
+    assert out == inst.tables.apply_unary("u0", i)
+    assert log.unary == {("u0", i)} and not log.binary
+    out, log = interp.eval_logged(AtomApp("b0", (i, j)))
+    assert out == inst.tables.apply_binary("b0", i, j)
+    assert log.binary == {("b0", i, j)} and not log.unary
