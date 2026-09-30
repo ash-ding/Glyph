@@ -196,14 +196,14 @@ def t_build_dataset(session, path) -> dict:
     return {**rec, **_remaining(session)}
 
 
-def t_train(session, dataset_id, epochs, lr) -> dict:
+def t_train(session, dataset_id, epochs, lr, student_id) -> dict:
     if not session.tool_available("train"):
         return _gate_error(session, "train")
 
     student, err = _student_or_error(session)
     if err is not None:
         return err
-    rec = student.train(dataset_id, epochs, lr)
+    rec = student.train(dataset_id, epochs, lr, student_id=student_id)
     return {**rec, **_remaining(session)}
 
 
