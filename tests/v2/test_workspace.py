@@ -47,3 +47,35 @@ def test_deterministic_per_seed(tmp_path):
     pa, _, ta = build_workspace(a, tmp_path/"a"); write_test_file(pa, a, ta)
     pb, _, tb = build_workspace(b, tmp_path/"b"); write_test_file(pb, b, tb)
     assert (pa.final_dir/"test.jsonl").read_text() == (pb.final_dir/"test.jsonl").read_text()
+
+
+def test_write_test_file_appends_probe_rows(tmp_path):
+    import json
+    from glyph.data import PRESETS, generate
+    from glyph.data.probe import probe_set
+    from glyph.v2 import workspace as W
+
+    inst = generate(1001, PRESETS["smoke"])
+    paths, _, test_id_of = W.build_workspace(inst, tmp_path)
+    probes = probe_set(inst, n_per_op=5)
+    probe_id_of = W.probe_ids_for(inst, probes)
+    out = W.write_test_file(paths, inst, test_id_of, probes=probes,
+                            probe_id_of=probe_id_of)
+    rows = [json.loads(l) for l in out.read_text().splitlines() if l.strip()]
+    test_rows = [r for r in rows if r["id"].startswith("test")]
+    probe_rows = [r for r in rows if r["id"].startswith("probe")]
+    assert len(test_rows) == len(inst.test)
+    assert len(probe_rows) == len(probes)
+    assert {r["id"] for r in probe_rows} == {probe_id_of(t) for t in probes}
+    assert all(set(r) == {"id", "expr"} for r in rows)   # no answers, no split
+
+
+def test_write_test_file_without_probes_is_unchanged(tmp_path):
+    import json
+    from glyph.data import PRESETS, generate
+    from glyph.v2 import workspace as W
+    inst = generate(1001, PRESETS["smoke"])
+    paths, _, test_id_of = W.build_workspace(inst, tmp_path)
+    out = W.write_test_file(paths, inst, test_id_of)
+    rows = [json.loads(l) for l in out.read_text().splitlines() if l.strip()]
+    assert len(rows) == len(inst.test)

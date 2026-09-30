@@ -216,6 +216,16 @@ it, on this near-crossover π=0.44 instance.)*
 
 If nothing legal is committed, the score is all-zero (`_zero_score`).
 
+**Per-op probes.** Every run also carries a probe set (`glyph.data.probe.probe_set`,
+default 100 bare-atomic items per atomic op, from a dedicated RNG stream — exempt
+from the frozen-instance fingerprint). The probes are delivered with the final
+test as `probe_*` rows in `final/test.jsonl`; a legal `final_answer` file must
+cover them, but they are scored **outside** `overall`, in a separate
+`report["probe"]["by_op"]` block. Each op's accuracy is split `seen`/`unseen`
+by the run's `LookupLog` (unseen = the cell was never bought — the clean per-op
+generalization read). Probe cells are deliberately *not* refused by the query
+oracle: refusing them would leak which cells are probes.
+
 ### 4.5 Practice vs final phases
 
 - **practice** (`drive_practice`, `harness.py:111-144`) — the agent explores: it can `query`,

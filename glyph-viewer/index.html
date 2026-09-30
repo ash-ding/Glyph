@@ -444,6 +444,22 @@ function section(title,contentEl,open){
   const d=el("details","sec"); if(open)d.open=true;
   d.append(el("summary",null,title)); const b=el("div","body"); b.append(contentEl); d.append(b); return d;
 }
+function probeTable(probe){
+  const table=el("table");
+  const hd=el("tr");
+  hd.append(el("th",null,"op"),el("th",null,"overall"),el("th",null,"seen"),el("th",null,"unseen"));
+  table.append(hd);
+  for(const op of Object.keys(probe.by_op||{}).sort()){
+    const v=probe.by_op[op]||{}, s=v.seen||{}, u=v.unseen||{};
+    const r=el("tr");
+    r.append(el("td",null,op),
+             el("td",null,num(v.overall,3)+" (n="+(v.n??0)+")"),
+             el("td",null,num(s.acc,3)+" (n="+(s.n??0)+")"),
+             el("td",null,num(u.acc,3)+" (n="+(u.n??0)+")"));
+    table.append(r);
+  }
+  return table;
+}
 function renderRun(rj){
   const m=$("#detail"); m.innerHTML="";
   const cfg=rj.config||{}, s=rj.summary||{}, rep=rj.report||{};
@@ -467,6 +483,7 @@ function renderRun(rj){
   m.append(section("Practice opener",el("pre",null,pr.practice_opener||"—")));
   m.append(section("Final opener",el("pre",null,pr.final_opener||"—")));
   m.append(section("Task (README the agent saw)",el("pre",null,(rj.task||{}).readme||"—")));
+  if(rep.probe&&rep.probe.by_op) m.append(section("Per-op probes",probeTable(rep.probe),true));
   m.append(section("Full report (JSON)",el("pre",null,fmtJSON(rep))));
   // transcript
   const tr=rj.transcript||[]; let phase=null;

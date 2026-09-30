@@ -3532,3 +3532,23 @@ Ran: `~/miniforge3/envs/glyph/bin/python -m pytest -q -m "not slow"` on lumen1
 → **274 passed, 6 deselected (0:14:56)**. Generation untouched;
 `test_frozen_instances.py` passed unmodified — the 15 frozen instances,
 fingerprints, and measured π all stand.
+
+## 2026-09-29 — PR C: per-op probe set
+
+Per the spec (§C): every run now carries a probe set — `glyph.data.probe.probe_set`,
+default 100 bare-atomic items per atomic op, generated from a dedicated RNG
+stream (`(inst.seed, PROBE_SALT=20260929)`), so it is exempt from the
+frozen-instance fingerprint. Delivery: `probe_*` rows appended to
+`final/test.jsonl` at the phase switch. `final_answer` legality covers them
+(a file missing probe answers is illegal); scoring reports them in a separate
+`report["probe"]["by_op"]` block — never in `overall` — with each op split
+`seen`/`unseen` by the run's `LookupLog`. The query oracle deliberately does
+NOT refuse probe cells: refusing would leak which cells are probes; seen/unseen
+is derived after the fact, same stance as `tail`. The viewer renders the block
+as a "Per-op probes" section.
+
+Ran on lumen1: `pytest -q -m "not slow"` → **285 passed, 6 deselected (0:12:30)**
+(was 274 on main; 11 new tests). `test_frozen_instances.py` and
+`test_data_boundary.py` passed unmodified. `pytest tests/v2 -q` → 118 passed,
+1 skipped — the e2e smoke run needed no fixture change because its scripted
+agent answers `final/test.jsonl` row by row, probes included.

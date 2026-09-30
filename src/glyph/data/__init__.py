@@ -26,13 +26,14 @@ from .instance import (SPLITS, GenerationFailed, GlyphInstance, TestItem,
                        generate)
 from .interp import Interpreter, LookupLog
 from .measure import measure_pi
+from .probe import probe_set
 from .semantics import StructSem, sample_skeleton, trivial_skeleton
 from .tables import IdentityTables, Tables
 
 __all__ = [
     "GlyphConfig", "PRESETS", "VALUE_FORMS", "QUERY_OOD_POLICIES",
     "generate", "GlyphInstance", "TestItem", "SPLITS", "GenerationFailed",
-    "Interpreter", "LookupLog", "measure_pi",
+    "Interpreter", "LookupLog", "measure_pi", "probe_set",
     "Tables", "IdentityTables",
     "StructSem", "sample_skeleton", "trivial_skeleton",
     "Expr", "AtomApp", "parse", "check", "render", "render_value", "render_list",

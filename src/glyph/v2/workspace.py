@@ -89,6 +89,9 @@ Rules:
     covers every id in the relevant file (validation.jsonl now, later
     final/test.jsonl) exactly once. An answer is either a value of the form
     "v_x_y_z" or a non-empty list [...].
+  - final/test.jsonl also contains bare-atomic probe rows (ids probe_*).
+    They are scored separately from the main test, but a legal answer file
+    must cover every row, probes included.
 """
 
 
@@ -134,13 +137,29 @@ def build_workspace(inst, run_dir) -> tuple[Paths, Callable[[Any], str], Callabl
     return paths, val_id_of, test_id_of
 
 
-def write_test_file(paths: Paths, inst, test_id_of: Callable[[Any], str]) -> Path:
+def probe_ids_for(inst, probes: list) -> Callable[[Any], str]:
+    """Identity-keyed probe ids, in an order shuffled off the instance seed
+    (same convention as the test ids)."""
+    shuffled = list(probes)
+    shuffle_for(inst.seed).shuffle(shuffled)
+    id_of, _ = assign_ids("probe", shuffled)
+    return id_of
+
+
+def write_test_file(paths: Paths, inst, test_id_of: Callable[[Any], str],
+                    probes: list | None = None,
+                    probe_id_of: Callable[[Any], str] | None = None) -> Path:
     """Write final/test.jsonl: one {"id","expr"} per test item, in the
     SHUFFLED order test_id_of was built from (ids sort back into that order
-    since they were assigned 0.. in it). No answer, no split label.
+    since they were assigned 0.. in it), followed by the probe rows when a
+    probe set is attached. No answer, no split label on either kind.
     """
     items = sorted(inst.test, key=test_id_of)
     lines = [json.dumps({"id": test_id_of(t), "expr": t.expr_src}) for t in items]
+    if probes:
+        p_items = sorted(probes, key=probe_id_of)
+        lines += [json.dumps({"id": probe_id_of(t), "expr": t.expr_src})
+                  for t in p_items]
     out = paths.final_dir / "test.jsonl"
     out.write_text("\n".join(lines) + ("\n" if lines else ""))
     return out

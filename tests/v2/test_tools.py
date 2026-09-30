@@ -224,6 +224,34 @@ def test_final_answer_illegal_not_committed(inst, tmp_path):
     assert not hasattr(s, "final_commit_path") or s.final_commit_path is None
 
 
+def _attach_probes(s, inst, n=5):
+    from glyph.data.probe import probe_set
+    s.probes = probe_set(inst, n_per_op=n)
+    s.probe_id_of = T.default_id_of("probe", s.probes)
+    return s.probes
+
+
+def test_final_answer_requires_probe_answers(inst, tmp_path):
+    s = make_session(inst, tmp_path, phase="final")
+    probes = _attach_probes(s, inst)
+    f = tmp_path / "final.jsonl"
+    write_test(f, inst, s.test_id_of, correct=True)   # test rows only
+    out = T.t_final_answer(s, path=str(f))
+    assert "error" in out
+    assert out["violations"]["missing_ids"] >= len(probes)
+
+
+def test_final_answer_with_probes_commits(inst, tmp_path):
+    s = make_session(inst, tmp_path, phase="final")
+    probes = _attach_probes(s, inst)
+    f = tmp_path / "final.jsonl"
+    rows = [{"id": s.test_id_of(t), "answer": t.answer_src} for t in inst.test]
+    rows += [{"id": s.probe_id_of(t), "answer": t.answer_src} for t in probes]
+    f.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+    out = T.t_final_answer(s, path=str(f))
+    assert out.get("committed") is True
+
+
 # ---------------------------------------------------------------------
 # train-arm tools with fake student
 # ---------------------------------------------------------------------
