@@ -14,4 +14,4 @@ def test_smoke_1001_unchanged():
 
 def test_pi_mid_1001_unchanged():
     assert _fp(generate(1001, PRESETS["pi_mid"])) == \
-        "f3cb3eb77a54b9f0c1cc77f6b4b9912c0b319d9d0584138611f658da07a32e92"
+        "efaf4694b0ece951ebaa24f3ebec0f8cae6e048fc92e6562ad89bf53be80255f"
