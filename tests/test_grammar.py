@@ -89,3 +89,22 @@ def test_atomapp_parse_from_source():
     v0, v1 = render_value(0, cfg), render_value(1, cfg)
     assert parse(f"u0({v0})", cfg) == AtomApp("u0", (0,))
     assert parse(f"b0({v0}, {v1})", cfg) == AtomApp("b0", (0, 1))
+
+
+def test_atomapp_check():
+    from glyph.data.grammar import AtomApp
+    cfg = PRESETS["smoke"]
+    v0, v1 = render_value(0, cfg), render_value(1, cfg)
+    # legal
+    check(parse(f"u0({v0})", cfg), cfg)
+    check(parse(f"b0({v0}, {v1})", cfg), cfg)
+    # wrong arity, disabled op, value out of range
+    for e in (AtomApp("u0", (0, 1)), AtomApp("b0", (0,)),
+              AtomApp(f"u{cfg.n_unary}", (0,)), AtomApp(f"b{cfg.n_binary}", (0, 1)),
+              AtomApp("u0", (cfg.n_values,))):
+        with pytest.raises(SyntaxError):
+            check(e, cfg)
+    # nesting and non-literal args never reach check: the parser rejects them
+    for src in (f"u0(u1({v0}))", f"u0([{v0}, {v1}])", f"u0(s2([{v0}, {v1}]))", "u0()"):
+        with pytest.raises(SyntaxError):
+            parse(src, cfg)

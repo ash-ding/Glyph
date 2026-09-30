@@ -327,6 +327,19 @@ def check(e: Expr, cfg: GlyphConfig) -> None:
                 if not 0 <= i < nv:
                     raise SyntaxError(f"value out of range: {i}")
             return
+        if isinstance(node, AtomApp):
+            if node.op in us:
+                want = 1
+            elif node.op in bs:
+                want = 2
+            else:
+                raise SyntaxError(f"operator {node.op!r} is not enabled")
+            if len(node.args) != want:
+                raise SyntaxError(f"{node.op} takes {want} value argument(s)")
+            for i in node.args:
+                if not 0 <= i < nv:
+                    raise SyntaxError(f"value out of range: {i}")
+            return
         shape = ops.get(node.op)
         if shape is None:
             raise SyntaxError(f"operator {node.op!r} is not enabled")
