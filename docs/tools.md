@@ -122,7 +122,9 @@ final_answer(path: str) -> {committed: true, digest, <remaining>}
 ```
 Commit the held-out-test answers and end the run. An *illegal* file is **not
 committed** and may be corrected and re-submitted; a legal one is committed once
-and is the thing scored. The held-out test keeps its `iid`/`comp`/`depth`
+and is the thing scored. Legality covers every row of `final/test.jsonl`,
+including the `probe_*` rows (the per-op probe set) — a file missing probe
+answers is illegal. Probes are scored separately, never in `overall`. The held-out test keeps its `iid`/`comp`/`depth`
 splits, but the agent never sees a split-level or per-item test score — only the
 final report does.
 

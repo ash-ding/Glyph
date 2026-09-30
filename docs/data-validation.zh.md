@@ -194,6 +194,14 @@ student 是训在完整的 表达式→答案 对上的**，用的是 agent 自�
 
 若没有合法提交，分数全为 0（`_zero_score`）。
 
+**Per-op 探针。**每次 run 还带一个探针集（`glyph.data.probe.probe_set`，默认每个原子
+算子 100 条裸原子题，来自独立 RNG 流——不进 frozen-instance 的 fingerprint）。探针随
+final test 一起下发，是 `final/test.jsonl` 里的 `probe_*` 行；合法的 `final_answer`
+文件必须覆盖它们，但它们**不计入** `overall`，单独报在 `report["probe"]["by_op"]`
+块里。每个算子的准确率按本次 run 的 `LookupLog` 拆成 `seen`/`unseen` 两栏
+（unseen = 该 cell 从未被购买——每算子泛化能力的干净读数）。查询 oracle 特意**不**
+拒绝探针 cell：拒绝会泄露哪些 cell 是探针。
+
 ### 4.5 practice 与 final 阶段
 
 - **practice**（`drive_practice`，`harness.py:111-144`）—— agent 探索：可以 `query`、对验证
