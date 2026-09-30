@@ -384,6 +384,12 @@ def syntax_spec(cfg: GlyphConfig) -> str:
     }
     for name, shape in enabled_ops(cfg):
         lines.append(f"    {name}{sig[shape]}")
+    lines += [
+        "Atomic operators may also be applied directly to value literals:",
+        "    u*(value) -> value",
+        "    b*(value, value) -> value",
+        "Their arguments must be value literals -- no nesting, no lists.",
+    ]
     lo, hi = cfg.list_len_range
     lines += [
         f"Integer arguments are {K_RANGE[0]}..{K_RANGE[1]}.",

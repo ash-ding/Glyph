@@ -100,3 +100,25 @@ def test_open_policy_allows_a_held_pair_nontest_expr():
             assert inst.query_violation(src, "open") is None   # open lifts the held-pair check
             return
     assert False, "no held-pair non-test expr found to check open policy"
+
+
+def test_bare_atomic_query_is_legal_billed_and_logged():
+    from glyph.data import generate, render_value
+    inst = generate(47, PRESETS["smoke"])
+    cfg = inst.cfg
+    i = 9 % cfg.n_values   # stay in range on any preset
+    src = f"u0({render_value(i, cfg)})"
+    for policy in ("strict", "open"):
+        assert inst.query_violation(src, policy) is None
+    n0, before = inst.query_count, len(inst.query_log)
+    out = inst.query(src)
+    assert out == render_value(inst.tables.apply_unary("u0", i), cfg)
+    assert inst.query_count == n0 + 1
+    assert ("u0", i) in inst.query_log.unary and len(inst.query_log) == before + 1
+
+
+def test_syntax_spec_documents_bare_atomics():
+    from glyph.data import syntax_spec
+    s = syntax_spec(PRESETS["smoke"])
+    assert "u*(value) -> value" in s
+    assert "b*(value, value) -> value" in s
