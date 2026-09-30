@@ -47,6 +47,32 @@ def build_report(session, committed_path, id_of) -> dict:
         tail_scored = score_file(committed_path, tail_items, cfg, id_of)
         tail_score = tail_scored["overall"]
 
+    probes = getattr(session, "probes", None)
+    if probes:
+        p_id_of = session.probe_id_of
+
+        def _acc(sub):
+            if not sub:
+                return None
+            if committed_path is None:
+                return 0.0
+            return score_file(committed_path, sub, cfg, p_id_of)["overall"]
+
+        by_op: dict[str, dict] = {}
+        for op in sorted({t.split for t in probes}):
+            its = [t for t in probes if t.split == op]
+            unseen = [t for t in its if inst.is_tail(t)]
+            seen = [t for t in its if not inst.is_tail(t)]
+            by_op[op] = {
+                "overall": _acc(its),
+                "n": len(its),
+                "seen": {"n": len(seen), "acc": _acc(seen)},
+                "unseen": {"n": len(unseen), "acc": _acc(unseen)},
+            }
+        probe_block = {"by_op": by_op}
+    else:
+        probe_block = None
+
     ceiling = inst.ceilings(items)
     skel_ceiling = ceiling["skeleton"]
 
@@ -114,6 +140,7 @@ def build_report(session, committed_path, id_of) -> dict:
         "by_split": score["by_split"],
         "by_depth": score["by_depth"],
         "tail": tail_score,
+        "probe": probe_block,
         "ceiling": ceiling,
         "headroom": hr,
         "instance": instance,
