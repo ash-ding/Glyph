@@ -62,3 +62,30 @@ def test_syntax_spec_leaks_no_semantics():
     for word in ("map", "fold", "reverse", "rotate", "dedup", "filter",
                  "sort", "guard", "even"):
         assert word not in spec, f"{word!r} leaks into the public syntax spec"
+
+
+@pytest.mark.parametrize("cfg", CFGS)
+def test_atomapp_roundtrip(cfg):
+    """render -> parse -> render is a fixed point for bare atomic applications."""
+    from glyph.data.grammar import AtomApp, depth, result_type
+    rng = np.random.default_rng(23)
+    for _ in range(100):
+        i, j = int(rng.integers(cfg.n_values)), int(rng.integers(cfg.n_values))
+        u = AtomApp(f"u{int(rng.integers(cfg.n_unary))}", (i,))
+        b = AtomApp(f"b{int(rng.integers(cfg.n_binary))}", (i, j))
+        for e in (u, b):
+            src = render(e, cfg)
+            back = parse(src, cfg)
+            assert back == e
+            assert render(back, cfg) == src
+            assert result_type(back) == "VAL"
+            assert depth(back) == 1
+
+
+def test_atomapp_parse_from_source():
+    """The written form parses to the node, not to a Val fallback."""
+    from glyph.data.grammar import AtomApp
+    cfg = PRESETS["smoke"]
+    v0, v1 = render_value(0, cfg), render_value(1, cfg)
+    assert parse(f"u0({v0})", cfg) == AtomApp("u0", (0,))
+    assert parse(f"b0({v0}, {v1})", cfg) == AtomApp("b0", (0, 1))

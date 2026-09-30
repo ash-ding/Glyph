@@ -139,7 +139,20 @@ class App:
     args: tuple
 
 
-Expr = Val | Lit | App
+@dataclass(frozen=True)
+class AtomApp:
+    """A bare atomic-operator application, e.g. u0(v_a_b_c) or b1(v_x, v_y).
+
+    Args are value indices: value literals only, no nesting.  This is the
+    query-layer channel for buying clean table cells; generation never emits
+    it, so test/val distributions (and frozen-instance fingerprints) are
+    untouched.
+    """
+    op: str
+    args: tuple[int, ...]
+
+
+Expr = Val | Lit | App | AtomApp
 
 
 def result_type(e: Expr) -> Type:
@@ -147,6 +160,8 @@ def result_type(e: Expr) -> Type:
         return "VAL"
     if isinstance(e, Lit):
         return "LIST"
+    if isinstance(e, AtomApp):
+        return "VAL"
     shape = dict(STRUCT_SHAPES)[e.op]
     return SHAPE_RESULT[shape]
 
@@ -179,6 +194,8 @@ def render(e: Expr, cfg: GlyphConfig) -> str:
         return render_value(e.idx, cfg)
     if isinstance(e, Lit):
         return "[" + ", ".join(render_value(i, cfg) for i in e.items) + "]"
+    if isinstance(e, AtomApp):
+        return f"{e.op}({', '.join(render_value(i, cfg) for i in e.args)})"
     parts = []
     for a in e.args:
         if isinstance(a, str):
@@ -249,6 +266,16 @@ class _P:
                     self.take(",")
             self.take(")")
             return App(op, tuple(args))
+        if (t[0] in ("u", "b") and t[1:].isdigit()
+                and self.i + 1 < len(self.toks) and self.toks[self.i + 1] == "("):
+            op = self.take()
+            self.take("(")
+            args = [parse_value(self.take(), self.cfg)]
+            while self.peek() == ",":
+                self.take(",")
+                args.append(parse_value(self.take(), self.cfg))
+            self.take(")")
+            return AtomApp(op, tuple(args))
         return Val(parse_value(self.take(), self.cfg))
 
 
