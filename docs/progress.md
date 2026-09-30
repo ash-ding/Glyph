@@ -3649,3 +3649,74 @@ logs: node09 `~/glyph_runs/cap5_06b/`.
   1.7B everywhere measured. Whether the arm should default to it is a
   separate decision (the weights re-measurement can now be run at either or
   both sizes via `--student-model`).
+
+## 2026-09-30 — presets: n_structural 5/7/9, demo_max_depth 2 everywhere
+
+**Rule.** Every preset knob is now either shared by all three presets or
+different on all three. Two broke it: `n_structural` 5/5/8 and
+`demo_max_depth` 2/2/3. Now 5/7/9 and 2/2/2; `pi_low` is unchanged.
+
+**`STRUCT_SHAPES` grows to s0..s11.** Appended `s8 UL, s9 LB, s10 L, s11 KL`,
+so every block of four holds each shape once. Appending only: `enabled_ops`
+takes a prefix, so instances at `n_structural <= 8` are bit-identical (the 70
+`pi_low` candidates and the 5 low frozen instances reproduced exactly,
+fingerprints and pi). `enabled_ops` now raises outside `1..12` -- a slice past
+the end used to clip silently, so `n_structural=9` built 8 operators while
+`report.py` recorded 9. The floor stays at 1, not 5, because `smoke` runs at 4.
+
+**Why these values.** Seeds 1000-1059 at `scaled(3000)`, whose pi equals full
+size (pi_low 1068: 0.2037 against the manifest's 0.204). "Window" is the
+frozen-selection window of the preset's band.
+
+| preset | n | demo | pi p10 / med / p90 | window |
+|---|---|---|---|---|
+| pi_low | 5 | 2 | 0.186 / 0.299 / 0.472 | 23/60 |
+| pi_low | 6 | 2 | 0.240 / 0.344 / 0.438 | 16/60 |
+| pi_low | 8 | 2 | 0.247 / 0.360 / 0.444 | 14/60 |
+| pi_mid | 5 | 2 | 0.424 / 0.537 / 0.689 | 16/60 |
+| pi_mid | 7 | 2 | 0.460 / 0.535 / 0.695 | 26/60 |
+| pi_mid | 8 | 2 | 0.469 / 0.531 / 0.643 | 28/60 |
+| pi_high | 8 | 3 | 0.620 / 0.694 / 0.778 | 25/60 |
+| pi_high | 8 | 2 | 0.625 / 0.706 / 0.789 | 25/60 |
+| pi_high | 9 | 2 | 0.654 / 0.717 / 0.802 | 28/60 |
+
+Adding operators pushes `pi_low` toward `pi_mid` (raising `atomic_ratio` to
+0.97 at n=8 only brought the median to 0.322), so its floor of 5 is also its
+setting. s8's shape does not matter at n=9: UL / LB / L / KL gave medians
+0.717 / 0.719 / 0.717 / 0.724, 28-37 of 60 in window, inside seed noise.
+`demo_max_depth=1` cannot generate (`pi_low`: 0/12) -- `comp` needs a held
+pair, which needs one operator nested in another -- so 2 is the only shared
+value that keeps `depth` a multi-depth split on every preset.
+
+**Frozen instances re-selected.** Ran in a worktree off `origin/main`:
+`tools/scan_instances.py`'s `scan()` over 70 seeds x 3 presets (1001-1070,
+driven in parallel, same output), then `tools/select_instances.py
+--n-per-band 5`, then `tools/run_reference.py --instance all --only
+skeleton,table,perfect`. low_1..5 are unchanged (seeds, fingerprints, all
+three ceilings). mid and high are new instances; high_3/high_4 reuse seeds
+1038/1043 but are different instances under the new config.
+
+| | seeds | measured pi |
+|---|---|---|
+| mid | 1047 1056 1019 1045 1058 | 0.452 0.469 0.491 0.508 0.529 |
+| high | 1046 1062 1038 1043 1068 | 0.701 0.729 0.751 0.773 0.794 |
+
+Any run on the old mid/high frozen instances is not comparable with new ones.
+
+**`scripts/bench_scan.py --seeds 20`** (full 10k test sets, 60/60 generated):
+median pi (iid) 0.306 / 0.543 / 0.736, ranges [0.132, 0.529] / [0.330, 0.763]
+/ [0.655, 0.870]; median skeleton ceiling 0.105 / 0.337 / 0.720. 5 of 20
+`pi_mid` seeds fall inside `pi_high`'s range. The site's preset table is
+updated from this; its old `pi_low` row (0.12-0.54, 0.07) did not match this
+unchanged preset either, so it predated some earlier generator change.
+
+**Table knobs are not pi knobs.** Checked while here: `pi_mid` over 30 seeds
+with coupling 0 / 0.25 / 1.0 / joint unary gave median pi 0.543 / 0.543 /
+0.545 / 0.550. pi's two baselines replace or ignore the true table, so how
+learnable the table is never enters pi.
+
+Ran on lumen1, rebased onto PR D (#52): `pytest -q -m "not slow"` ->
+**297 passed, 6 deselected (0:08:50)**, exit 0 (294 after PR D; 3 new tests).
+The CPU ceilings were recomputed on the rebased code and came out
+byte-identical. `test_pi_mid_1001_unchanged`
+re-pinned; `test_frozen_instances.py` passes against the new manifest.

@@ -50,7 +50,7 @@ class GlyphConfig:
     value_form: str = "letter_sep"   # see the note above VALUE_FORMS
 
     # ---- skeleton (structural operator semantics) --------------------
-    n_structural: int = 5       # how many of s0..s7 are enabled
+    n_structural: int = 5       # how many of s0..s11 are enabled, as a prefix
     max_transform_depth: int = 2   # how deep `<transform> then <transform>` may nest
     guard_prob: float = 0.5     # chance a structural op gets a guard
 
@@ -195,6 +195,41 @@ def _preset(atomic_ratio: float, **kw) -> GlyphConfig:
     return GlyphConfig(atomic_ratio=atomic_ratio, **kw)
 
 
+# Every knob is either the same on all three presets or different on all
+# three, so a knob that differs is one the pi axis runs along and a knob that
+# is shared is held fixed.  Before 2026-09-30 two knobs broke this:
+# `n_structural` was 5/5/8 and `demo_max_depth` was 2/2/3.
+#
+# `demo_max_depth` is 2 everywhere.  It is the seen/unseen depth boundary --
+# demos, `iid` and `comp` sit at or below it, `depth` strictly above it, and
+# strict queries may not exceed it -- not a pi knob, so varying it would make
+# depth generalisation a different exam on each preset.  It cannot go below
+# 2: `comp` needs a held-out pair, a pair needs one operator nested in
+# another, and pi_low at 1 failed to generate on 12 of 12 seeds.  pi_high
+# moving 3 -> 2 barely moves pi (below).
+#
+# `n_structural` is 5/7/9, rising with pi like the other skeleton knobs.  5 is
+# the floor (see pi_low); 9 needed STRUCT_SHAPES to grow past s7.
+#
+# Measured on seeds 1000-1059 at `scaled(3000)` (whose pi equals full size:
+# pi_low 1068 gives 0.2037 against the manifest's 0.204); "window" counts
+# seeds inside the frozen-instance selection window of the preset's band:
+#
+#   preset   n  demo   pi p10 / med / p90      window
+#   pi_low   5   2     0.186 / 0.299 / 0.472   23/60   [0.20, 0.30)
+#   pi_low   6   2     0.240 / 0.344 / 0.438   16/60
+#   pi_low   8   2     0.247 / 0.360 / 0.444   14/60
+#   pi_mid   5   2     0.424 / 0.537 / 0.689   16/60   [0.45, 0.53)
+#   pi_mid   7   2     0.460 / 0.535 / 0.695   26/60
+#   pi_mid   8   2     0.469 / 0.531 / 0.643   28/60
+#   pi_high  8   3     0.620 / 0.694 / 0.778   25/60   [0.70, 0.80)
+#   pi_high  8   2     0.625 / 0.706 / 0.789   25/60
+#   pi_high  9   2     0.654 / 0.717 / 0.802   28/60
+#
+# More operators push pi_low up toward pi_mid, which is why its floor is also
+# its setting; pi_mid's spread tightens as operators are added.  The shape of
+# s8 does not matter to pi at n = 9: UL / LB / L / KL gave medians 0.717 /
+# 0.719 / 0.717 / 0.724 and 28-37 of 60 in window, inside seed noise.
 PRESETS: dict[str, GlyphConfig] = {
     # pi -> 1 : difficulty lives in the skeleton.  Many structural ops, deep
     # nesting, guards, and expressions that rarely reach for the table.
@@ -226,12 +261,13 @@ PRESETS: dict[str, GlyphConfig] = {
     # which is the question.
     "pi_high": _preset(
         atomic_ratio=0.15, base=17, n_digits=3,
-        n_structural=8, max_transform_depth=3, guard_prob=0.9,
-        max_expr_depth=5, demo_max_depth=3,
+        n_structural=9, max_transform_depth=3, guard_prob=0.9,
+        max_expr_depth=5, demo_max_depth=2,
     ),
     "pi_mid": _preset(
         atomic_ratio=0.5, base=17, n_digits=3,
-        n_structural=5, max_transform_depth=2, guard_prob=0.5,
+        n_structural=7, max_transform_depth=2, guard_prob=0.5,
+        max_expr_depth=4, demo_max_depth=2,
     ),
     # pi -> 0 : difficulty lives in the tables.  Large value space,
     # near-trivial structural ops, no guards, no composition.
@@ -246,8 +282,8 @@ PRESETS: dict[str, GlyphConfig] = {
     #
     # Filtering the draw to realizable pairs fixed generation at any n >= 3.
     # What 5 buys is that `comp` becomes a *sample* rather than a fixed probe.
-    # `STRUCT_SHAPES` is (UL, LB, L, KL, L, UL, KL, LB): the first four shapes
-    # are pairwise distinct, so below 5 every (outer shape, inner shape) class
+    # `STRUCT_SHAPES` begins (UL, LB, L, KL, L, UL, KL, LB): the first four
+    # shapes are pairwise distinct, so below 5 every (outer shape, inner shape) class
     # holds exactly one pair and the stratified draw has nothing to choose.
     # Over 40 seeds:
     #
