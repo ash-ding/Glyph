@@ -25,6 +25,10 @@ Type = Literal["LIST", "VAL"]
 #   LB : (list, binary) -> value    consumes an atomic binary operator
 #   L  : (list) -> list             pure structure
 #   KL : (int, list) -> list        pure structure
+#
+# Each block of four holds every shape once.  Entries are only ever appended:
+# `enabled_ops` takes a prefix, so appending leaves every instance with
+# n_structural <= the old length bit-identical, and reordering would not.
 STRUCT_SHAPES: tuple[tuple[str, str], ...] = (
     ("s0", "UL"),
     ("s1", "LB"),
@@ -34,6 +38,10 @@ STRUCT_SHAPES: tuple[tuple[str, str], ...] = (
     ("s5", "UL"),
     ("s6", "KL"),
     ("s7", "LB"),
+    ("s8", "UL"),
+    ("s9", "LB"),
+    ("s10", "L"),
+    ("s11", "KL"),
 )
 SHAPE_RESULT: dict[str, Type] = {"UL": "LIST", "LB": "VAL", "L": "LIST", "KL": "LIST"}
 K_RANGE = (1, 3)
@@ -42,7 +50,14 @@ K_RANGE = (1, 3)
 def enabled_ops(cfg: GlyphConfig) -> list[tuple[str, str]]:
     """The first `n_structural` shapes, in order.  Order matters: s0 (map-like)
     and s1 (fold-like) come first because they are the two that consume atomic
-    operators, and the pi->0 preset keeps only those."""
+    operators, and the pi->0 preset keeps only those.
+
+    Out-of-range counts raise.  A slice past the end used to clip silently, so
+    `n_structural=9` built an 8-operator instance while the report recorded 9.
+    """
+    if not 1 <= cfg.n_structural <= len(STRUCT_SHAPES):
+        raise ValueError(f"n_structural={cfg.n_structural} is outside "
+                         f"1..{len(STRUCT_SHAPES)}, the operators STRUCT_SHAPES defines")
     return list(STRUCT_SHAPES[: cfg.n_structural])
 
 
