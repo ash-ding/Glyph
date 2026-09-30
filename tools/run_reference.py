@@ -35,7 +35,7 @@ from glyph.reference.subset import ceilings_on, paired_subset  # noqa: E402
 from glyph.reference.weights_ceiling import score_ceiling, train_student  # noqa: E402
 
 CHEAP_ORACLES = ("skeleton", "table", "perfect")
-ALL_ORACLES = CHEAP_ORACLES + ("weights", "a0prime")
+ALL_ORACLES = CHEAP_ORACLES + ("weights", "weights-per-op", "a0prime")
 
 
 def merge_reference(path, instance_id: str, oracle: str, payload) -> dict:
@@ -192,9 +192,11 @@ def main(argv=None) -> int:
                      help="a frozen instance id (from the manifest), or 'all'")
     ap.add_argument("--only", default="skeleton,table,perfect",
                      help="comma-separated oracles to run: "
-                          "skeleton,table,perfect,weights,a0prime")
+                          "skeleton,table,perfect,weights,weights-per-op,a0prime")
     ap.add_argument("--seen-frac", type=float, nargs="+", default=[0.02, 0.05, 0.10],
                      help="seen fractions of the table, used by weights/a0prime")
+    ap.add_argument("--student-model", default="Qwen/Qwen3-1.7B",
+                     help="base model for the weights / weights-per-op students")
     ap.add_argument("--out", default="docs/benchmark/reference_ceilings.json",
                      help="output reference_ceilings.json path")
     ap.add_argument("--frozen", default="docs/benchmark/frozen_instances.json",
@@ -225,10 +227,30 @@ def main(argv=None) -> int:
             # [GPU] only entered when explicitly requested via --only.
             by_frac = {}
             for frac in args.seen_frac:
-                model, tok = train_student(inst, frac)
+                model, tok = train_student(inst, frac, model=args.student_model)
                 by_frac[str(frac)] = score_ceiling(inst, model, tok, items)
+                del model
             merge_reference(args.out, instance_id, "weights", by_frac)
             print(f"{instance_id}: weights done for seen_frac={args.seen_frac}")
+
+        if "weights-per-op" in oracles:
+            # [GPU] one specialist per atomic op, scored on that op's probes.
+            from glyph.data import probe_set
+            from glyph.data.grammar import binary_names, unary_names
+            from glyph.reference.weights_ceiling import score_probes_model
+            probes = probe_set(inst)
+            by_frac = {}
+            for frac in args.seen_frac:
+                per_op = {}
+                for op in unary_names(inst.cfg) + binary_names(inst.cfg):
+                    model, tok = train_student(inst, frac, ops=[op],
+                                               model=args.student_model)
+                    op_items = [t for t in probes if t.split == op]
+                    per_op[op] = score_probes_model(inst, model, tok, op_items, frac)
+                    del model
+                by_frac[str(frac)] = per_op
+            merge_reference(args.out, instance_id, "weights_per_op", by_frac)
+            print(f"{instance_id}: weights-per-op done for seen_frac={args.seen_frac}")
 
         if "a0prime" in oracles:
             # [API] only entered when explicitly requested via --only.

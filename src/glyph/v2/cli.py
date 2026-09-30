@@ -23,6 +23,7 @@ def build_run_config(args: argparse.Namespace) -> RunConfig:
         instance_seed=args.seed,
         instance_id=getattr(args, "instance_id", None),
         model=args.model,
+        student_model=args.student_model,
         q_cap=args.q,
         submit_cap=args.submit_cap,
         tp=args.tp,
@@ -57,6 +58,7 @@ def cmd_grid(args: argparse.Namespace) -> int:
             for instance_id in args.instance_ids:
                 rc = RunConfig(
                     arm=arm, instance_id=instance_id, model=args.model,
+                    student_model=args.student_model,
                     q_cap=args.q, submit_cap=args.submit_cap, tp=args.tp, tf=args.tf,
                     usd_line=args.usd_line, n_val=args.n_val, max_turns=args.max_turns,
                     out_root=args.out_root,
@@ -71,6 +73,7 @@ def cmd_grid(args: argparse.Namespace) -> int:
                 for seed in args.seeds:
                     rc = RunConfig(
                         arm=arm, preset=preset, instance_seed=seed, model=args.model,
+                        student_model=args.student_model,
                         q_cap=args.q, submit_cap=args.submit_cap, tp=args.tp, tf=args.tf,
                         usd_line=args.usd_line, n_val=args.n_val, max_turns=args.max_turns,
                         out_root=args.out_root,
@@ -87,6 +90,9 @@ def _add_run_args(s: argparse.ArgumentParser) -> None:
     s.add_argument("--arm", required=True, choices=["train", "no_train"])
     s.add_argument("--preset", default="pi_mid")
     s.add_argument("--model", default="claude-opus-4-8")
+    s.add_argument("--student-model", default="Qwen/Qwen3-1.7B",
+                   help="the trainable student's base model (train arm); "
+                        "NOT the frontier model id")
     s.add_argument("--q", type=int, default=1000, help="query cap (q_cap)")
     s.add_argument("--submit-cap", type=int, default=20)
     s.add_argument("--tp", type=int, default=100, help="practice turn cap")
@@ -114,6 +120,9 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--presets", nargs="+", default=["pi_mid"])
     g.add_argument("--seeds", nargs="+", type=int, default=[1001], dest="seeds")
     g.add_argument("--model", default="claude-opus-4-8")
+    g.add_argument("--student-model", default="Qwen/Qwen3-1.7B",
+                   help="the trainable student's base model (train arm); "
+                        "NOT the frontier model id")
     g.add_argument("--q", type=int, default=1000)
     g.add_argument("--submit-cap", type=int, default=20)
     g.add_argument("--tp", type=int, default=100)
