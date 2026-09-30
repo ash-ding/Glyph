@@ -228,7 +228,14 @@ def t_final_answer(session, path) -> dict:
         return _gate_error(session, "final_answer")
 
     id_of = _test_id_of(session)
-    v = check_file(path, session.inst.test, session.inst.cfg, session.run_dir, id_of)
+    items = list(session.inst.test)
+    probes = getattr(session, "probes", None)
+    if probes:
+        p_id_of, t_id_of = session.probe_id_of, id_of
+        probe_ids = {id(t) for t in probes}
+        items += list(probes)
+        id_of = lambda t: p_id_of(t) if id(t) in probe_ids else t_id_of(t)
+    v = check_file(path, items, session.inst.cfg, session.run_dir, id_of)
     if not v.ok:
         return {"error": "illegal final answer (not committed)",
                 "violations": v.counts, "examples": _examples(v),
