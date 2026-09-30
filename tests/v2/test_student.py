@@ -6,9 +6,13 @@ from glyph.v2.student import StudentPool
 CFG = PRESETS["smoke"]
 
 class FakeBackend:
-    def __init__(self): self.train_calls = 0
-    def train_fn(self, examples, hp, base_model, out_dir, ledger):
+    def __init__(self):
+        self.train_calls = 0
+        self.inits = []            # init_checkpoint of every train_fn call
+    def train_fn(self, examples, hp, base_model, out_dir, ledger,
+                 init_checkpoint=None):
         self.train_calls += 1
+        self.inits.append(init_checkpoint)
         pathlib.Path(out_dir).mkdir(parents=True, exist_ok=True)
         return {"examples": len(examples), "final_loss": 0.001, "gpu_seconds": 100.0}
     def make_student(self, base_model, adapter_path, prefix):
@@ -102,3 +106,53 @@ def test_full_finetune_checkpoint_served_as_base_not_lora(tmp_path):
     (pathlib.Path(ck_dir) / "train_record.json").write_text(json.dumps({"adapter": "lora-r8"}))
     pool.infer(ckid, inp, out, None)
     assert be.last_make == ("Qwen/Qwen3-1.7B", str(ck_dir))
+
+
+def _dsid(tmp_path, inst, pool):
+    ds = tmp_path / "d.jsonl"
+    ds.write_text(json.dumps({"expr": inst.demos[0][0], "answer": "v_a_a"}) + "\n")
+    return pool.build_dataset(ds, inst)["dataset_id"]
+
+
+def test_new_student_id_trains_from_base(tmp_path):
+    inst = generate(1001, CFG); pool = _pool(tmp_path, inst)
+    dsid = _dsid(tmp_path, inst, pool)
+    rec = pool.train(dsid, epochs=1, lr=1e-5, student_id="alpha")
+    assert pool.backend.inits == [None]
+    assert rec["student_id"] == "alpha" and rec["continued_from"] is None
+    assert pool.students["alpha"] == [rec["checkpoint_id"]]
+
+
+def test_existing_student_id_continues_from_latest(tmp_path):
+    inst = generate(1001, CFG); pool = _pool(tmp_path, inst)
+    dsid = _dsid(tmp_path, inst, pool)
+    r1 = pool.train(dsid, epochs=1, lr=1e-5, student_id="alpha")
+    r2 = pool.train(dsid, epochs=1, lr=1e-5, student_id="alpha")
+    assert pool.backend.inits[1] == str(pool.checkpoints[r1["checkpoint_id"]])
+    assert r2["continued_from"] == r1["checkpoint_id"]
+    assert pool.students["alpha"] == [r1["checkpoint_id"], r2["checkpoint_id"]]
+
+
+def test_two_student_ids_are_independent(tmp_path):
+    inst = generate(1001, CFG); pool = _pool(tmp_path, inst)
+    dsid = _dsid(tmp_path, inst, pool)
+    pool.train(dsid, epochs=1, lr=1e-5, student_id="alpha")
+    pool.train(dsid, epochs=1, lr=1e-5, student_id="beta")
+    assert pool.backend.inits == [None, None]
+    assert set(pool.students) == {"alpha", "beta"}
+
+
+def test_infer_accepts_student_id_as_latest_checkpoint(tmp_path):
+    inst = generate(1001, CFG)
+    be = RecordingBackend()
+    pool = StudentPool("Qwen/Qwen3-1.7B", Ledger(), work_dir=tmp_path / "ck",
+                       queries_path=None, backend=be)
+    dsid = _dsid(tmp_path, inst, pool)
+    pool.train(dsid, epochs=1, lr=1e-5, student_id="alpha")
+    r2 = pool.train(dsid, epochs=1, lr=1e-5, student_id="alpha")
+    inp = tmp_path / "in.jsonl"; out = tmp_path / "out.jsonl"
+    inp.write_text(json.dumps({"id": "t0", "expr": inst.test[0].expr_src}) + "\n")
+    rec = pool.infer("alpha", inp, out, None)
+    # the student id resolved to its LATEST checkpoint, served as a full model
+    assert be.last_make == (str(pool.checkpoints[r2["checkpoint_id"]]), None)
+    assert rec["rows"] == 1

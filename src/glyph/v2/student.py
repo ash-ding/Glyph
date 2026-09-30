@@ -141,6 +141,7 @@ class StudentPool:
         self.gpu_used_s = 0.0
         self.datasets: dict[str, list[Example]] = {}
         self.checkpoints: dict[str, Path] = {}
+        self.students: dict[str, list[str]] = {}
         self._ds_n = 0
         self._ck_n = 0
 
@@ -213,7 +214,7 @@ class StudentPool:
         }
 
     # -- train --------------------------------------------------------
-    def train(self, dataset_id, epochs, lr) -> dict:
+    def train(self, dataset_id, epochs, lr, student_id="s1") -> dict:
         if self.gpu_used_s >= self.gpu_cap_total_s:
             return {
                 "stopped_at_cap": True,
@@ -227,12 +228,21 @@ class StudentPool:
         examples = self.datasets[dataset_id]
         hp = HParams(full_finetune=True, epochs=epochs, lr=lr)
 
+        # Lineage: a known student continues from its latest checkpoint; a new
+        # one starts from the base model.  Full fine-tunes only, so a
+        # checkpoint dir IS a loadable model (see _resolve_checkpoint).
+        lineage = self.students.setdefault(student_id, [])
+        continued_from = lineage[-1] if lineage else None
+        init_checkpoint = (str(self.checkpoints[continued_from])
+                           if continued_from else None)
+
         self._ck_n += 1
         checkpoint_id = f"ck{self._ck_n}"
         out_dir = self.work_dir / checkpoint_id
 
         rec = self.backend.train_fn(examples, hp, base_model=self.base_model,
-                                     out_dir=out_dir, ledger=self.ledger)
+                                     out_dir=out_dir, ledger=self.ledger,
+                                     init_checkpoint=init_checkpoint)
 
         gpu_seconds = rec.get("gpu_seconds")
         if gpu_seconds is None:
@@ -240,12 +250,15 @@ class StudentPool:
         self.gpu_used_s += gpu_seconds
         self.ledger.add_gpu_seconds("train", gpu_seconds)
         self.checkpoints[checkpoint_id] = out_dir
+        lineage.append(checkpoint_id)
 
         stopped_at_cap = (self.gpu_used_s >= self.gpu_cap_total_s or
                            gpu_seconds > self.gpu_cap_per_call_s)
 
         return {
             "checkpoint_id": checkpoint_id,
+            "student_id": student_id,
+            "continued_from": continued_from,
             "final_loss": rec.get("final_loss"),
             "gpu_seconds": gpu_seconds,
             "gpu_seconds_remaining": max(0.0, self.gpu_cap_total_s - self.gpu_used_s),
@@ -283,7 +296,10 @@ class StudentPool:
         if checkpoint == "base":
             base_model, adapter_path = self.base_model, None
         else:
-            base_model, adapter_path = self._resolve_checkpoint(self.checkpoints[checkpoint])
+            ck = checkpoint
+            if ck not in self.checkpoints and ck in self.students and self.students[ck]:
+                ck = self.students[ck][-1]      # a student id means its latest ck
+            base_model, adapter_path = self._resolve_checkpoint(self.checkpoints[ck])
 
         prefix = None
         if prefix_path is not None:
