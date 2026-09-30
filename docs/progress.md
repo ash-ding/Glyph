@@ -3649,3 +3649,42 @@ logs: node09 `~/glyph_runs/cap5_06b/`.
   1.7B everywhere measured. Whether the arm should default to it is a
   separate decision (the weights re-measurement can now be run at either or
   both sizes via `--student-model`).
+
+## 2026-09-29 — weights ceiling re-measured on mid_1 (public-syntax format), 0.6B and 1.7B
+
+First weights numbers under the new public-syntax training format (`u0(v_…) =`,
+PR #52). Host node09, GPUs 2–7 in parallel; `train_student` defaults
+(6000 steps, batch 128, lr 1e-4); scored on the 500-item `paired_subset` of
+frozen instance **mid_1**; `entries_needed` = 1198 unary + 134 binary.
+
+```
+tools/run_reference.py --instance mid_1 --only weights --seen-frac <f> \
+  --student-model Qwen/Qwen3-{0.6B|1.7B} --out <scratch>.json
+```
+
+| model | seen_frac | overall | iid | comp | depth | tail | headroom |
+|---|---|---|---|---|---|---|---|
+| 0.6B | 0.02 | 0.442 | 0.458 | 0.504 | 0.233 | 0.240 | 0.240 |
+| 0.6B | 0.05 | 0.492 | 0.511 | 0.557 | 0.267 | 0.308 | 0.308 |
+| 0.6B | 0.10 | **0.534** | 0.557 | 0.557 | 0.367 | 0.365 | 0.365 |
+| 1.7B | 0.02 | 0.414 | 0.422 | 0.504 | 0.200 | 0.202 | 0.202 |
+| 1.7B | 0.05 | 0.498 | 0.508 | 0.557 | 0.333 | 0.316 | 0.316 |
+| 1.7B | 0.10 | 0.512 | 0.535 | 0.574 | 0.267 | 0.335 | 0.335 |
+
+Raw JSON + logs: node09 `~/glyph_runs/weights_remeasure/`.
+
+### Read
+
+- **Coverage scaling is clean and monotone** for both sizes (0.02 → 0.10 buys
+  ~+0.1 overall), and tail (never-seen cells) climbs with it — extrapolation,
+  not lookup, since the tail entries were never trained on.
+- **0.6B ≥ 1.7B everywhere except a tie at 0.05.** On 500 items the binomial
+  SE is ~0.022, so the 0.6B–1.7B gaps (≤0.028) are within noise: the honest
+  claim is *indistinguishable*, not "0.6B wins". Together with the capacity
+  check, there is no measured reason to pay 1.7B's cost.
+- The old-format published 0.498 (pi_mid/1001, 1.7B @0.10) sits near the new
+  1.7B @0.10 = 0.512 on mid_1 — reassuring magnitude, but different format AND
+  different instance: do not compare them in any figure.
+- **Not merged into `docs/benchmark/reference_ceilings.json` yet:** its
+  `weights` payload has no model dimension. Decide a schema (e.g. key the
+  payload by student model) before canonicalizing either column.
