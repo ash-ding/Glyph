@@ -3552,3 +3552,22 @@ Ran on lumen1: `pytest -q -m "not slow"` → **285 passed, 6 deselected (0:12:30
 `test_data_boundary.py` passed unmodified. `pytest tests/v2 -q` → 118 passed,
 1 skipped — the e2e smoke run needed no fixture change because its scripted
 agent answers `final/test.jsonl` row by row, probes included.
+
+## 2026-09-29 — PR B: student_id lineages + continue-training
+
+Per the spec (§B): `train` now takes a required `student_id` — an unknown id
+fine-tunes from the base model, a known id continues from that student's
+latest checkpoint (`StudentPool.students` lineage map; `sft.train` gained
+`init_checkpoint`, recorded in `train_record.json`). Checkpoints stay globally
+numbered and remain valid `student_infer` targets; `student_infer`'s
+`checkpoint` also accepts a student_id, meaning its latest checkpoint. The
+train-arm prompt paragraph now states these mechanics — MECHANICS ONLY, with a
+load-bearing comment forbidding strategy hints (whether to build per-op
+specialists is the quantity under test). GPU accounting unchanged: shared
+per-call/total caps, training metered, inference not (the unmetered-inference
+issue stays open).
+
+Ran on lumen1: `pytest -q -m "not slow"` → **290 passed, 6 deselected (0:11:00)**
+(285 after PR C; 5 new tests). No real fine-tune was run — the lineage
+contract is pinned by fake-backend tests; the first continued-training GPU run
+will exercise `init_checkpoint` for real.

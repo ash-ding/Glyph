@@ -31,7 +31,8 @@ _TOOL_SPECS = {
     "check_answers": (_T.t_check_answers, {"path": str, "set": str}),
     "finish_practice": (_T.t_finish_practice, {"reason": str}),
     "build_dataset": (_T.t_build_dataset, {"path": str}),
-    "train": (_T.t_train, {"dataset_id": str, "epochs": int, "lr": float}),
+    "train": (_T.t_train, {"dataset_id": str, "epochs": int, "lr": float,
+                            "student_id": str}),
     "student_infer": (_T.t_student_infer, {
         "checkpoint": str, "input_path": str,
         "output_path": str, "prefix_path": str,
@@ -45,8 +46,13 @@ _DESCRIPTIONS = {
     "check_answers": "Check an answer file for legality (set='validation' or 'test').",
     "finish_practice": "Signal that the practice phase is done.",
     "build_dataset": "Build a student training dataset from purchased queries (train arm).",
-    "train": "Fine-tune the student model on a dataset (train arm).",
-    "student_infer": "Run inference with a trained student checkpoint (train arm).",
+    "train": ("Fine-tune a student model on a dataset (train arm). A new "
+              "student_id starts a fresh student from the base model; an "
+              "existing student_id continues training that student from its "
+              "latest checkpoint. Several students may coexist."),
+    "student_infer": ("Run inference with a trained student (train arm). "
+                      "checkpoint accepts a checkpoint id, 'base', or a "
+                      "student_id (meaning that student's latest checkpoint)."),
     "final_answer": "Commit the final held-out-test answers and end the run.",
 }
 

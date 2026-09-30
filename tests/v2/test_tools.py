@@ -260,8 +260,9 @@ class FakeStudent:
     def build_dataset(self, path, inst):
         return {"dataset_id": "ds1", "size": 10, "provenance": "fake"}
 
-    def train(self, dataset_id, epochs, lr):
-        return {"checkpoint_id": "ck1", "final_loss": 0.1, "gpu_seconds": 5.0,
+    def train(self, dataset_id, epochs, lr, student_id="s1"):
+        return {"checkpoint_id": "ck1", "student_id": student_id,
+                "continued_from": None, "final_loss": 0.1, "gpu_seconds": 5.0,
                 "gpu_seconds_remaining": 95.0, "stopped_at_cap": False}
 
     def infer(self, checkpoint, input_path, output_path, prefix_path):
@@ -279,7 +280,7 @@ def test_build_dataset_with_fake_student(inst, tmp_path):
 def test_train_with_fake_student(inst, tmp_path):
     s = make_session(inst, tmp_path)
     s.student = FakeStudent()
-    out = T.t_train(s, dataset_id="ds1", epochs=2, lr=0.01)
+    out = T.t_train(s, dataset_id="ds1", epochs=2, lr=0.01, student_id="s1")
     assert out["checkpoint_id"] == "ck1"
     assert out["gpu_seconds_remaining"] == 95.0
 
@@ -296,7 +297,7 @@ def test_train_tools_no_student_error(inst, tmp_path):
     assert getattr(s, "student", None) is None
     out = T.t_build_dataset(s, path="foo.jsonl")
     assert "error" in out
-    out2 = T.t_train(s, dataset_id="ds1", epochs=1, lr=0.1)
+    out2 = T.t_train(s, dataset_id="ds1", epochs=1, lr=0.1, student_id="s1")
     assert "error" in out2
     out3 = T.t_student_infer(s, checkpoint="c", input_path="i", output_path="o")
     assert "error" in out3
@@ -310,3 +311,10 @@ def test_default_id_of(inst):
     id_of = T.default_id_of("val", inst.val)
     assert id_of(inst.val[0]) == "val_00000"
     assert id_of(inst.val[1]) == "val_00001"
+
+
+def test_train_passes_student_id_through(inst, tmp_path):
+    s = make_session(inst, tmp_path)
+    s.student = FakeStudent()
+    out = T.t_train(s, dataset_id="ds1", epochs=1, lr=1e-4, student_id="alpha")
+    assert out["student_id"] == "alpha"

@@ -117,7 +117,7 @@ def _weighted_loss(logits: torch.Tensor, labels: torch.Tensor,
 
 def train(examples: list[Example], hp: HParams, *, base_model: str,
           out_dir: str | Path, ledger=None, device: str = "cuda",
-          log_every: int = 50) -> dict:
+          log_every: int = 50, init_checkpoint: str | None = None) -> dict:
     """Train and save.  Returns a record of what was actually run.
 
     GPU seconds go through the ledger, measured rather than estimated -- the
@@ -142,7 +142,8 @@ def train(examples: list[Example], hp: HParams, *, base_model: str,
         raise ValueError("no trainable examples: every answer was truncated away")
 
     model = AutoModelForCausalLM.from_pretrained(
-        base_model, dtype=torch.bfloat16, attn_implementation="sdpa").to(device)
+        init_checkpoint if init_checkpoint else base_model,
+        dtype=torch.bfloat16, attn_implementation="sdpa").to(device)
     model.gradient_checkpointing_enable()
     model.config.use_cache = False
 
@@ -194,7 +195,8 @@ def train(examples: list[Example], hp: HParams, *, base_model: str,
     model.save_pretrained(out_dir)
     tok.save_pretrained(out_dir)
 
-    record = {"base_model": base_model, "out_dir": str(out_dir),
+    record = {"base_model": base_model, "init_checkpoint": init_checkpoint,
+              "out_dir": str(out_dir),
               "examples": len(ds), "dropped": len(examples) - len(ds),
               "steps": step, "hparams": asdict(hp), "lr": lr,
               "final_loss": sum(losses[-20:]) / max(1, len(losses[-20:])),

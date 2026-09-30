@@ -98,12 +98,16 @@ Voluntarily end practice before the caps are hit; flags the switch to final.
 
 ```
 build_dataset(path: str)                              -> {dataset_id, ..., <remaining>}
-train(dataset_id: str, epochs: int, lr: float)        -> {checkpoint, ..., <remaining>}
+train(dataset_id: str, epochs: int, lr: float, student_id: str) -> {checkpoint, student_id, continued_from, ..., <remaining>}
 ```
 `build_dataset` assembles a student training set from **purchased queries** — the
-agent cannot manufacture labels it has not bought. `train` fine-tunes the
+agent cannot manufacture labels it has not bought. `train` fine-tunes a
 Qwen3-1.7B student; GPU time is metered into the ledger like any other spend, so
-training competes with querying under one budget line.
+training competes with querying under one budget line. `student_id` selects the
+lineage: a new id starts a fresh student from the base model, an existing id
+continues training that student from its latest checkpoint, and students
+coexist. `student_infer`'s `checkpoint` accepts a checkpoint id, `"base"`, or a
+student_id (that student's latest checkpoint).
 
 ### Both phases — the student (train arm only)
 

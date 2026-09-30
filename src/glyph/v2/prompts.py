@@ -49,16 +49,23 @@ This run provides these tools:
 - final_answer: submit your final test answers and complete the run"""
 
 
-# Student paragraph: only for the train arm
+# Student paragraph: only for the train arm.
+# MECHANICS ONLY. Never hint at a strategy (e.g. "train one specialist per
+# operator") -- whether and how to delegate to students is the quantity this
+# benchmark measures, and a hint here would contaminate it.
 _STUDENT_PARAGRAPH = """
-**Building a Student Model (train arm only)**
+**Building Student Models (train arm only)**
 
-During practice, you may also build a student model:
+During practice, you may also build student models:
 - build_dataset: collect training data from queries you make
-- train: fine-tune a student model on your collected data
-- student_infer: use your trained student model to generate answers
+- train: fine-tune a student on a dataset. You choose a student_id: a new id
+  starts a fresh student from the base model; an existing id continues
+  training that student from its latest checkpoint. Students may coexist.
+- student_infer: generate answers with a trained checkpoint, or with a
+  student_id (meaning that student's latest checkpoint)
 
-These tools allow you to build up a small model that learns from the private semantics you discover. Training and inference consume turns but not queries."""
+These tools let you put what you discover into a small model's weights.
+Training and inference consume turns but not queries."""
 
 
 # Build the system prompts by combining common template with/without student paragraph
