@@ -23,8 +23,8 @@ from __future__ import annotations
 import collections
 import time
 
-from ..data.grammar import (binary_names, parse, render_list, render_value,
-                            unary_names)
+from ..data.grammar import (AtomApp, binary_names, parse, render, render_list,
+                            render_value, unary_names)
 from ..data.interp import Interpreter
 from ..seal import headroom as _headroom
 
@@ -50,12 +50,16 @@ def seen_b(i: int, j: int, frac: float) -> bool:
     return is_seen(i * 7919 + j, frac)
 
 
+# The training/answering surface form is the PUBLIC syntax (bare atomic
+# applications, legal since PR A) -- CLAUDE.md rule 7: one surface form for
+# everyone.  The pre-2026-09-29 private format ("u0 v_a_b_c =") makes earlier
+# weights numbers (e.g. the published 0.498) incomparable with new ones.
 def prompt_unary(op: str, i: int, cfg) -> str:
-    return f"{op} {render_value(i, cfg)} ="
+    return render(AtomApp(op, (i,)), cfg) + " ="
 
 
 def prompt_binary(op: str, i: int, j: int, cfg) -> str:
-    return f"{op} {render_value(i, cfg)} {render_value(j, cfg)} ="
+    return render(AtomApp(op, (i, j)), cfg) + " ="
 
 
 class StudentTables:

@@ -41,3 +41,18 @@ def test_score_with_perfect_student_is_perfect():
 
     assert abs(result["overall"] - 1.0) < 1e-9
     assert result["tail"] == 1.0 or result["tail"] is None
+
+
+def test_oracle_prompts_are_public_syntax():
+    """The oracle must train/answer in the same surface form the agent uses
+    (CLAUDE.md rule 7). The prompt minus ' =' must parse under the public
+    grammar as a bare atomic application."""
+    from glyph.data import parse
+    from glyph.data.grammar import AtomApp
+    from glyph.reference.weights_ceiling import prompt_binary, prompt_unary
+    cfg = PRESETS["smoke"]
+    pu = prompt_unary("u0", 3, cfg)
+    pb = prompt_binary("b0", 3, 4, cfg)
+    for p, want in ((pu, AtomApp("u0", (3,))), (pb, AtomApp("b0", (3, 4)))):
+        assert p.endswith(" =")
+        assert parse(p[:-2], cfg) == want
