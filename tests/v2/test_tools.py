@@ -280,7 +280,7 @@ def test_build_dataset_with_fake_student(inst, tmp_path):
 def test_train_with_fake_student(inst, tmp_path):
     s = make_session(inst, tmp_path)
     s.student = FakeStudent()
-    out = T.t_train(s, dataset_id="ds1", epochs=2, lr=0.01)
+    out = T.t_train(s, dataset_id="ds1", epochs=2, lr=0.01, student_id="s1")
     assert out["checkpoint_id"] == "ck1"
     assert out["gpu_seconds_remaining"] == 95.0
 
@@ -297,7 +297,7 @@ def test_train_tools_no_student_error(inst, tmp_path):
     assert getattr(s, "student", None) is None
     out = T.t_build_dataset(s, path="foo.jsonl")
     assert "error" in out
-    out2 = T.t_train(s, dataset_id="ds1", epochs=1, lr=0.1)
+    out2 = T.t_train(s, dataset_id="ds1", epochs=1, lr=0.1, student_id="s1")
     assert "error" in out2
     out3 = T.t_student_infer(s, checkpoint="c", input_path="i", output_path="o")
     assert "error" in out3
