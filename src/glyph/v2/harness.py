@@ -327,6 +327,9 @@ def run(rc: RunConfig) -> dict:
     session.val_id_of = val_id_of
     session.test_id_of = test_id_of
     session.preset = preset
+    from glyph.data.probe import probe_set
+    session.probes = probe_set(inst)
+    session.probe_id_of = workspace.probe_ids_for(inst, session.probes)
     if rc.arm == "train":
         session.student = _make_student(rc, ledger, paths)
 
@@ -394,7 +397,9 @@ def run(rc: RunConfig) -> dict:
                                      opener=prompts.practice_opener(paths))
                 session.turns_practice = session.turns
                 session.switch_to_final()
-                workspace.write_test_file(paths, inst, test_id_of)
+                workspace.write_test_file(paths, inst, test_id_of,
+                                          probes=session.probes,
+                                          probe_id_of=session.probe_id_of)
                 await drive_final(session, client,
                                   opener=prompts.final_opener(paths))
         finally:
