@@ -158,11 +158,8 @@
   </div>
   <div class="stream-legend"><span>← interpreter P</span><span>evaluation data drawn from P →</span></div>
   <p>
-    The order has a practical consequence. Change a field that only shapes the
-    data — <code>atomic_ratio</code>, say — and the same seed gives the
-    <em>same</em> <span class="mono">P</span> with different questions. Change a
-    field of <span class="mono">P</span> and the stream shifts from the start:
-    the same seed gives an unrelated task.
+    Changing one field affects only the step where it takes effect and the
+    steps after it; everything drawn before it stays the same.
   </p>
 
   <p>
