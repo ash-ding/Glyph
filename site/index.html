@@ -22,7 +22,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
-<link rel="stylesheet" href="assets/css/style.css?v=bd08732ccd">
+<link rel="stylesheet" href="assets/css/style.css?v=a19ce419c2">
 </head>
 
 <body>
@@ -151,12 +151,21 @@
     seeded random stream: steps 1–4 below draw <span class="mono">P</span>,
     steps 5–8 draw the data from it, and step 9 measures the result.
   </p>
-  <div class="stream" aria-label="Order of draws from the random stream">
-    <span class="s-skel">skeleton</span><span class="s-table">tables</span>
-    <span class="s-dist">held pairs</span><span class="s-dist">demos</span>
-    <span class="s-dist">test</span><span class="s-dist">validation</span>
+  <div class="stream" role="img" aria-label="Draw order from the random stream: skeleton, tables (together the interpreter P), then held pairs, demos, test and validation (the evaluation data drawn from P)">
+    <div class="stream__order"><span>draw order</span><i></i></div>
+    <div class="stream__groups">
+      <div class="stream__group stream__group--p">
+        <div class="stream__cells"><span class="s-skel">skeleton</span><span class="s-table">tables</span></div>
+        <div class="stream__brace"></div>
+        <div class="stream__label">interpreter P</div>
+      </div>
+      <div class="stream__group stream__group--data">
+        <div class="stream__cells"><span class="s-dist">held pairs</span><span class="s-dist">demos</span><span class="s-dist">test</span><span class="s-dist">validation</span></div>
+        <div class="stream__brace"></div>
+        <div class="stream__label">evaluation data drawn from P</div>
+      </div>
+    </div>
   </div>
-  <div class="stream-legend"><span>← interpreter P</span><span>evaluation data drawn from P →</span></div>
   <p>
     Changing one field affects only the step where it takes effect and the
     steps after it; everything drawn before it stays the same.

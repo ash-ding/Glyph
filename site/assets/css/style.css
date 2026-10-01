@@ -273,13 +273,27 @@ figcaption b, .figcap b { color: var(--fg); font-weight: 600; }
 .lg-held { background: var(--data); }
 .classes { display: flex; flex-wrap: wrap; gap: .3rem; justify-content: center; }
 
-/* RNG stream bar */
-.stream { display: flex; border-radius: 10px; overflow: hidden; font-family: var(--font-sans); font-size: .78rem; gap: 2px; }
-.stream span { flex: 1 1 0; padding: .55rem .3rem; text-align: center; min-width: 0; overflow-wrap: anywhere; }
-.stream .s-skel { background: var(--skel); color: var(--skel-ink); }
-.stream .s-table { background: var(--table); color: var(--table-ink); }
-.stream .s-dist { background: var(--data-soft); color: var(--data-ink); }
-.stream-legend { display: flex; justify-content: space-between; gap: 1rem; font-family: var(--font-sans); font-size: .76rem; color: var(--fg-faint); margin-top: .4rem; flex-wrap: wrap; }
+/* RNG stream: draw order on top, two braces underneath */
+.stream { margin: 1rem 0 1.2rem; font-family: var(--font-sans); }
+.stream__order { display: flex; align-items: center; gap: .6rem; font-size: .74rem; color: var(--fg-faint); margin-bottom: .45rem; }
+.stream__order i { flex: 1; height: 1px; background: #c4c4c4; position: relative; }
+.stream__order i::after { content: ""; position: absolute; right: -1px; top: -4px; border: 4.5px solid transparent; border-left: 7px solid #c4c4c4; border-right: 0; }
+.stream__groups { display: flex; gap: 6px; }
+.stream__group--p { flex: 2; }
+.stream__group--data { flex: 4; }
+.stream__cells { display: flex; gap: 2px; border-radius: 10px; overflow: hidden; font-size: .78rem; }
+.stream__cells span { flex: 1 1 0; padding: .55rem .3rem; text-align: center; min-width: 0; }
+.stream__cells .s-skel { background: var(--skel); color: var(--skel-ink); }
+.stream__cells .s-table { background: var(--table); color: var(--table-ink); }
+.stream__cells .s-dist { background: var(--data-soft); color: var(--data-ink); }
+.stream__brace { height: .5rem; margin: .35rem .4rem 0; border: 1.5px solid #c4c4c4; border-top: 0; border-radius: 0 0 6px 6px; }
+.stream__label { text-align: center; font-size: .78rem; margin-top: .3rem; color: var(--fg); }
+.stream__group--data .stream__label { color: var(--data-ink); }
+@media (max-width: 560px) {
+  .stream__cells { font-size: .62rem; }
+  .stream__cells span { padding: .5rem .12rem; }
+  .stream__label { font-size: .7rem; }
+}
 
 /* split cards */
 .splits { display: grid; grid-template-columns: repeat(auto-fit, minmax(10.4rem, 1fr)); gap: .6rem; font-family: var(--font-sans); }
@@ -420,4 +434,3 @@ figcaption b, .figcap b { color: var(--fg); font-weight: 600; }
 @media (max-width: 620px) { .parts { grid-template-columns: 1fr; } }
 .gen-map__after { font-size: .8rem; color: var(--fg-faint); margin: .1rem 0 0 .2rem; }
 .knobs__label { font-family: var(--font-sans); font-size: .76rem; color: var(--fg-faint); align-self: center; margin-right: .2rem; }
-@media (max-width: 560px) { .stream { flex-wrap: wrap; border-radius: 10px; } .stream span { flex: 1 1 30%; overflow-wrap: normal; } }
