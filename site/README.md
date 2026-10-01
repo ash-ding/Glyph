@@ -52,6 +52,12 @@ The site then lives at <https://ash-ding.github.io/Glyph/>.
   a sans (Inter Tight). Change a token, not a rule.
 - **Figures** in "Data generation" play once when scrolled into view (never
   under `prefers-reduced-motion`) and can be stepped, replayed or skipped.
+- **Asset stamps** — every stylesheet, script and image the pages load is
+  referenced as `asset?v=<content hash>`. Pages caches files for ten minutes,
+  so without the stamp a browser can pair a fresh `index.html` with a stale
+  stylesheet. After changing anything under `assets/`, run
+  `python tools/stamp_site_assets.py`; `tests/test_site_asset_versions.py`
+  fails until you do.
 - **The running example** — `assets/js/example-data.js` is exported from the
   generator, so every number in the "Data generation" walkthrough is real.
   Regenerate it after any change to the data layer:
