@@ -105,15 +105,18 @@ details summary { font-family: var(--font-sans); font-size: .86rem; color: var(-
 
 /* ---------------------------------------------------------------------- hero */
 .hero { padding: 4.5rem 0 2.75rem; }
-.hero__mark { display: block; width: 3.4rem; height: 3.4rem; margin: 0 0 1.4rem; }
+.hero__title { display: flex; align-items: center; gap: .32em; font-size: clamp(2.8rem, 7vw, 4.2rem); margin: 0 0 2rem; letter-spacing: -.035em; }
+.hero__mark { display: block; width: .95em; height: .95em; flex: none; }
+.rqs { list-style: none; margin: 0; padding: 0; display: grid; gap: .9rem; max-width: 46rem; }
+.rqs li { display: grid; grid-template-columns: 3.4rem 1fr; gap: .9rem; align-items: baseline; }
+.rqs p { margin: 0; font-size: clamp(1.1rem, 2.2vw, 1.32rem); line-height: 1.5; color: var(--fg); }
+.rq__k { font-family: var(--font-mono); font-size: .78rem; font-weight: 600; text-align: center; padding: .16rem 0; border-radius: 999px; background: var(--fg); color: var(--bg); position: relative; top: -.15em; }
+@media (max-width: 560px) { .rqs li { grid-template-columns: 1fr; gap: .35rem; } .rq__k { justify-self: start; padding: .14rem .6rem; } }
+
+/* used by 404.html */
 .hero__eyebrow { font-family: var(--font-sans); font-size: .84rem; color: var(--fg-faint); margin: 0 0 .7rem; }
-.hero h1 { font-size: clamp(2.6rem, 6vw, 3.8rem); margin: 0 0 1rem; letter-spacing: -.035em; }
+.hero > h1:not(.hero__title) { font-size: clamp(2.6rem, 6vw, 3.8rem); margin: 0 0 1rem; letter-spacing: -.035em; }
 .hero__tagline { font-size: clamp(1.1rem, 2.2vw, 1.3rem); color: var(--fg-muted); max-width: 46ch; margin: 0 0 1.75rem; }
-.badges { display: flex; flex-wrap: wrap; gap: .4rem; margin: 0 0 1.75rem; font-family: var(--font-sans); }
-.badge { font-size: .78rem; border-radius: 999px; padding: .2rem .7rem; background: var(--panel); color: var(--fg-muted); }
-.badge--skel { background: var(--skel-soft); color: var(--skel-ink); }
-.badge--table { background: var(--table-soft); color: var(--table-ink); }
-.badge--data { background: var(--data-soft); color: var(--data-ink); }
 .actions { display: flex; flex-wrap: wrap; gap: .5rem; font-family: var(--font-sans); }
 .btn { display: inline-flex; align-items: center; padding: .52rem 1.15rem; border-radius: 999px; font-size: .9rem; font-weight: 500; text-decoration: none; color: var(--fg); background: var(--chip); }
 .btn:hover { background: #dcdcdc; color: var(--fg); }

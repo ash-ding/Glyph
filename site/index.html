@@ -45,25 +45,20 @@
 
 <!-- ==================================================================== HERO -->
 <header class="hero wrap" id="top">
-  <img class="hero__mark" src="assets/img/logo.svg" alt="" width="54" height="54">
-  <p class="hero__eyebrow">Task T1 · weight-space delegation</p>
-  <h1>Glyph</h1>
-  <p class="hero__tagline">
-    A hidden-semantics DSL execution benchmark. Half of every instance can be
-    written down as code; the other half can only be fit into weights.
-  </p>
+  <h1 class="hero__title"><img class="hero__mark" src="assets/img/logo.svg" alt="" width="64" height="64">Glyph</h1>
 
-  <div class="badges">
-    <span class="badge badge--skel">syntax public · semantics private</span>
-    <span class="badge badge--table">|V| = 4913 values</span>
-    <span class="badge badge--data">10,000 held-out expressions</span>
-    <span class="badge">15 frozen instances</span>
-  </div>
-
-  <div class="actions">
-    <a class="btn btn--primary" href="https://github.com/ash-ding/Glyph">Code</a>
-    <a class="btn" href="#pipeline">Data generation</a>
-  </div>
+  <ol class="rqs">
+    <li>
+      <span class="rq__k">RQ1</span>
+      <p>Given a problem that inference-time scaling alone cannot solve, can a
+         frontier agent identify the gap and train a small model as its own
+         tool?</p>
+    </li>
+    <li>
+      <span class="rq__k">RQ2</span>
+      <p>How well can the frontier model use that tool?</p>
+    </li>
+  </ol>
 </header>
 
 <div class="wrap"><hr></div>
@@ -73,20 +68,34 @@
   <h2>Abstract</h2>
   <div class="prose">
     <p>
-      Given a verifiable task a frontier model cannot solve alone, when does
-      putting capability into a small model's <b>weights</b> beat putting it
-      into <b>context</b> or into <b>code</b>? And when an agent chooses for
-      itself, how good is that choice?
+      Glyph is a benchmark built to answer these questions. Each instance is a
+      small programming language whose <b>syntax is public</b> and whose
+      <b>semantics are hidden</b> inside an interpreter <span class="mono">P</span>.
+      The only way to learn what an expression means is to ask
+      <span class="mono">P</span>, one metered query at a time.
     </p>
     <p>
-      Glyph is the instrument, not the answer. Each instance is a hidden
-      interpreter whose syntax is public and whose semantics must be bought one
-      query at a time. It splits deliberately into two halves that are different
-      in kind: a <b>skeleton</b> sampled from a finite combinator grammar, which
-      is always describable in finitely many words, and <b>tables</b> built from
-      shared digit embeddings and frozen random MLPs, which are not. A single
-      knob moves the difficulty between them, so the same generator produces
-      instances where code should win and instances where only weights can.
+      <span class="mono">P</span> has two halves that differ in kind. The
+      <b class="skel">skeleton</b> — what each structural operator does to a
+      list — is drawn from a small, finite grammar, so it can always be written
+      down as code. The <b class="table">tables</b> — what each atomic operator
+      does to a value — are frozen random networks over shared digit embeddings,
+      so they can be learned from examples but never written down. The presets
+      move the difficulty between the two halves, and every instance carries a
+      measured <span class="mono">π</span> that says where it ended up. The same
+      generator therefore produces instances where reasoning and code should be
+      enough, and instances where only a trained model reaches far.
+    </p>
+    <p>
+      The page follows that construction in order.
+      <a href="#pipeline">Data generation</a> builds one real instance step by
+      step. <a href="#validation">Data validation</a> measures it before any
+      agent arrives: <span class="mono">π</span>, and the reference ceilings
+      that frame every score. <a href="#protocol">Evaluation protocol</a> is how
+      an agent meets it — a practice phase with a query budget and, in one arm,
+      a small model it can train, then a single committed answer.
+      <a href="#results">Results</a> will report when training pays off, and
+      whether the agent knew.
     </p>
   </div>
 </section>
