@@ -22,7 +22,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
-<link rel="stylesheet" href="assets/css/style.css?v=6b2a288967">
+<link rel="stylesheet" href="assets/css/style.css?v=019d0258d0">
 </head>
 
 <body>
@@ -244,7 +244,23 @@
     </div>
     <p>
       The syntax is handed to the agent; nothing in it reveals what an operator
-      does. Every structural operator takes exactly one list — the expression it
+      does. It fixes how an expression is written and what counts as legal, and
+      for <span class="mono">mid_3</span> it has four parts:
+    </p>
+    <ul class="syntax-parts">
+      <li><b>Values</b> — the 4,913 strings from step 1,
+          <span class="mono">v_a_a_a</span> … <span class="mono">v_q_q_q</span>.</li>
+      <li><b>Structural operators</b> — 7 of them, <span class="mono">s0…s6</span>,
+          taken from a fixed public table of twelve.</li>
+      <li><b>Atomic operators</b> — 5 of them: three unary,
+          <span class="mono">u0…u2</span>, each taking one value, and two binary,
+          <span class="mono">b0</span> and <span class="mono">b1</span>, each
+          taking two.</li>
+      <li><b>Two size limits</b> — how deeply an expression may nest, and how
+          long a list literal may be.</li>
+    </ul>
+    <p>
+      Every structural operator takes exactly one list — the expression it
       transforms — plus at most one extra argument: a unary operator, a binary
       operator, or a small integer <span class="mono">k</span>. That gives four
       <em>shapes</em>: map-like (<span class="mono">UL</span>), fold-like
@@ -252,14 +268,8 @@
       pure (<span class="mono">L</span>) and integer-parameterised
       (<span class="mono">KL</span>). In form this resembles the list DSLs used
       in program synthesis.<sup class="fn"><a href="#ref-1" id="cite-1">1</a></sup>
-      Because each operator wraps exactly one inner expression, an expression is
-      a chain of operators around a literal list; it never forks.
-    </p>
-    <p>
-      Structural operators come from a fixed, public table of twelve. Every
-      block of four holds each shape once, and an instance enables a prefix of
-      the table. Atomic operators are <span class="mono">u0…u2</span> (one value
-      in) and <span class="mono">b0…b1</span> (two values in).
+      The public table of twelve holds each shape once in every block of four,
+      and an instance enables a prefix of it.
     </p>
     <div class="fig">
       <div class="fig__body">
@@ -274,6 +284,12 @@
         </p>
       </div>
     </div>
+    <p>
+      The two size limits: <code>max_expr_depth</code> = 4 caps how many
+      structural operators may nest inside one another, and
+      <code>list_len_range</code> = (2, 4) says how many values a list literal
+      holds. An expression outside either limit is a syntax error.
+    </p>
     <details>
       <summary class="small">The syntax spec mid_3's agent receives, verbatim</summary>
       <pre id="syntax-spec"></pre>
