@@ -3794,3 +3794,51 @@ torch, vllm, transformers, numba, pandas, peft, accelerate).
 from the pin. It failed against `>=1.26` before the pin and passes after.
 
 Ran on lumen1: `pytest -q -m "not slow"` -> **302 passed, 6 deselected (0:14:23)**, exit 0.
+
+## 2026-10-01 — per-op specialist ceilings on mid_1 (weights-per-op, 0.6B + 1.7B)
+
+First `weights-per-op` numbers (PR #52's oracle): one specialist per atomic op,
+trained on that op's cells only (`train_student(ops=[op])`, 6000 steps, batch
+128, lr 1e-4), scored on that op's 100 probe items. Host lumen2, GPUs 0–5 in
+parallel (the idle vLLM fleet was stopped first with the user's approval —
+restart line recorded below). Raw JSON: lumen2 `~/glyph_runs/perop_mid1/`.
+
+**Metric caveat:** probe accuracy is CELL-level (one lookup per item). It is
+directly comparable to the agent report's `probe.by_op` and across specialists
+— NOT to the weights oracle's expression-level `overall`.
+
+Unseen-split accuracy (the generalization read; cell-level, n=86–99 per cell):
+
+| op | 0.6B f.02 | 0.6B f.05 | 0.6B f.10 | 1.7B f.02 | 1.7B f.05 | 1.7B f.10 |
+|---|---|---|---|---|---|---|
+| u0 | 0.398 | 0.495 | 0.557 | 0.286 | 0.474 | 0.489 |
+| u1 | 0.612 | 0.714 | 0.789 | 0.388 | 0.643 | 0.756 |
+| u2 | 0.381 | 0.505 | 0.593 | 0.216 | 0.396 | 0.570 |
+| b0 | 0.825 | 0.832 | 0.854 | 0.845 | 0.853 | 0.865 |
+| b1 | 0.788 | 0.817 | 0.865 | 0.758 | 0.806 | 0.787 |
+
+### Read
+
+- **Binary specialists generalize from almost nothing**: 0.76–0.87 at every
+  frac, already at seen_frac 0.02 — the digit-wise-dominant structure carries
+  them. **Unary is the hard half** (0.22–0.79) and strongly coverage-dependent,
+  consistent with the 2026-08-27 finding that unary is the harder table.
+- **Per-op difficulty is heterogeneous**: u1 is consistently ~0.15–0.25 easier
+  than u0/u2 at the same budget — exactly the kind of structure the probe set
+  exists to expose (an agent routing training effort per op has real signal to
+  find).
+- **0.6B ≥ 1.7B again**, most visibly at f0.02 unary (e.g. u1 0.612 vs 0.388):
+  at a fixed 6000-step budget the small model fits small data faster. Third
+  consecutive measurement (capacity, weights, per-op) where 0.6B is at least
+  as good.
+- Unary `seen` accuracy is 1.000 everywhere (few hundred cells × ~3000 visits
+  each = memorized); binary `seen` ≈ `unseen` (the seen pool is ~10⁶ cells, so
+  most "seen"-eligible cells were never actually sampled in 768k examples) —
+  both exactly as the sampling arithmetic predicts, a good internal
+  consistency check.
+
+vLLM restart line for lumen2 (8 instances, one per GPU, ports 8100–8107):
+`verl_discover` env, `python -m vllm.entrypoints.openai.api_server --model
+~/models/Qwen3-8B --served-model-name qwen3-8b --port 810N
+--tensor-parallel-size 1 --max-model-len 32768 --gpu-memory-utilization 0.9
+--no-enable-log-requests`.
