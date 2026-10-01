@@ -43,9 +43,15 @@ The site then lives at <https://ash-ding.github.io/Glyph/>.
   (`<!-- ===== ABSTRACT ===== -->`). Points still to be decided are marked
   `TODO`: the paper link, the author list, the phase-diagram figure, the
   results table, and the BibTeX entry.
-- **Look** — every colour is a token at the top of `style.css`. Blue means the
-  skeleton (structural operators), orange means the tables (atomic
-  operators); everything else is greyscale. Change a token, not a rule.
+- **Look** — every colour is a token at the top of `style.css`, and each one
+  means something: blue is the skeleton (structural operators), green is the
+  tables (atomic operators), amber is the data drawn from P (held pairs,
+  splits, sampling knobs). Each hue is a pair, a soft fill and a dark ink of
+  the same hue, so coloured chips keep their contrast. Body text is a serif
+  (Iowan Old Style where installed, else Source Serif 4), headings and figures
+  a sans (Inter Tight). Change a token, not a rule.
+- **Figures** in "Data generation" play once when scrolled into view (never
+  under `prefers-reduced-motion`) and can be stepped, replayed or skipped.
 - **The running example** — `assets/js/example-data.js` is exported from the
   generator, so every number in the "Data generation" walkthrough is real.
   Regenerate it after any change to the data layer:

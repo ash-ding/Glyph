@@ -19,6 +19,9 @@
 <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="assets/img/favicon-32.png" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
 <link rel="stylesheet" href="assets/css/style.css">
 </head>
 
@@ -42,6 +45,7 @@
 
 <!-- ==================================================================== HERO -->
 <header class="hero wrap" id="top">
+  <img class="hero__mark" src="assets/img/logo.svg" alt="" width="54" height="54">
   <p class="hero__eyebrow">Task T1 · weight-space delegation</p>
   <h1>Glyph</h1>
   <p class="hero__tagline">
@@ -50,9 +54,9 @@
   </p>
 
   <div class="badges">
-    <span class="badge">syntax public · semantics private</span>
-    <span class="badge">|V| = 4913 values</span>
-    <span class="badge">10,000 held-out expressions</span>
+    <span class="badge badge--skel">syntax public · semantics private</span>
+    <span class="badge badge--table">|V| = 4913 values</span>
+    <span class="badge badge--data">10,000 held-out expressions</span>
     <span class="badge">15 frozen instances</span>
   </div>
 
@@ -116,18 +120,18 @@
         <a class="gen-map__step" href="#g0"><b>0</b>preset + seed</a><span class="gen-map__arrow">→</span>
         <a class="gen-map__step" href="#g1"><b>1</b>value space</a><span class="gen-map__arrow">→</span>
         <a class="gen-map__step" href="#g2"><b>2</b>public syntax</a><span class="gen-map__arrow">→</span>
-        <a class="gen-map__step" href="#g3"><b>3</b><span class="skel">skeleton</span></a><span class="gen-map__arrow">→</span>
-        <a class="gen-map__step" href="#g4"><b>4</b><span class="table">tables</span></a><span class="gen-map__arrow">→</span>
+        <a class="gen-map__step gen-map__step--skel" href="#g3"><b>3</b>skeleton</a><span class="gen-map__arrow">→</span>
+        <a class="gen-map__step gen-map__step--table" href="#g4"><b>4</b>tables</a><span class="gen-map__arrow">→</span>
         <span class="gen-map__p">P fixed</span>
       </div>
     </div>
     <div class="gen-map__group">
       <p class="gen-map__label">defines the data drawn from P — P does not change</p>
       <div class="gen-map__row">
-        <a class="gen-map__step" href="#g5"><b>5</b>held-out pairs</a><span class="gen-map__arrow">→</span>
-        <a class="gen-map__step" href="#g6"><b>6</b>sample an expression</a><span class="gen-map__arrow">→</span>
+        <a class="gen-map__step gen-map__step--data" href="#g5"><b>5</b>held-out pairs</a><span class="gen-map__arrow">→</span>
+        <a class="gen-map__step gen-map__step--data" href="#g6"><b>6</b>sample an expression</a><span class="gen-map__arrow">→</span>
         <a class="gen-map__step" href="#g7"><b>7</b>evaluate it</a><span class="gen-map__arrow">→</span>
-        <a class="gen-map__step" href="#g8"><b>8</b>demos + splits</a><span class="gen-map__arrow">→</span>
+        <a class="gen-map__step gen-map__step--data" href="#g8"><b>8</b>demos + splits</a><span class="gen-map__arrow">→</span>
         <a class="gen-map__step" href="#g9"><b>9</b>measure π</a>
       </div>
     </div>
@@ -145,7 +149,7 @@
       step draws from it in this order:
     </p>
     <div class="stream" aria-label="Order of draws from the random stream">
-      <span class="s-lang">skeleton</span><span class="s-lang">tables</span>
+      <span class="s-skel">skeleton</span><span class="s-table">tables</span>
       <span class="s-dist">held pairs</span><span class="s-dist">demos</span>
       <span class="s-dist">test</span><span class="s-dist">validation</span>
     </div>
@@ -189,6 +193,7 @@
       still be predicted.
     </p>
     <div class="fig" id="fig-value"></div>
+    <p class="figcap"><b>Figure 1:</b> one value of the example, from letters to digits to its 48-number embedding. Only 51 vectors exist; every value is built from three of them.</p>
     <div class="knobs">
       <span class="knob knob--table">base = <b>17</b></span>
       <span class="knob knob--table">n_digits = <b>3</b></span>
@@ -251,7 +256,7 @@
   <div class="gstep" id="g3">
     <div class="gstep__head">
       <span class="gstep__n">STEP 3</span><h3 class="gstep__title"><span class="skel">The skeleton</span> — what each structural operator does</h3>
-      <span class="gstep__layer">interpreter</span>
+      <span class="gstep__layer gstep__layer--interp">interpreter</span>
       <span class="gstep__src">data/semantics.py</span>
     </div>
     <p>
@@ -275,6 +280,7 @@ guard      ::= len is even | len &gt; k | first == last
 
 fold-like (LB) operators add:   then fold the list with b, left or right (50/50)</div>
     <div class="fig" id="fig-deriv"></div>
+    <p class="figcap"><b>Figure 2:</b> how the hidden meanings of <span class="mono">s0</span> and <span class="mono">s1</span> were drawn — one grammar choice per step, each tied to the knob that weighs it.</p>
     <details>
       <summary class="small">All seven hidden meanings of mid_3</summary>
       <div class="table-scroll"><table id="skel-table"></table></div>
@@ -290,7 +296,7 @@ fold-like (LB) operators add:   then fold the list with b, left or right (50/50)
   <div class="gstep" id="g4">
     <div class="gstep__head">
       <span class="gstep__n">STEP 4</span><h3 class="gstep__title"><span class="table">The tables</span> — what each atomic operator does</h3>
-      <span class="gstep__layer">interpreter</span>
+      <span class="gstep__layer gstep__layer--interp">interpreter</span>
       <span class="gstep__src">data/tables.py</span>
     </div>
     <p>
@@ -305,6 +311,7 @@ fold-like (LB) operators add:   then fold the list with b, left or right (50/50)
       a unary table has 4913 entries and a binary one about 24 million.
     </p>
     <div class="fig" id="fig-table"></div>
+    <p class="figcap"><b>Figure 3:</b> one unary and one binary lookup from the example, computed the way the generator computes every table entry.</p>
     <div class="knobs">
       <span class="knob knob--table">unary_coupling = <b>0.25</b></span>
       <span class="knob knob--table">binary_coupling = <b>0.25</b></span>
@@ -323,7 +330,7 @@ fold-like (LB) operators add:   then fold the list with b, left or right (50/50)
   <div class="gstep" id="g5">
     <div class="gstep__head">
       <span class="gstep__n">STEP 5</span><h3 class="gstep__title">Held-out operator pairs</h3>
-      <span class="gstep__layer">data</span>
+      <span class="gstep__layer gstep__layer--data">data</span>
       <span class="gstep__src">data/instance.py · _draw_held_pairs</span>
     </div>
     <p>
@@ -336,8 +343,9 @@ fold-like (LB) operators add:   then fold the list with b, left or right (50/50)
       <em>kinds</em> of composition are held out does not depend on the seed.
     </p>
     <div class="fig" id="fig-held"></div>
+    <p class="figcap"><b>Figure 4:</b> mid_3's operator pairs. Held-out pairs (amber) never appear in demos, validation, iid or depth; comp requires one.</p>
     <div class="knobs">
-      <span class="knob knob--skel">n_structural = <b>7</b> → 42 buildable pairs → 14 held</span>
+      <span class="knob knob--data">n_structural = <b>7</b> → 42 buildable pairs → 14 held</span>
     </div>
   </div>
 
@@ -345,7 +353,7 @@ fold-like (LB) operators add:   then fold the list with b, left or right (50/50)
   <div class="gstep" id="g6">
     <div class="gstep__head">
       <span class="gstep__n">STEP 6</span><h3 class="gstep__title">Sampling an expression</h3>
-      <span class="gstep__layer">data</span>
+      <span class="gstep__layer gstep__layer--data">data</span>
       <span class="gstep__src">data/instance.py · _sample</span>
     </div>
     <p>
@@ -357,12 +365,13 @@ fold-like (LB) operators add:   then fold the list with b, left or right (50/50)
       structural ones. This one coin is what moves π most.
     </p>
     <div class="fig" id="fig-sample"></div>
+    <p class="figcap"><b>Figure 5:</b> the example expression grown top-down. Blue nodes are structural operators; green slots name a table.</p>
     <div class="knobs">
-      <span class="knob">atomic_ratio = <b>0.5</b></span>
-      <span class="knob">binary_freq = <b>0.35</b></span>
-      <span class="knob">depth_stop_prob = <b>0.15</b></span>
-      <span class="knob">list_len_range = <b>(2, 4)</b></span>
-      <span class="knob">budget = demo_max_depth = <b>2</b></span>
+      <span class="knob knob--data">atomic_ratio = <b>0.5</b></span>
+      <span class="knob knob--data">binary_freq = <b>0.35</b></span>
+      <span class="knob knob--data">depth_stop_prob = <b>0.15</b></span>
+      <span class="knob knob--data">list_len_range = <b>(2, 4)</b></span>
+      <span class="knob knob--data">budget = demo_max_depth = <b>2</b></span>
     </div>
   </div>
 
@@ -380,13 +389,14 @@ fold-like (LB) operators add:   then fold the list with b, left or right (50/50)
       table lookups — the only places a value's meaning matters.
     </p>
     <div class="fig" id="fig-eval"></div>
+    <p class="figcap"><b>Figure 6:</b> P evaluating the example bottom-up. Blue rows rearrange lists; green rows are table lookups.</p>
   </div>
 
   <!-- ---------------------------------------------------------------- 8 -->
   <div class="gstep" id="g8">
     <div class="gstep__head">
       <span class="gstep__n">STEP 8</span><h3 class="gstep__title">Demos and the three test splits</h3>
-      <span class="gstep__layer">data</span>
+      <span class="gstep__layer gstep__layer--data">data</span>
       <span class="gstep__src">data/instance.py</span>
     </div>
     <p>
@@ -405,13 +415,13 @@ fold-like (LB) operators add:   then fold the list with b, left or right (50/50)
     </div>
     <div class="splits" id="splits"></div>
     <div class="knobs">
-      <span class="knob">n_demos = <b>30</b></span>
-      <span class="knob">n_iid = <b>6500</b></span>
-      <span class="knob">n_comp = <b>2300</b></span>
-      <span class="knob">n_depth = <b>1200</b></span>
-      <span class="knob">n_val = <b>5000</b></span>
-      <span class="knob">demo_max_depth = <b>2</b></span>
-      <span class="knob">max_expr_depth = <b>4</b></span>
+      <span class="knob knob--data">n_demos = <b>30</b></span>
+      <span class="knob knob--data">n_iid = <b>6500</b></span>
+      <span class="knob knob--data">n_comp = <b>2300</b></span>
+      <span class="knob knob--data">n_depth = <b>1200</b></span>
+      <span class="knob knob--data">n_val = <b>5000</b></span>
+      <span class="knob knob--data">demo_max_depth = <b>2</b></span>
+      <span class="knob knob--data">max_expr_depth = <b>4</b></span>
     </div>
   </div>
 
@@ -598,6 +608,7 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
   <div class="fig">
     <div class="fig__body" id="fig-frozen"></div>
   </div>
+  <p class="figcap"><b>Figure 7:</b> skeleton and table ceilings of the 15 frozen instances on their paired 500-item subsets, against measured π. Amber bands are the selection windows.</p>
   <p class="small muted">
     As π rises the skeleton ceiling climbs and the table ceiling falls: the two
     halves trade places along the axis, which is what π was built to show. Near
@@ -747,9 +758,9 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
         <tr><td class="mono">submit</td><td>✓</td><td>—</td><td>✓</td><td>—</td></tr>
         <tr><td class="mono">check_answers</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td></tr>
         <tr><td class="mono">finish_practice</td><td>✓</td><td>—</td><td>✓</td><td>—</td></tr>
-        <tr><td class="mono">build_dataset</td><td>—</td><td>—</td><td>✓</td><td>—</td></tr>
-        <tr><td class="mono">train</td><td>—</td><td>—</td><td>✓</td><td>—</td></tr>
-        <tr><td class="mono">student_infer</td><td>—</td><td>—</td><td>✓</td><td>✓</td></tr>
+        <tr><td class="mono">build_dataset</td><td>—</td><td>—</td><td class="train">✓</td><td>—</td></tr>
+        <tr><td class="mono">train</td><td>—</td><td>—</td><td class="train">✓</td><td>—</td></tr>
+        <tr><td class="mono">student_infer</td><td>—</td><td>—</td><td class="train">✓</td><td class="train">✓</td></tr>
         <tr><td class="mono">final_answer</td><td>—</td><td>✓</td><td>—</td><td>✓</td></tr>
       </tbody>
     </table>

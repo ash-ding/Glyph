@@ -42,9 +42,14 @@
       vec.map(function (x) {
         var t = Math.max(0, Math.min(1, (x + lim) / (2 * lim)));
         var i = el("i");
-        i.style.background = "hsl(0,0%," + (97 - t * 82).toFixed(0) + "%)";
+        i.style.background = ramp(t);
         return i;
       }));
+  }
+  /* the tables' hue: pale green to dark olive, for vectors that belong to them */
+  var LO = [246, 250, 236], HI = [56, 82, 12];
+  function ramp(t) {
+    return "rgb(" + LO.map(function (a, k) { return Math.round(a + (HI[k] - a) * t); }).join(",") + ")";
   }
   function mono(t, cls) { return el("span", { class: "mono" + (cls ? " " + cls : ""), text: t }); }
   function txt(t, cls) { return el("span", { class: cls || "", text: t }); }
@@ -59,9 +64,10 @@
     var prev = el("button", { type: "button", text: "← Back" });
     var next = el("button", { type: "button", text: "Next →" });
     var play = el("button", { type: "button", text: "▶ Play" });
+    var skip = el("button", { type: "button", text: "Skip ⇥" });
     var count = el("span", { class: "fig__count" });
     var cap = el("span", { class: "fig__caption", "aria-live": "polite" });
-    var bar = el("div", { class: "fig__bar" }, [prev, next, play, count, cap]);
+    var bar = el("div", { class: "fig__bar" }, [prev, next, play, skip, count, cap]);
     if (tabs) host.appendChild(tabs);
     host.appendChild(body);
     host.appendChild(bar);
@@ -74,24 +80,30 @@
       count.textContent = (i + 1) + " / " + S.length;
       prev.disabled = i === 0;
       next.disabled = i === S.length - 1;
+      skip.disabled = i === S.length - 1;
+      if (!timer) play.textContent = i === S.length - 1 ? "↺ Replay" : "▶ Play";
     }
-    function stop() { if (timer) { clearInterval(timer); timer = null; play.textContent = "▶ Play"; } }
-    prev.onclick = function () { stop(); if (i > 0) { i--; draw(); } };
-    next.onclick = function () { stop(); if (i < S.length - 1) { i++; draw(); } };
-    play.onclick = function () {
+    var touched = false;
+    function stop() { if (timer) { clearInterval(timer); timer = null; } play.textContent = i === S.length - 1 ? "↺ Replay" : "▶ Play"; }
+    prev.onclick = function () { touched = true; stop(); if (i > 0) { i--; draw(); } };
+    next.onclick = function () { touched = true; stop(); if (i < S.length - 1) { i++; draw(); } };
+    skip.onclick = function () { touched = true; stop(); i = S.length - 1; draw(); };
+    play.onclick = function () { touched = true; start(); };
+    function start() {
       if (timer) { stop(); return; }
       if (i === S.length - 1) { i = 0; draw(); }
       play.textContent = "❚❚ Pause";
       timer = setInterval(function () {
         if (i >= S.length - 1) { stop(); return; }
         i++; draw();
+        if (i >= S.length - 1) stop();
       }, opts.interval || 1600);
-    };
+    }
     if (tabs) {
       opts.tabs.forEach(function (t, k) {
         var b = el("button", { type: "button", text: t.label, "aria-pressed": k === 0 ? "true" : "false" });
         b.onclick = function () {
-          stop();
+          touched = true; stop();
           Array.prototype.forEach.call(tabs.children, function (c) { c.setAttribute("aria-pressed", "false"); });
           b.setAttribute("aria-pressed", "true");
           S = t.steps; render = t.render; i = 0; draw();
@@ -101,6 +113,18 @@
       S = opts.tabs[0].steps; render = opts.tabs[0].render;
     }
     draw();
+
+    var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!still && "IntersectionObserver" in window) {
+      var seen = new IntersectionObserver(function (es) {
+        es.forEach(function (e) {
+          if (!e.isIntersecting) return;
+          seen.disconnect();
+          if (!touched && i === 0) start();
+        });
+      }, { threshold: .55 });
+      seen.observe(host);
+    }
   }
 
   /* ------------------------------------------------------- the example */
@@ -305,7 +329,7 @@
       { caption: "Every (outer, inner) pair of the 7 enabled operators: " + nAll + " cells." },
       { caption: "Keep the buildable ones. No operator takes a value argument, so s1 — which returns a value — can never be inner: " + H.realizable.length + " remain." },
       { caption: "Group them by (outer shape, inner shape): " + H.classes.length + " classes. Each gives up one third, by largest remainder." },
-      { caption: H.held.length + " pairs held out (black). Demos, validation, iid and depth never contain one; comp always does." },
+      { caption: H.held.length + " pairs held out (amber). Demos, validation, iid and depth never contain one; comp always does." },
       { caption: "The example's only pair, (" + exPair.join(", ") + "), is not held — so it may appear in a demo." }
     ];
     Stepper(host, steps, function (body, i) {
@@ -330,9 +354,9 @@
       t.appendChild(tb);
       body.appendChild(t);
       body.appendChild(el("div", { class: "legend" }, [
-        el("span", {}, [el("i", { style: "background:#fff" }), txt("buildable")]),
-        el("span", {}, [el("i", { style: "background:#f5f5f5;border-color:#f5f5f5" }), txt("not buildable")]),
-        el("span", {}, [el("i", { style: "background:#111;border-color:#111" }), txt("held out")])
+        el("span", {}, [el("i", { class: "lg-real" }), txt("buildable")]),
+        el("span", {}, [el("i", { class: "lg-none" }), txt("not buildable")]),
+        el("span", {}, [el("i", { class: "lg-held" }), txt("held out")])
       ]));
       if (i >= 2) {
         var chips = el("div", { class: "classes" });
@@ -490,7 +514,7 @@
           }
           right.appendChild(el("div", {}, [vlist(r.out, function (x) { return newSet[x] ? "v--new" : ""; })]));
         }
-        box.appendChild(el("div", { class: "trace__row" + cls }, [left, right]));
+        box.appendChild(el("div", { class: "trace__row trace__row--" + r.kind + cls }, [left, right]));
       });
       body.appendChild(box);
     }, { interval: 1700 });
@@ -543,7 +567,7 @@
     var C = D.crippled, pi = D.instance.pi;
     function ans(label, sub, val, ok) {
       return el("div", { class: "answer" }, [el("div", {}, [txt(label), el("div", { class: "small faint", text: sub })]),
-        v(val, ok ? "v--new" : ""), el("span", { class: "mark " + (ok ? "guard-ok" : "guard-no"), text: ok ? "correct" : "wrong" })]);
+        v(val, ok ? "v--new" : ""), el("span", { class: "mark " + (ok ? "guard-ok" : "guard-no"), text: ok ? "✓ correct" : "✗ wrong" })]);
     }
     body.appendChild(el("p", { class: "small muted", style: "margin-top:0", text: "The running example, answered three ways:" }));
     body.appendChild(el("div", { class: "answers" }, [
