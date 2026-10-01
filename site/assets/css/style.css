@@ -434,3 +434,13 @@ figcaption b, .figcap b { color: var(--fg); font-weight: 600; }
 @media (max-width: 620px) { .parts { grid-template-columns: 1fr; } }
 .gen-map__after { font-size: .8rem; color: var(--fg-faint); margin: .1rem 0 0 .2rem; }
 .knobs__label { font-family: var(--font-sans); font-size: .76rem; color: var(--fg-faint); align-self: center; margin-right: .2rem; }
+
+/* footnote markers and the reference list */
+sup.fn { font-family: var(--font-sans); font-size: .68em; line-height: 0; margin-left: .08em; }
+sup.fn a { text-decoration: none; color: var(--skel-ink); padding: 0 .12em; }
+sup.fn a:hover { text-decoration: underline; }
+.refs { font-family: var(--font-sans); font-size: .88rem; color: var(--fg-muted); padding-left: 1.3rem; margin: 0; }
+.refs li { margin: .35rem 0; scroll-margin-top: 5rem; }
+.refs li:target { background: var(--skel-soft); border-radius: 6px; }
+.refs__back { text-decoration: none; margin-left: .3rem; }
+#cite-1 { scroll-margin-top: 6rem; }

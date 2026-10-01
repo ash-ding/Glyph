@@ -22,7 +22,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
-<link rel="stylesheet" href="assets/css/style.css?v=a19ce419c2">
+<link rel="stylesheet" href="assets/css/style.css?v=6b2a288967">
 </head>
 
 <body>
@@ -244,12 +244,22 @@
     </div>
     <p>
       The syntax is handed to the agent; nothing in it reveals what an operator
-      does. Structural operators come from a fixed, public table of twelve, each
-      with a <em>shape</em> — which arguments it takes and whether it returns a
-      list or a value. Every block of four holds each shape once, and an
-      instance enables a prefix of the table. Atomic operators are
-      <span class="mono">u0…u2</span> (one value in) and
-      <span class="mono">b0…b1</span> (two values in).
+      does. Every structural operator takes exactly one list — the expression it
+      transforms — plus at most one extra argument: a unary operator, a binary
+      operator, or a small integer <span class="mono">k</span>. That gives four
+      <em>shapes</em>: map-like (<span class="mono">UL</span>), fold-like
+      (<span class="mono">LB</span>, the only one that returns a single value),
+      pure (<span class="mono">L</span>) and integer-parameterised
+      (<span class="mono">KL</span>). In form this resembles the list DSLs used
+      in program synthesis.<sup class="fn"><a href="#ref-1" id="cite-1">1</a></sup>
+      Because each operator wraps exactly one inner expression, an expression is
+      a chain of operators around a literal list; it never forks.
+    </p>
+    <p>
+      Structural operators come from a fixed, public table of twelve. Every
+      block of four holds each shape once, and an instance enables a prefix of
+      the table. Atomic operators are <span class="mono">u0…u2</span> (one value
+      in) and <span class="mono">b0…b1</span> (two values in).
     </p>
     <div class="fig">
       <div class="fig__body">
@@ -916,6 +926,22 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
   url    = {https://github.com/ash-ding/glyph}
 }</code></pre>
   </div>
+</section>
+
+<div class="wrap"><hr></div>
+
+<!-- ============================================================== REFERENCES -->
+<section class="section wrap" id="references">
+  <h2>References</h2>
+  <ol class="refs">
+    <li id="ref-1">
+      Matej Balog, Alexander L. Gaunt, Marc Brockschmidt, Sebastian Nowozin and
+      Daniel Tarlow.
+      <a href="https://arxiv.org/abs/1611.01989">DeepCoder: Learning to Write Programs</a>.
+      ICLR 2017.
+      <a class="refs__back" href="#cite-1" aria-label="Back to the text">↩</a>
+    </li>
+  </ol>
 </section>
 
 </main>
