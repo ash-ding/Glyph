@@ -89,7 +89,8 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: 3rem 0; }
   border-bottom: 1px solid var(--rule);
 }
 .nav__inner { width: var(--page); margin-inline: auto; display: flex; align-items: center; gap: 1.25rem; height: 3.25rem; }
-.nav__brand { font-weight: 650; letter-spacing: .02em; text-decoration: none; }
+.nav__brand { font-weight: 650; letter-spacing: .02em; text-decoration: none; display: inline-flex; align-items: center; gap: .45rem; }
+.nav__brand img { display: block; }
 .nav__links { display: flex; gap: 1.1rem; margin-left: auto; align-items: center; }
 .nav__links a { color: var(--fg-muted); text-decoration: none; font-size: .88rem; }
 .nav__links a:hover, .nav__links a[aria-current="true"] { color: var(--fg); }
@@ -158,24 +159,6 @@ td.diff { font-weight: 600; }
 .placeholder { border: 1px dashed var(--rule-strong); border-radius: 8px; padding: 1.25rem 1.4rem;
                color: var(--fg-muted); font-size: .92rem; }
 .placeholder p { margin: .4rem 0; }
-
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 1rem; margin: 1.5rem 0; }
-.kpi { border: 1px solid var(--rule); border-radius: 8px; padding: .9rem 1rem; }
-.kpi--lead { border-color: var(--fg); }
-.kpi__n { font-family: var(--font-mono); font-size: 1.7rem; line-height: 1.1; display: block; }
-.kpi__label { display: block; margin-top: .4rem; font-size: .82rem; color: var(--fg-muted); line-height: 1.45; }
-.kpi__sub { display: block; margin-top: .25rem; font-size: .74rem; color: var(--fg-faint); font-family: var(--font-mono); }
-
-/* the 0..1 band */
-.band { margin: 1.75rem 0 2.5rem; }
-.band__track { position: relative; height: 2.2rem; border-radius: 4px; background: var(--inset); }
-.band__fill { position: absolute; inset: 0 auto 0 0; border-radius: 4px 0 0 4px; background: #e2e2e2; }
-.band__mark { position: absolute; top: -.3rem; bottom: -.3rem; width: 1px; background: var(--fg-faint); }
-.band__mark--key { background: var(--fg); width: 2px; }
-.band__labels { position: relative; height: 5.5rem; margin-top: .4rem; font-size: .76rem; }
-.band__label { position: absolute; transform: translateX(-50%); text-align: center; width: 9rem; line-height: 1.35; color: var(--fg-muted); }
-.band__label b { display: block; font-family: var(--font-mono); font-size: .92rem; color: var(--fg); font-weight: 600; }
-@media (max-width: 720px) { .band__labels { height: 8.5rem; } .band__label { width: 6.5rem; font-size: .7rem; } }
 
 .cite { position: relative; }
 .cite pre { margin: 0; }
