@@ -1,4 +1,10 @@
-# Glyph
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="site/assets/img/logo-light.svg">
+    <img src="site/assets/img/logo.svg" alt="" width="36" height="36" align="absmiddle">
+  </picture>
+  Glyph
+</h1>
 
 A hidden-semantics DSL execution benchmark, built for research on **weight-space
 delegation**: when a frontier agent faces a task it cannot solve on its own,
@@ -9,8 +15,7 @@ Glyph is the instrument that makes that question measurable. It is a ruler with
 known graduations, not a discovery in its own right.
 
 **→ [ash-ding.github.io/Glyph](https://ash-ding.github.io/Glyph/)** — the
-project page: the first result, how an instance is built, and what is still
-open.
+project page: how an instance is built, step by step, and what is still open.
 
 ## What an instance is
 
@@ -225,8 +230,7 @@ real-API and GPU tests). The first data-layer measurement:
 Split by whether the evidence held the entries an item needed, the frontier
 scores **0.976** on the 126 it had and **0.016** on the 374 it did not.
 Retrieval saturated, extrapolation at zero — which is the separation the
-benchmark was built to produce. Details on the
-[project page](https://ash-ding.github.io/Glyph/#result).
+benchmark was built to produce.
 
 Arm results for v2 are not published yet — pilot calibration is in progress. The
 v1 explore/prepare/seal protocol (arms A2/A4/A6/A7) was removed in favour of the
