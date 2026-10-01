@@ -22,7 +22,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
-<link rel="stylesheet" href="assets/css/style.css?v=f53f538f30">
+<link rel="stylesheet" href="assets/css/style.css?v=bd08732ccd">
 </head>
 
 <body>
@@ -111,13 +111,64 @@
   <h2>Data generation</h2>
 
   <p class="section__lede">
-    <code>generate(seed, cfg)</code> builds an instance in a fixed order, all
-    from one seeded random stream. The first four steps define the language and
-    the hidden interpreter <span class="mono">P</span>; the rest only decide
-    which expressions are drawn from it. We follow one real instance — frozen
-    instance <span class="mono">mid_3</span>, preset <span class="mono">pi_mid</span>,
-    seed 1019 — and one of its demos all the way through. Every number below
-    is exported from the generator, not typed by hand.
+    An evaluation task in Glyph has two parts: a hidden interpreter
+    <span class="mono">P</span>, and a set of evaluation data — demos, a
+    validation set and a held-out test — drawn from <span class="mono">P</span>.
+  </p>
+
+  <p>
+    A task is specified by one <a href="https://github.com/ash-ding/Glyph/blob/main/src/glyph/data/config.py"><code>GlyphConfig</code></a>, a
+    class with 25 fields. Fourteen of them define <span class="mono">P</span>,
+    its public syntax and its hidden meaning; the other eleven define the
+    evaluation data, how expressions are sampled from <span class="mono">P</span>
+    and how many of each kind are drawn.
+  </p>
+
+  <div class="parts">
+    <div class="part part--p">
+      <span class="part__k">the hidden interpreter</span>
+      <h4>P · 14 fields</h4>
+      <p><b>11 fixed</b> across the benchmark, <b>3 knobs</b>:
+         <code>n_structural</code>, <code>max_transform_depth</code>, <code>guard_prob</code>.</p>
+    </div>
+    <div class="part part--data">
+      <span class="part__k">the evaluation data</span>
+      <h4>drawn from P · 11 fields</h4>
+      <p><b>9 fixed</b> across the benchmark, <b>2 knobs</b>:
+         <code>atomic_ratio</code>, <code>max_expr_depth</code>.</p>
+    </div>
+  </div>
+  <p class="small muted">
+    Given a seed, a config determines the task completely: the same config and
+    seed always give the same <span class="mono">P</span> and the same data.
+    Two data fields, <code>max_expr_depth</code> and <code>list_len_range</code>,
+    also bound what the public syntax allows. Every field is listed in the
+    <a href="#params">table at the end</a>.
+  </p>
+
+  <p>
+    <code>generate(seed, cfg)</code> builds the task in a fixed order from one
+    seeded random stream: steps 1–4 below draw <span class="mono">P</span>,
+    steps 5–8 draw the data from it, and step 9 measures the result.
+  </p>
+  <div class="stream" aria-label="Order of draws from the random stream">
+    <span class="s-skel">skeleton</span><span class="s-table">tables</span>
+    <span class="s-dist">held pairs</span><span class="s-dist">demos</span>
+    <span class="s-dist">test</span><span class="s-dist">validation</span>
+  </div>
+  <div class="stream-legend"><span>← interpreter P</span><span>evaluation data drawn from P →</span></div>
+  <p>
+    The order has a practical consequence. Change a field that only shapes the
+    data — <code>atomic_ratio</code>, say — and the same seed gives the
+    <em>same</em> <span class="mono">P</span> with different questions. Change a
+    field of <span class="mono">P</span> and the stream shifts from the start:
+    the same seed gives an unrelated task.
+  </p>
+
+  <p>
+    We follow one real task — frozen instance <span class="mono">mid_3</span>,
+    seed 1019 — and one of its demos all the way through. Every number below is
+    exported from the generator, not typed by hand.
   </p>
 
   <div class="example">
@@ -128,9 +179,8 @@
 
   <div class="gen-map" aria-label="Pipeline overview">
     <div class="gen-map__group">
-      <p class="gen-map__label">defines the language and the hidden interpreter</p>
+      <p class="gen-map__label">draws the hidden interpreter P</p>
       <div class="gen-map__row">
-        <a class="gen-map__step" href="#g0"><b>0</b>preset + seed</a><span class="gen-map__arrow">→</span>
         <a class="gen-map__step" href="#g1"><b>1</b>value space</a><span class="gen-map__arrow">→</span>
         <a class="gen-map__step" href="#g2"><b>2</b>public syntax</a><span class="gen-map__arrow">→</span>
         <a class="gen-map__step gen-map__step--skel" href="#g3"><b>3</b>skeleton</a><span class="gen-map__arrow">→</span>
@@ -139,7 +189,7 @@
       </div>
     </div>
     <div class="gen-map__group">
-      <p class="gen-map__label">defines the data drawn from P — P does not change</p>
+      <p class="gen-map__label">draws the evaluation data from P — P does not change</p>
       <div class="gen-map__row">
         <a class="gen-map__step gen-map__step--data" href="#g5"><b>5</b>held-out pairs</a><span class="gen-map__arrow">→</span>
         <a class="gen-map__step gen-map__step--data" href="#g6"><b>6</b>sample an expression</a><span class="gen-map__arrow">→</span>
@@ -148,45 +198,7 @@
         <a class="gen-map__step" href="#g9"><b>9</b>measure π</a>
       </div>
     </div>
-  </div>
-
-  <!-- ---------------------------------------------------------------- 0 -->
-  <div class="gstep" id="g0">
-    <div class="gstep__head">
-      <span class="gstep__n">STEP 0</span><h3 class="gstep__title">A preset and a seed</h3>
-      <span class="gstep__src">data/config.py · data/instance.py</span>
-    </div>
-    <p>
-      A preset is a <code>GlyphConfig</code>: 22 fields, of which the three
-      presets differ in five. The seed starts one random stream, and every later
-      step draws from it in this order:
-    </p>
-    <div class="stream" aria-label="Order of draws from the random stream">
-      <span class="s-skel">skeleton</span><span class="s-table">tables</span>
-      <span class="s-dist">held pairs</span><span class="s-dist">demos</span>
-      <span class="s-dist">test</span><span class="s-dist">validation</span>
-    </div>
-    <div class="stream-legend"><span>← interpreter P</span><span>data drawn from P →</span></div>
-    <p>
-      The order has a practical consequence. Change a knob that only shapes the
-      data — <code>atomic_ratio</code>, say — and the same seed gives the
-      <em>same</em> interpreter with different questions. Change a knob that
-      shapes the language or the interpreter and the stream shifts from the
-      start: the same seed gives an unrelated instance.
-    </p>
-    <div class="table-scroll">
-      <table>
-        <thead><tr><th>the five knobs that differ</th><th class="num">pi_low</th><th class="num">pi_mid</th><th class="num">pi_high</th><th>moves π through</th></tr></thead>
-        <tbody>
-          <tr><td class="mono">atomic_ratio</td><td class="num">0.85</td><td class="num">0.5</td><td class="num">0.15</td><td>how often expressions touch the table</td></tr>
-          <tr><td class="mono">n_structural</td><td class="num">5</td><td class="num">7</td><td class="num">9</td><td>how many structural operators exist</td></tr>
-          <tr><td class="mono">max_transform_depth</td><td class="num">0</td><td class="num">2</td><td class="num">3</td><td>how long an operator's meaning can be</td></tr>
-          <tr><td class="mono">guard_prob</td><td class="num">0.0</td><td class="num">0.5</td><td class="num">0.9</td><td>how often an operator branches</td></tr>
-          <tr><td class="mono">max_expr_depth</td><td class="num">3</td><td class="num">4</td><td class="num">5</td><td>how deep the deepest test items go</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p class="small muted">Every other field is shared by all three presets; the full list is in the <a href="#params">summary table</a>.</p>
+    <p class="gen-map__after">then <a href="#presets">the three presets</a>: configurations that differ in the five knobs</p>
   </div>
 
   <!-- ---------------------------------------------------------------- 1 -->
@@ -208,6 +220,7 @@
     <div class="fig" id="fig-value"></div>
     <p class="figcap"><b>Figure 1:</b> one value of the example, from letters to digits to its 48-number embedding. Only 51 vectors exist; every value is built from three of them.</p>
     <div class="knobs">
+      <span class="knobs__label">Related configuration fields:</span>
       <span class="knob knob--table">base = <b>17</b></span>
       <span class="knob knob--table">n_digits = <b>3</b></span>
       <span class="knob knob--table">d_digit = <b>16</b></span>
@@ -235,8 +248,8 @@
       <div class="fig__body">
         <div class="shapes" id="shape-grid"></div>
         <p class="small muted" style="margin:.8rem 0 0">
-          Enabled in <span class="mono">pi_mid</span>: the first 7.
-          <span class="mono">pi_low</span> enables 5, <span class="mono">pi_high</span> 9.
+          <span class="mono">mid_3</span> enables the first 7
+          (<code>n_structural</code> = 7).
           The shape names: <span class="mono">UL</span> (unary, list) → list ·
           <span class="mono">LB</span> (list, binary) → value ·
           <span class="mono">L</span> (list) → list ·
@@ -257,6 +270,7 @@
       (2–4 allowed) and nests 2 deep (at most 4 allowed).
     </div>
     <div class="knobs">
+      <span class="knobs__label">Related configuration fields:</span>
       <span class="knob knob--skel">n_structural = <b>7</b></span>
       <span class="knob knob--table">n_unary = <b>3</b></span>
       <span class="knob knob--table">n_binary = <b>2</b></span>
@@ -299,6 +313,7 @@ fold-like (LB) operators add:   then fold the list with b, left or right (50/50)
       <div class="table-scroll"><table id="skel-table"></table></div>
     </details>
     <div class="knobs">
+      <span class="knobs__label">Related configuration fields:</span>
       <span class="knob knob--skel">max_transform_depth = <b>2</b></span>
       <span class="knob knob--skel">guard_prob = <b>0.5</b></span>
       <span class="knob knob--skel">n_structural = <b>7</b></span>
@@ -326,6 +341,7 @@ fold-like (LB) operators add:   then fold the list with b, left or right (50/50)
     <div class="fig" id="fig-table"></div>
     <p class="figcap"><b>Figure 3:</b> one unary and one binary lookup from the example, computed the way the generator computes every table entry.</p>
     <div class="knobs">
+      <span class="knobs__label">Related configuration fields:</span>
       <span class="knob knob--table">unary_coupling = <b>0.25</b></span>
       <span class="knob knob--table">binary_coupling = <b>0.25</b></span>
       <span class="knob knob--table">mlp_width = <b>64</b></span>
@@ -358,6 +374,7 @@ fold-like (LB) operators add:   then fold the list with b, left or right (50/50)
     <div class="fig" id="fig-held"></div>
     <p class="figcap"><b>Figure 4:</b> mid_3's operator pairs. Held-out pairs (amber) never appear in demos, validation, iid or depth; comp requires one.</p>
     <div class="knobs">
+      <span class="knobs__label">Related configuration fields:</span>
       <span class="knob knob--data">n_structural = <b>7</b> → 42 buildable pairs → 14 held</span>
     </div>
   </div>
@@ -380,6 +397,7 @@ fold-like (LB) operators add:   then fold the list with b, left or right (50/50)
     <div class="fig" id="fig-sample"></div>
     <p class="figcap"><b>Figure 5:</b> the example expression grown top-down. Blue nodes are structural operators; green slots name a table.</p>
     <div class="knobs">
+      <span class="knobs__label">Related configuration fields:</span>
       <span class="knob knob--data">atomic_ratio = <b>0.5</b></span>
       <span class="knob knob--data">binary_freq = <b>0.35</b></span>
       <span class="knob knob--data">depth_stop_prob = <b>0.15</b></span>
@@ -428,6 +446,7 @@ fold-like (LB) operators add:   then fold the list with b, left or right (50/50)
     </div>
     <div class="splits" id="splits"></div>
     <div class="knobs">
+      <span class="knobs__label">Related configuration fields:</span>
       <span class="knob knob--data">n_demos = <b>30</b></span>
       <span class="knob knob--data">n_iid = <b>6500</b></span>
       <span class="knob knob--data">n_comp = <b>2300</b></span>
@@ -455,8 +474,42 @@ fold-like (LB) operators add:   then fold the list with b, left or right (50/50)
     <div class="fig"><div class="fig__body" id="pi-body"></div></div>
   </div>
 
+  <!-- ------------------------------------------------------------ presets -->
+  <div class="gstep" id="presets">
+    <div class="gstep__head">
+      <h3 class="gstep__title">Presets: three configurations</h3>
+      <span class="gstep__src">data/config.py · PRESETS</span>
+    </div>
+    <p>
+      That is one task, traced end to end. The benchmark ships three
+      configurations, called presets. They share 20 of the 25 fields and differ
+      only in the five knobs, which move the difficulty between the two halves
+      of <span class="mono">P</span>. <span class="mono">mid_3</span> above is
+      drawn from <span class="mono">pi_mid</span>.
+    </p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>knob</th><th>part</th><th class="num">pi_low</th><th class="num">pi_mid</th><th class="num">pi_high</th><th>moves π through</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">n_structural</td><td>P</td><td class="num">5</td><td class="num">7</td><td class="num">9</td><td>how many structural operators exist</td></tr>
+          <tr><td class="mono">max_transform_depth</td><td>P</td><td class="num">0</td><td class="num">2</td><td class="num">3</td><td>how long an operator's meaning can be</td></tr>
+          <tr><td class="mono">guard_prob</td><td>P</td><td class="num">0.0</td><td class="num">0.5</td><td class="num">0.9</td><td>how often an operator branches</td></tr>
+          <tr><td class="mono">atomic_ratio</td><td>data</td><td class="num">0.85</td><td class="num">0.5</td><td class="num">0.15</td><td>how often expressions touch the tables</td></tr>
+          <tr><td class="mono">max_expr_depth</td><td>data</td><td class="num">3</td><td class="num">4</td><td class="num">5</td><td>how deep the deepest test items go</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      Moving left to right, the skeleton grows richer and expressions reach for
+      the tables less, so the difficulty shifts from the tables to the skeleton.
+      The names carry the <em>intended</em> π; each instance's actual π is
+      measured, and neighbouring presets overlap
+      (<a href="#pi">Data validation</a>).
+    </p>
+  </div>
+
   <!-- ------------------------------------------------------------ summary -->
-  <h3 id="params">Every generation parameter</h3>
+  <h3 id="params">All 25 configuration fields</h3>
   <p class="muted small">
     <span class="lay lay--syntax">syntax</span> public rules the agent is given ·
     <span class="lay lay--interp">interpreter</span> the hidden meaning,
@@ -871,6 +924,6 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
 
 <script src="assets/js/example-data.js?v=6a6dfb92e8"></script>
 <script src="assets/js/main.js?v=ea7fc422a4"></script>
-<script src="assets/js/pipeline.js?v=2e260fea0d"></script>
+<script src="assets/js/pipeline.js?v=1c49c8eb5a"></script>
 </body>
 </html>

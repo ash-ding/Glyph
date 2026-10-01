@@ -180,12 +180,7 @@
       var sig = { UL: "(unary, list) → list", LB: "(list, binary) → value", L: "(list) → list", KL: "(int, list) → list" };
       var n = D.presets.pi_mid.n_structural;
       D.struct_shapes.forEach(function (s, k) {
-        var marks = [];
-        if (k < D.presets.pi_low.n_structural) marks.push("low");
-        if (k < D.presets.pi_mid.n_structural) marks.push("mid");
-        if (k < D.presets.pi_high.n_structural) marks.push("high");
         grid.appendChild(el("div", { class: "shape" + (k < n ? " is-on" : "") }, [
-          el("span", { class: "tick", text: marks.join(" · ") }),
           txt(s[0] + " " + s[1]),
           el("small", { text: sig[s[1]] })
         ]));
