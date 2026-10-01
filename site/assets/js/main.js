@@ -3,41 +3,6 @@
 (function () {
   "use strict";
 
-  /* ---- theme toggle: light -> dark -> system, persisted per browser ------ */
-
-  var root = document.documentElement;
-  var KEY = "glyph-theme";
-  var ICON = { light: "☀", dark: "☾", system: "◐" };
-
-  function stored() {
-    try { return localStorage.getItem(KEY); } catch (e) { return null; }
-  }
-
-  function apply(mode) {
-    if (mode === "light" || mode === "dark") {
-      root.setAttribute("data-theme", mode);
-    } else {
-      root.removeAttribute("data-theme");
-    }
-    var btn = document.querySelector(".theme-toggle");
-    if (btn) {
-      btn.textContent = ICON[mode] || ICON.system;
-      btn.setAttribute("aria-label", "Theme: " + (mode || "system"));
-    }
-  }
-
-  var current = stored() || "system";
-  apply(current);
-
-  document.addEventListener("click", function (ev) {
-    var btn = ev.target.closest(".theme-toggle");
-    if (!btn) return;
-    var order = ["system", "light", "dark"];
-    current = order[(order.indexOf(current) + 1) % order.length];
-    try { localStorage.setItem(KEY, current); } catch (e) { /* private mode */ }
-    apply(current);
-  });
-
   /* ---- copy buttons ------------------------------------------------------ */
 
   document.addEventListener("click", function (ev) {
