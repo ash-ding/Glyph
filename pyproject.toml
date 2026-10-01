@@ -3,7 +3,11 @@ name = "glyph"
 version = "0.1.0"
 description = "Glyph — a hidden-semantics DSL execution benchmark for weight-space delegation research"
 requires-python = ">=3.11"
-dependencies = ["numpy>=1.26"]
+# Exact pin: instances are drawn from numpy.random.Generator, whose streams
+# NumPy does not promise to keep across releases, so the frozen instances are
+# defined by this version as much as by the code. Changing it means
+# re-checking tests/test_frozen_instances.py before anything else.
+dependencies = ["numpy==2.3.5"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]

@@ -65,7 +65,7 @@ fix — run it first and in parallel, it needs no benchmark.
 
 ## Conventions
 
-- Python 3.11+, numpy only in the data layer. torch/transformers live in
+- Python 3.11+, numpy (pinned exactly, see `pyproject.toml`) only in the data layer. torch/transformers live in
   `train/` (fine-tuning, vLLM inference) and are used only by the train arm's
   `v2/student.py`; the data layer and the rest of `v2/` stay torch-free.
 - `pytest -m "not slow"` must be green before every commit; the `slow` marker
