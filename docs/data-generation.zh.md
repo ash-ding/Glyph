@@ -39,13 +39,15 @@ token；更关键的是，让每个值都带有内部的**数字结构**，table
 
 ## 3. 算子与表
 
-**结构算子**（skeleton 的积木）：共定义 8 个，`s0..s7`（`grammar.py:28-38`）。每个有一个
-*shape*，决定它返回值还是列表（`UL`/`LB`/`L`/`KL`）。`enabled_ops(cfg)` 取前 `n_structural`
-个；`s0`（类 map）和 `s1`（类 fold）排在最前，因为它俩是真正**消费原子表算子**的两个
-（`grammar.py:42-47`）。
+**结构算子**（skeleton 的积木）：共定义 12 个，`s0..s11`（`grammar.py:32-46`）。每个有一个
+*shape*，决定它返回值还是列表（`UL`/`LB`/`L`/`KL`）；shape 是固定且公开的，每连续 4 个里
+四种 shape 各出现一次。`enabled_ops(cfg)` 取前 `n_structural` 个，超出 `1..12` 直接报错；
+`s0`（类 map）和 `s1`（类 fold）排在最前，因为它俩是真正**消费原子表算子**的两个
+（`grammar.py:50-61`）。这张表只在末尾追加，所以以后再加算子，已有 `n_structural` 取值下的
+实例都不会变。
 
 **原子算子**（表）：默认 `n_unary = 3`（`u0, u1, u2`）、`n_binary = 2`（`b0, b1`）
-（`grammar.py:49-54`）。
+（`grammar.py:64-69`）。
 
 裸原子应用是合法表达式：`u*(value)` 与 `b*(value, value)`，参数只能是 value 字面量（不可嵌套、
 不可传列表）。生成器从不产出这种形态——它存在的意义是让 agent 在 query 时可以逐条购买表条目。
@@ -81,7 +83,7 @@ skeleton 天花板用的退化基线（`tables.py:261-274`）。
 | `n_digits` | 3 | 数字位数（`base**n_digits = n_values`） |
 | `d_digit` | 16 | 每位数字的嵌入维度 |
 | `value_form` | `"letter_sep"` | 值的渲染形式（§2） |
-| `n_structural` | 5 | 启用 `s0..s7` 中的几个 |
+| `n_structural` | 5 | 启用 `s0..s11` 的前几个 |
 | `max_transform_depth` | 2 | `<transform> then <transform>` 的最大嵌套深度 |
 | `guard_prob` | 0.5 | 结构算子带 `if/then/else` 守卫的概率 |
 | `n_unary` | 3 | unary 原子算子个数 |
@@ -111,19 +113,25 @@ skeleton 天花板用的退化基线（`tables.py:261-274`）。
 
 ## 5. Preset 与 π 旋钮
 
-内置三个 preset（`config.py:198-279`）；未列出的字段取 dataclass 默认值。
+内置三个 preset（`config.py:197-315`）；未列出的字段取 dataclass 默认值。
 
 | preset | `atomic_ratio` | `n_structural` | `max_transform_depth` | `guard_prob` | `max_expr_depth` | `demo_max_depth` |
 |---|---|---|---|---|---|---|
 | `pi_low` | **0.85** | 5 | 0 | 0.0 | 3 | 2 |
-| `pi_mid` | 0.5 | 5 | 2 | 0.5 | 4（默认） | 2（默认） |
-| `pi_high` | **0.15** | 8 | 3 | 0.9 | 5 | 3 |
+| `pi_mid` | 0.5 | 7 | 2 | 0.5 | 4 | 2 |
+| `pi_high` | **0.15** | 9 | 3 | 0.9 | 5 | 2 |
+
+每个旋钮要么三个 preset 全同，要么三个各不相同：表里前五个旋钮三档各不相同，其余（值空间、
+tables、`demo_max_depth`、数据集大小）三档共享。`demo_max_depth` 是"见过的深度"和"没见过的
+深度"之间的分界线，不是 π 旋钮；它不能低于 2，因为 `comp` 需要一个算子嵌套在另一个算子里。
+`n_structural` 从 5 起步，因为低于 5 时每个种子留出的算子对都一样（5/7/9 背后的实测数据见
+`config.py:197-232`）。
 
 **`atomic_ratio` 是扫 π 的主连续旋钮**（`config.py:128`）。它让表达式采样偏向**消费表**的算子
 还是纯结构算子（`instance.py:85-90`）：
 
 - **低 `atomic_ratio` → 高 π**（`pi_high`，0.15）：表达式很少碰表，难度集中在 skeleton。
-  8 个结构算子全开、深嵌套、带守卫。
+  9 个结构算子、深嵌套、带守卫。
 - **高 `atomic_ratio` → 低 π**（`pi_low`，0.85）：表达式不停碰表，难度集中在 tables。
   结构算子近乎平凡、无守卫、无组合。
 

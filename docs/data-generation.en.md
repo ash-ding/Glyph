@@ -45,14 +45,16 @@ tables can generalize over (see §3).
 
 ## 3. Operators and tables
 
-**Structural operators** (the skeleton's building blocks): 8 are defined, `s0..s7`
-(`grammar.py:28-38`). Each has a *shape* deciding whether it returns a value or a list
-(`UL`/`LB`/`L`/`KL`). `enabled_ops(cfg)` takes the first `n_structural` of them; `s0` (map-like)
-and `s1` (fold-like) come first because they are the two that actually *consume* the atomic
-table operators (`grammar.py:42-47`).
+**Structural operators** (the skeleton's building blocks): 12 are defined, `s0..s11`
+(`grammar.py:32-46`). Each has a *shape* deciding whether it returns a value or a list
+(`UL`/`LB`/`L`/`KL`); the shapes are fixed and public, and every block of four holds each shape
+once. `enabled_ops(cfg)` takes the first `n_structural` of them and raises outside `1..12`; `s0`
+(map-like) and `s1` (fold-like) come first because they are the two that actually *consume* the
+atomic table operators (`grammar.py:50-61`). The table only grows by appending, so an instance
+with a given `n_structural` never changes when later operators are added.
 
 **Atomic operators** (the tables): `n_unary = 3` (`u0, u1, u2`) and `n_binary = 2` (`b0, b1`)
-by default (`grammar.py:49-54`).
+by default (`grammar.py:64-69`).
 
 Bare atomic applications are legal expressions: `u*(value)` and `b*(value, value)`, with
 value-literal arguments only (no nesting, no lists). Generation never emits them — they exist so
@@ -90,7 +92,7 @@ the degenerate baseline used by the skeleton ceiling (`tables.py:261-274`).
 | `n_digits` | 3 | number of digit positions (`base**n_digits = n_values`) |
 | `d_digit` | 16 | embedding dims per digit |
 | `value_form` | `"letter_sep"` | how a value is rendered (§2) |
-| `n_structural` | 5 | how many of `s0..s7` are enabled |
+| `n_structural` | 5 | how many of `s0..s11` are enabled, as a prefix |
 | `max_transform_depth` | 2 | how deep a `<transform> then <transform>` may nest |
 | `guard_prob` | 0.5 | chance a structural op gets an `if/then/else` guard |
 | `n_unary` | 3 | number of unary atomic operators |
@@ -121,20 +123,27 @@ instance at generation time (§6), not set as a knob.
 
 ## 5. Presets and the π knob
 
-Three presets are shipped (`config.py:198-279`); unlisted fields take the dataclass defaults.
+Three presets are shipped (`config.py:197-315`); unlisted fields take the dataclass defaults.
 
 | preset | `atomic_ratio` | `n_structural` | `max_transform_depth` | `guard_prob` | `max_expr_depth` | `demo_max_depth` |
 |---|---|---|---|---|---|---|
 | `pi_low` | **0.85** | 5 | 0 | 0.0 | 3 | 2 |
-| `pi_mid` | 0.5 | 5 | 2 | 0.5 | 4 (default) | 2 (default) |
-| `pi_high` | **0.15** | 8 | 3 | 0.9 | 5 | 3 |
+| `pi_mid` | 0.5 | 7 | 2 | 0.5 | 4 | 2 |
+| `pi_high` | **0.15** | 9 | 3 | 0.9 | 5 | 2 |
+
+Every knob is either shared by all three presets or different on all three: the first five
+knobs in the table differ, everything else (value space, tables, `demo_max_depth`, dataset
+sizes) is shared. `demo_max_depth` is the seen/unseen depth boundary rather than a π knob, and cannot go
+below 2 because `comp` needs one operator nested in another. `n_structural` starts at 5 because
+below that `comp` holds out the same pairs on every seed (`config.py:197-232` has the
+measurements behind 5/7/9).
 
 **`atomic_ratio` is the primary continuous knob for sweeping π** (`config.py:128`). It biases
 expression sampling toward operators that *consume the table* versus purely structural ones
 (`instance.py:85-90`):
 
 - **low `atomic_ratio` → high π** (`pi_high`, 0.15): expressions rarely reach for the table, so
-  difficulty lives in the skeleton. All 8 structural ops, deep nesting, guards.
+  difficulty lives in the skeleton. Nine structural ops, deep nesting, guards.
 - **high `atomic_ratio` → low π** (`pi_low`, 0.85): expressions constantly touch the table, so
   difficulty lives in the tables. Near-trivial structural ops, no guards, no composition.
 

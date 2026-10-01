@@ -1,5 +1,5 @@
 {
-  "created": "2026-09-16",
+  "created": "2026-09-30",
   "band_cutoffs": {
     "low": [
       0.2,
@@ -65,91 +65,91 @@
       "id": "mid_1",
       "band": "mid",
       "preset": "pi_mid",
-      "seed": 1068,
-      "measured_pi": 0.46003541644594415,
+      "seed": 1047,
+      "measured_pi": 0.4520337275282382,
       "uses_binary_tables": true,
-      "fingerprint_sha256": "cadc1b3f1401c015d8a34ea3a3481934d83e77be62605554786b79404a2751e0"
+      "fingerprint_sha256": "96c628a926cba795882b3ea90250601eb9418520b6f0201edb7ff2f6fcbacdb8"
     },
     {
       "id": "mid_2",
       "band": "mid",
       "preset": "pi_mid",
-      "seed": 1048,
-      "measured_pi": 0.4699485256925225,
+      "seed": 1056,
+      "measured_pi": 0.4694420800123812,
       "uses_binary_tables": true,
-      "fingerprint_sha256": "af4575040d6b351b61c5ff9fecd3822e4ca5a484b96094f08ed906c628de244d"
+      "fingerprint_sha256": "b338aa5bd48ecf751f47e91e04122b53f416d5322dec8821bb81ceafc28bd667"
     },
     {
       "id": "mid_3",
       "band": "mid",
       "preset": "pi_mid",
-      "seed": 1017,
-      "measured_pi": 0.49362226753283683,
+      "seed": 1019,
+      "measured_pi": 0.49054280917739246,
       "uses_binary_tables": true,
-      "fingerprint_sha256": "ecc33252f85ed02456dd019ec4772b1fa5f86a034a2b31ba57573c39498f1d63"
+      "fingerprint_sha256": "54c82290a39b20f39c870e3071607501d27d5a8a9b1a3d10b85c815e8fb4fedf"
     },
     {
       "id": "mid_4",
       "band": "mid",
       "preset": "pi_mid",
-      "seed": 1027,
-      "measured_pi": 0.5113183653008994,
+      "seed": 1045,
+      "measured_pi": 0.5080327249162978,
       "uses_binary_tables": true,
-      "fingerprint_sha256": "ef97b0c06f246113af1aa6019fd27e2d3f81620a2683786f265c3767dd4dad03"
+      "fingerprint_sha256": "24410a9b0bfdd8d2daf4cd399c7243a814f870afafa8abb87f7eabd8fa5ac849"
     },
     {
       "id": "mid_5",
       "band": "mid",
       "preset": "pi_mid",
-      "seed": 1066,
-      "measured_pi": 0.5297175562178277,
+      "seed": 1058,
+      "measured_pi": 0.5293625519512065,
       "uses_binary_tables": true,
-      "fingerprint_sha256": "0ce6cae4dd8008c4d8a16e9f7ea326a0165673772d2b05f4a3a7d35eeb38e2e9"
+      "fingerprint_sha256": "000431104b2d36e66a2e6287ab4bf69b89c64e3136c3dd90106823b78dc0b3e5"
     },
     {
       "id": "high_1",
       "band": "high",
       "preset": "pi_high",
-      "seed": 1038,
-      "measured_pi": 0.7049360146252289,
+      "seed": 1046,
+      "measured_pi": 0.7009795991731834,
       "uses_binary_tables": true,
-      "fingerprint_sha256": "88ddfd298e324f4a20e69214ed728a705d7d02fab5c7beb6c2c2d3227daf2583"
+      "fingerprint_sha256": "706b2ea79dca1eb1f51f9106077891f00cded30ccfc51829723074a8323a50a2"
     },
     {
       "id": "high_2",
       "band": "high",
       "preset": "pi_high",
-      "seed": 1012,
-      "measured_pi": 0.7240531920455938,
+      "seed": 1062,
+      "measured_pi": 0.7287883504548444,
       "uses_binary_tables": true,
-      "fingerprint_sha256": "646c023d41c0ab525b324cc1ac3800bc40d514fc9285e0ba5f32bd80a78e4bc2"
+      "fingerprint_sha256": "73d6b54981c01e079532edc1eec557c41d369c7f6e583aea2d89ec166ed8d5d5"
     },
     {
       "id": "high_3",
       "band": "high",
       "preset": "pi_high",
-      "seed": 1023,
-      "measured_pi": 0.7501653691548362,
+      "seed": 1038,
+      "measured_pi": 0.751095018396309,
       "uses_binary_tables": true,
-      "fingerprint_sha256": "dae292717f67586e6e0698e8494b8eaf3e1803b04dda79987e80b4adc895f994"
+      "fingerprint_sha256": "342a066576e77173e4316a6bf13d46682349411e28aa1a32c9957ff1921cbd6e"
     },
     {
       "id": "high_4",
       "band": "high",
       "preset": "pi_high",
       "seed": 1043,
-      "measured_pi": 0.7780538230337566,
+      "measured_pi": 0.7725848514981521,
       "uses_binary_tables": true,
-      "fingerprint_sha256": "f3b818a7ac96f114756162251446eabba0b1beb7655ff44b69cec93a576f61bf"
+      "fingerprint_sha256": "d0732bb85c63258e64ef1182cbd67c4241eb918109510251dad9dbff2b0fd607"
     },
     {
       "id": "high_5",
       "band": "high",
       "preset": "pi_high",
-      "seed": 1059,
-      "measured_pi": 0.7953406593406595,
+      "seed": 1068,
+      "measured_pi": 0.7936440127045452,
       "uses_binary_tables": true,
-      "fingerprint_sha256": "6b45ca26e41728c80914aa833f8dc53a3b4d471b9713b174ef2998211c7c4bec"
+      "fingerprint_sha256": "14d876b53e9d5bd292ea6b6db5a65454c8b824e08dfbc32e8fb01ac51b3418c4"
     }
   ]
 }

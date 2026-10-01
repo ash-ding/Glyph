@@ -3,8 +3,8 @@ import numpy as np
 import pytest
 
 from glyph.data.config import PRESETS, GlyphConfig
-from glyph.data.grammar import (check, digits, parse, parse_value, render,
-                           render_value, syntax_spec, undigits)
+from glyph.data.grammar import (STRUCT_SHAPES, check, digits, enabled_ops, parse,
+                           parse_value, render, render_value, syntax_spec, undigits)
 from glyph.data.instance import _sample
 
 CFGS = [PRESETS["smoke"], PRESETS["pi_mid"], PRESETS["pi_high"]]
@@ -53,6 +53,19 @@ def test_check_rejects_malformed():
     for src in bad:
         with pytest.raises(Exception):
             check(parse(src, cfg), cfg)
+
+
+@pytest.mark.parametrize("n", [0, len(STRUCT_SHAPES) + 1])
+def test_n_structural_out_of_range_raises(n):
+    with pytest.raises(ValueError, match="n_structural"):
+        enabled_ops(PRESETS["pi_mid"].with_(n_structural=n))
+
+
+def test_every_block_of_four_shapes_holds_each_shape_once():
+    shapes = [s for _, s in STRUCT_SHAPES]
+    assert len(shapes) % 4 == 0
+    for i in range(0, len(shapes), 4):
+        assert sorted(shapes[i:i + 4]) == ["KL", "L", "LB", "UL"]
 
 
 def test_syntax_spec_leaks_no_semantics():
