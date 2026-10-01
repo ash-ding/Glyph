@@ -3760,6 +3760,41 @@ Raw JSON + logs: node09 `~/glyph_runs/weights_remeasure/`.
   `weights` payload has no model dimension. Decide a schema (e.g. key the
   payload by student model) before canonicalizing either column.
 
+## 2026-10-01 — numpy pinned to 2.3.5
+
+**Why.** An instance is one `numpy.random.Generator` stream drawn in a fixed
+order (skeleton → tables → held pairs → demos → test → validation; probes on
+their own `(seed, PROBE_SALT)` stream). NumPy promises bit-for-bit stream
+stability across releases only for the legacy `RandomState`, so the frozen
+instances are defined by the numpy version as well as the code.
+`pyproject.toml` only said `numpy>=1.26`.
+
+**What was checked first.** `pi_mid` seed 1019 (`mid_3`) generated part by part
+and hashed: the skeleton, all 3 × 4913 unary cells, 2 × 20,000 binary pairs,
+held pairs, demos, the 10k test, the 5k validation set, probes, π and the
+fingerprint.
+
+| host | numpy | result vs lumen1 run 1 |
+|---|---|---|
+| lumen1, second process | 2.3.5 | identical |
+| lumen3 | 2.3.5 | identical |
+| node09 | 2.4.6 | identical |
+
+The fingerprint matches `frozen_instances.json` (`54c82290a39b…`). So 2.4.6
+draws the same instances today; the pin guards against a future release that
+does not.
+
+**Environments.** lumen1/2/3 run 2.3.5. node09 runs 2.4.6 and fails
+`tests/test_numpy_pinned.py` until `pip install numpy==2.3.5` there. Every
+installed numpy requirement admits 2.3.5 (checked on lumen1 and node09:
+torch, vllm, transformers, numba, pandas, peft, accelerate).
+
+**Change.** `dependencies = ["numpy==2.3.5"]`, plus
+`tests/test_numpy_pinned.py`, which fails when the installed numpy differs
+from the pin. It failed against `>=1.26` before the pin and passes after.
+
+Ran on lumen1: `pytest -q -m "not slow"` -> **302 passed, 6 deselected (0:14:23)**, exit 0.
+
 ## 2026-10-01 — per-op specialist ceilings on mid_1 (weights-per-op, 0.6B + 1.7B)
 
 First `weights-per-op` numbers (PR #52's oracle): one specialist per atomic op,

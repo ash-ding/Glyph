@@ -5,19 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <title>Glyph — a hidden-semantics DSL execution benchmark</title>
-<meta name="description" content="A hidden-semantics DSL execution benchmark. A frontier model handed 52% of the hidden table scores at the line requiring no table knowledge at all; a 1.7B model trained on a tenth of it reaches twice as far.">
+<meta name="description" content="A hidden-semantics DSL execution benchmark that evaluates how well frontier agents can build (train) and use (interact with) another model as their own tool.">
 
 <!-- Social cards. Replace the URL below with the deployed page URL, and drop
      an image at assets/img/og.png (1200x630) to enable the preview image. -->
 <meta property="og:type" content="website">
 <meta property="og:title" content="Glyph — a hidden-semantics DSL execution benchmark">
 <meta property="og:description" content="A ruler with known graduations for measuring weight-space delegation: does an agent train a small model on what it learns, or keep reasoning with the frontier?">
-<!-- <meta property="og:url" content="https://ash-ding.github.io/glyph/"> -->
-<!-- <meta property="og:image" content="https://ash-ding.github.io/glyph/assets/img/og.png"> -->
+<!-- <meta property="og:url" content="https://ash-ding.github.io/Glyph/"> -->
+<!-- <meta property="og:image" content="https://ash-ding.github.io/Glyph/assets/img/og.png"> -->
 <meta name="twitter:card" content="summary_large_image">
 
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>◈</text></svg>">
-<link rel="stylesheet" href="assets/css/style.css">
+<link rel="icon" href="assets/img/favicon.svg?v=0fd65c90c8" type="image/svg+xml">
+<link rel="icon" href="assets/img/favicon-32.png?v=5c07ffa36c" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png?v=38eb1d31ea">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+<link rel="stylesheet" href="assets/css/style.css?v=019d0258d0">
 </head>
 
 <body>
@@ -25,16 +30,13 @@
 
 <nav class="nav">
   <div class="nav__inner">
-    <a class="nav__brand" href="#top">◈ GLYPH</a>
+    <a class="nav__brand" href="#top"><img src="assets/img/logo.svg?v=e699a42fc0" alt="" width="18" height="18">Glyph</a>
     <div class="nav__links">
-      <a href="#result">Result</a>
-      <a href="#pipeline">Pipeline</a>
-      <a href="#pi">π</a>
-      <a href="#ceiling">Ceilings</a>
-      <a href="#arms">Arms</a>
-      <a href="#start">Get started</a>
-      <a class="nav__cta" href="https://github.com/ash-ding/glyph">GitHub&nbsp;↗</a>
-      <button class="theme-toggle" type="button" aria-label="Toggle theme">◐</button>
+      <a href="#pipeline">Data generation</a>
+      <a href="#validation">Data validation</a>
+      <a href="#protocol">Evaluation protocol</a>
+      <a href="#results">Results</a>
+      <a class="nav__cta" href="https://github.com/ash-ding/Glyph">GitHub&nbsp;↗</a>
     </div>
   </div>
 </nav>
@@ -43,152 +45,26 @@
 
 <!-- ==================================================================== HERO -->
 <header class="hero wrap" id="top">
-  <p class="hero__eyebrow">Task T1 · weight-space delegation</p>
-  <h1>Glyph</h1>
-  <p class="hero__tagline">
-    A hidden-semantics DSL execution benchmark. Half of every instance can be
-    written down as code; the other half can only be fit into weights. The
-    first measurement is in: a frontier model handed <b>52% of the table</b> and
-    unlimited thinking scores at the line that requires <b>no table knowledge at
-    all</b>, while a 1.7B model trained on a tenth of it reaches twice as far.
+  <h1 class="hero__title"><img class="hero__mark" src="assets/img/logo.svg?v=e699a42fc0" alt="" width="64" height="64">Glyph</h1>
+  <p class="hero__lede">
+    A hidden-semantics DSL execution benchmark that evaluates how well frontier
+    agents can build (train) and use (interact with) another model as their own
+    tool.
   </p>
 
-  <div class="badges">
-    <span class="badge">syntax public · semantics private</span>
-    <span class="badge">|V| = 4913 values</span>
-    <span class="badge">10,000 held-out expressions</span>
-    <span class="badge">data layer frozen · 2026-08-31</span>
-  </div>
-
-  <div class="actions">
-    <a class="btn btn--primary" href="https://github.com/ash-ding/glyph">Code</a>
-    <a class="btn" href="#result">The result</a>
-    <a class="btn" href="#pipeline">How an instance is built</a>
-    <a class="btn" href="#start">Quick start</a>
-  </div>
+  <ol class="rqs">
+    <li>
+      <span class="rq__k">RQ1</span>
+      <p>Given a problem that inference-time scaling alone cannot solve, can a
+         frontier agent identify the gap and choose to train another model as its
+         own tool?</p>
+    </li>
+    <li>
+      <span class="rq__k">RQ2</span>
+      <p>How well can the frontier model build and use that tool?</p>
+    </li>
+  </ol>
 </header>
-
-<div class="wrap"><hr></div>
-
-<!-- ================================================================== RESULT -->
-<section class="section wrap" id="result">
-  <h2>The task needs training, and we can now show it<span class="tag tag--done">measured</span></h2>
-
-  <p class="section__lede">
-    The design goal was a task that <em>cannot</em> be talked into a context
-    window — one where the difficulty has to be absorbed by gradient descent.
-    Three oracles on the same 500 items settle whether the generator achieved
-    that.
-  </p>
-
-  <div class="band" aria-hidden="true">
-    <div class="band__track">
-      <div class="band__fill" style="width:24.8%"></div>
-      <div class="band__mark band__mark--key" style="left:24.8%"></div>
-      <div class="band__mark" style="left:25.8%"></div>
-      <div class="band__mark band__mark--key" style="left:49.8%"></div>
-    </div>
-    <div class="band__labels">
-      <div class="band__label band__label--key" style="left:24.8%">
-        <b>0.248</b>skeleton only<br>zero table entries
-      </div>
-      <div class="band__label" style="left:25.8%; top:3.2rem">
-        <b>0.258</b>frontier, 2551 entries<br>unlimited thinking
-      </div>
-      <div class="band__label band__label--key" style="left:49.8%">
-        <b>0.498</b>1.7B weights<br>491 entries seen
-      </div>
-    </div>
-  </div>
-
-  <div class="table-scroll">
-    <table>
-      <thead>
-        <tr>
-          <th>Oracle</th><th>What it knows</th>
-          <th class="num">overall</th><th class="num">tail</th><th class="num">headroom</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td class="mono">skeleton ceiling</td>
-          <td>every structural rule, not one table entry</td>
-          <td class="num">0.248</td><td class="num">0.000</td><td class="num">—</td>
-        </tr>
-        <tr>
-          <td class="mono">A0′</td>
-          <td>frontier model, 2551 of 4913 entries in context, unlimited thinking</td>
-          <td class="num">0.258</td><td class="num">0.016</td><td class="num">+0.013</td>
-        </tr>
-        <tr class="is-lead">
-          <td class="mono">weights</td>
-          <td>Qwen3-1.7B fine-tuned on 491 entries (10% of the table)</td>
-          <td class="num">0.498</td><td class="num">0.328</td><td class="num">+0.333</td>
-        </tr>
-        <tr>
-          <td class="mono">perfect</td>
-          <td>true skeleton, true tables</td>
-          <td class="num">1.000</td><td class="num">1.000</td><td class="num">+1.000</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-  <p class="muted" style="font-size:.85rem">
-    pi_mid, instance seed 1001, the same stratified 500-item subset throughout.
-    <span class="mono">headroom = (score − skeleton ceiling) / (1 − skeleton ceiling)</span>.
-  </p>
-
-  <h3>What the frontier actually did</h3>
-  <p>
-    Splitting A0′'s items by whether the evidence contained the entries they
-    needed separates two capabilities that a single score hides:
-  </p>
-
-  <div class="kpis">
-    <div class="kpi">
-      <span class="kpi__n">0.976</span>
-      <span class="kpi__label">items whose needed entries <b>were</b> in the evidence</span>
-      <span class="kpi__sub">126 items</span>
-    </div>
-    <div class="kpi kpi--lead">
-      <span class="kpi__n">0.016</span>
-      <span class="kpi__label">items whose needed entries <b>were not</b></span>
-      <span class="kpi__sub">374 items</span>
-    </div>
-  </div>
-
-  <div class="callout">
-    <p>
-      <b>Retrieval saturated, extrapolation at zero.</b> The frontier uses what
-      it is told almost perfectly and infers almost nothing beyond it. That is
-      not a capability shortfall — it is the separation the benchmark was built
-      to produce.
-    </p>
-    <p>
-      The <span class="mono">tail</span> column is where that shows cleanly.
-      Both arms have a tail of ~370 items — those needing entries never supplied
-      — and on that subset the skeleton ceiling is <b>0.000</b>, so every point
-      is table knowledge. The frontier scores <b>0.016</b> there; a 1.7B student
-      given a fifth as many entries scores <b>0.328</b>. Twenty times, on
-      exactly the items that require extrapolating.
-    </p>
-  </div>
-
-  <p>
-    The evidence was made deliberately generous — 2000 purchased queries
-    revealing 2551 of 4913 unary entries, 70k tokens of it — so the failure does
-    not depend on how much any particular agent happened to buy. Leakage was
-    checked rather than assumed: the 2000 purchased expressions and the 500
-    scored ones intersect in zero rows.
-  </p>
-  <p class="muted" style="font-size:.88rem">
-    One caveat, stated because it is the first thing worth checking: A0′ does
-    not choose its own queries. The evidence was drawn by the harness, where a
-    real agent probes adaptively. That does not touch the retrieval-versus-
-    extrapolation split, which is about the evidence it was given; it does leave
-    an adaptive-buyer control worth running.
-  </p>
-</section>
 
 <div class="wrap"><hr></div>
 
@@ -197,20 +73,34 @@
   <h2>Abstract</h2>
   <div class="prose">
     <p>
-      Given a verifiable task a frontier model cannot solve alone, when does
-      putting capability into a small model's <b>weights</b> beat putting it
-      into <b>context</b> or into <b>code</b>? And when an agent chooses for
-      itself, how good is that choice?
+      Glyph is a benchmark built to answer these questions. Each instance is a
+      small programming language whose <b>syntax is public</b> and whose
+      <b>semantics are hidden</b> inside an interpreter <span class="mono">P</span>.
+      The only way to learn what an expression means is to ask
+      <span class="mono">P</span>, one metered query at a time.
     </p>
     <p>
-      Glyph is the instrument, not the answer. Each instance is a hidden
-      interpreter whose syntax is public and whose semantics must be bought one
-      query at a time. It splits deliberately into two halves that are different
-      in kind: a <b>skeleton</b> sampled from a finite combinator grammar, which
-      is always describable in finitely many words, and <b>tables</b> built from
-      shared digit embeddings and frozen random MLPs, which are not. A single
-      knob moves the difficulty between them, so the same generator produces
-      instances where code should win and instances where only weights can.
+      <span class="mono">P</span> has two halves that differ in kind. The
+      <b class="skel">skeleton</b> — what each structural operator does to a
+      list — is drawn from a small, finite grammar, so it can always be written
+      down as code. The <b class="table">tables</b> — what each atomic operator
+      does to a value — are frozen random networks over shared digit embeddings,
+      so they can be learned from examples but never written down. The presets
+      move the difficulty between the two halves, and every instance carries a
+      measured <span class="mono">π</span> that says where it ended up. The same
+      generator therefore produces instances where reasoning and code should be
+      enough, and instances where only a trained model reaches far.
+    </p>
+    <p>
+      The page follows that construction in order.
+      <a href="#pipeline">Data generation</a> builds one real instance step by
+      step. <a href="#validation">Data validation</a> measures it before any
+      agent arrives: <span class="mono">π</span>, and the reference ceilings
+      that frame every score. <a href="#protocol">Evaluation protocol</a> is how
+      an agent meets it — a practice phase with a query budget and, in one arm,
+      a small model it can train, then a single committed answer.
+      <a href="#results">Results</a> will report when training pays off, and
+      whether the agent knew.
     </p>
   </div>
 </section>
@@ -219,136 +109,510 @@
 
 <!-- ================================================================ PIPELINE -->
 <section class="section wrap" id="pipeline">
-  <h2>How an instance is built<span class="tag tag--done">frozen</span></h2>
+  <h2>Data generation</h2>
 
   <p class="section__lede">
-    <code>generate(seed, cfg)</code> runs five steps in order, each consuming a
-    different part of the config from one seeded stream. Every step is a place a
-    design decision lives.
+    An evaluation task in Glyph has two parts: a hidden interpreter
+    <span class="mono">P</span>, and a set of evaluation data — demos, a
+    validation set and a held-out test — drawn from <span class="mono">P</span>.
   </p>
 
-  <ol class="pipeline">
-    <li class="pipe">
-      <div class="pipe__head">
-        <span class="pipe__n">STEP 01</span>
-        <span class="pipe__title">The value space</span>
-        <span class="pipe__src">data/grammar.py · data/tables.py</span>
-      </div>
-      <p>
-        A value is a fixed-length digit string, not an atomic symbol:
-        <span class="mono">d<sub>k</sub>(x) = ⌊x / base<sup>k</sup>⌋ mod base</span>,
-        giving 17³ = 4913 values rendered <span class="mono">v_k_e_e</span>. One
-        random Gaussian vector is stored per <em>digit position and value</em> —
-        51 vectors, not 4913 — and a value's embedding is their concatenation.
-        <b>That sharing is the only reason an unqueried entry can ever be
-        predicted.</b>
-      </p>
-      <div class="pipe__knobs">
-        <code>base = 17</code><code>n_digits = 3</code><code>d_digit = 16</code>
-        <code>value_form = letter_sep</code>
-      </div>
-    </li>
+  <p>
+    A task is specified by one <a href="https://github.com/ash-ding/Glyph/blob/main/src/glyph/data/config.py"><code>GlyphConfig</code></a>, a
+    class with 25 fields. Fourteen of them define <span class="mono">P</span>,
+    its public syntax and its hidden meaning; the other eleven define the
+    evaluation data, how expressions are sampled from <span class="mono">P</span>
+    and how many of each kind are drawn.
+  </p>
 
-    <li class="pipe">
-      <div class="pipe__head">
-        <span class="pipe__n">STEP 02</span>
-        <span class="pipe__title">The skeleton — sampled, and describable</span>
-        <span class="pipe__src">data/semantics.py</span>
-      </div>
-      <p>
-        Each structural operator's meaning is drawn from a <em>finite</em>
-        combinator grammar: <span class="mono">ident · reverse · rotate k ·
-        dedup · take k · drop k · map_all · map_skip j</span>, optionally under
-        a guard. Sampling from a finite grammar is what guarantees the skeleton
-        can always be written down in finitely many words — and every transform
-        rearranges structure and <b>never interprets a value</b>, which is where
-        the skeleton/table split comes from rather than being imposed.
-      </p>
-      <div class="pipe__knobs">
-        <code>n_structural = 5 / 7 / 9</code><code>max_transform_depth</code>
-        <code>guard_prob</code>
-      </div>
-    </li>
+  <div class="parts">
+    <div class="part part--p">
+      <span class="part__k">the hidden interpreter</span>
+      <h4>P · 14 fields</h4>
+      <p><b>11 fixed</b> across the benchmark, <b>3 knobs</b>:
+         <code>n_structural</code>, <code>max_transform_depth</code>, <code>guard_prob</code>.</p>
+    </div>
+    <div class="part part--data">
+      <span class="part__k">the evaluation data</span>
+      <h4>drawn from P · 11 fields</h4>
+      <p><b>9 fixed</b> across the benchmark, <b>2 knobs</b>:
+         <code>atomic_ratio</code>, <code>max_expr_depth</code>.</p>
+    </div>
+  </div>
+  <p class="small muted">
+    Given a seed, a config determines the task completely: the same config and
+    seed always give the same <span class="mono">P</span> and the same data.
+    Two data fields, <code>max_expr_depth</code> and <code>list_len_range</code>,
+    also bound what the public syntax allows. Every field is listed in the
+    <a href="#params">table at the end</a>.
+  </p>
 
-    <li class="pipe">
-      <div class="pipe__head">
-        <span class="pipe__n">STEP 03</span>
-        <span class="pipe__title">The tables — learnable, not describable</span>
-        <span class="pipe__src">data/tables.py</span>
+  <p>
+    <code>generate(seed, cfg)</code> builds the task in a fixed order from one
+    seeded random stream: steps 1–4 below draw <span class="mono">P</span>,
+    steps 5–8 draw the data from it, and step 9 measures the result.
+  </p>
+  <div class="stream" role="img" aria-label="Draw order from the random stream: skeleton, tables (together the interpreter P), then held pairs, demos, test and validation (the evaluation data drawn from P)">
+    <div class="stream__order"><span>draw order</span><i></i></div>
+    <div class="stream__groups">
+      <div class="stream__group stream__group--p">
+        <div class="stream__cells"><span class="s-skel">skeleton</span><span class="s-table">tables</span></div>
+        <div class="stream__brace"></div>
+        <div class="stream__label">interpreter P</div>
       </div>
-      <p>
-        Never materialised. A table is a function: digits → shared embeddings →
-        a frozen two-layer tanh MLP → decode to the nearest legal symbol.
-        Tabulated it would be 4913 entries for unary and 24 million for binary.
-        Operators are digit-wise with a weak global coupling term: pure
-        digit-wise is enumerable into a lookup table, which hands the win to the
-        code arm; too much coupling and nobody learns it.
-      </p>
-      <div class="pipe__knobs">
-        <code>binary_coupling = 0.25</code><code>unary_coupling = 0.25</code>
-        <code>mlp_temp = 1.0</code><code>decode = whiten</code>
+      <div class="stream__group stream__group--data">
+        <div class="stream__cells"><span class="s-dist">held pairs</span><span class="s-dist">demos</span><span class="s-dist">test</span><span class="s-dist">validation</span></div>
+        <div class="stream__brace"></div>
+        <div class="stream__label">evaluation data drawn from P</div>
       </div>
-    </li>
+    </div>
+  </div>
+  <p>
+    Changing one field affects only the step where it takes effect and the
+    steps after it; everything drawn before it stays the same.
+  </p>
 
-    <li class="pipe">
-      <div class="pipe__head">
-        <span class="pipe__n">STEP 04</span>
-        <span class="pipe__title">Held-out operator pairs</span>
-        <span class="pipe__src">data/instance.py</span>
-      </div>
-      <p>
-        A third of the directly-nested <span class="mono">(outer, inner)</span>
-        operator pairs are kept out of the demo distribution, and the
-        <span class="mono">comp</span> split then <em>requires</em> one to
-        appear while every other split forbids all of them. Drawn only from
-        pairs the grammar can actually build — an operator returning a value can
-        never sit inside another — and a fixed share of each shape class, so the
-        split's composition does not drift by seed.
-      </p>
-      <div class="pipe__knobs"><code>n_hold = |realizable| / 3</code></div>
-    </li>
+  <p>
+    We follow one real task — frozen instance <span class="mono">mid_3</span>,
+    seed 1019 — and one of its demos all the way through. Every number below is
+    exported from the generator, not typed by hand.
+  </p>
 
-    <li class="pipe">
-      <div class="pipe__head">
-        <span class="pipe__n">STEP 05</span>
-        <span class="pipe__title">Demos and the three splits</span>
-        <span class="pipe__src">data/instance.py</span>
-      </div>
-      <p>
-        Rejection sampling: draw an expression, test it against the split's
-        constraints, keep or discard. Depth is <em>sampled</em> rather than
-        being the split's budget restated — each recursion level may stop early,
-        so <span class="mono">iid</span> spans depths 1–2 rather than sitting at
-        a single point. A split that cannot be filled <b>raises with a
-        diagnosis</b> rather than returning a short test set, which it used to
-        do silently.
-      </p>
-      <div class="pipe__knobs">
-        <code>depth_stop_prob = 0.15</code><code>n_iid = 6500</code>
-        <code>n_comp = 2300</code><code>n_depth = 1200</code>
-      </div>
-    </li>
-  </ol>
+  <div class="example">
+    <span class="example__label">the running example — demo #1 of mid_3</span>
+    <code id="ex-expr">s1(s0(u1, [v_m_h_e, v_m_p_m, v_k_n_b, v_k_m_d]), b1)</code>
+    &nbsp;→&nbsp; <code id="ex-answer">v_l_m_e</code>
+  </div>
 
-  <div class="callout">
+  <div class="gen-map" aria-label="Pipeline overview">
+    <div class="gen-map__group">
+      <p class="gen-map__label">draws the hidden interpreter P</p>
+      <div class="gen-map__row">
+        <a class="gen-map__step" href="#g1"><b>1</b>value space</a><span class="gen-map__arrow">→</span>
+        <a class="gen-map__step" href="#g2"><b>2</b>public syntax</a><span class="gen-map__arrow">→</span>
+        <a class="gen-map__step gen-map__step--skel" href="#g3"><b>3</b>skeleton</a><span class="gen-map__arrow">→</span>
+        <a class="gen-map__step gen-map__step--table" href="#g4"><b>4</b>tables</a><span class="gen-map__arrow">→</span>
+        <span class="gen-map__p">P fixed</span>
+      </div>
+    </div>
+    <div class="gen-map__group">
+      <p class="gen-map__label">draws the evaluation data from P — P does not change</p>
+      <div class="gen-map__row">
+        <span class="gen-map__p">P fixed</span><span class="gen-map__arrow">→</span>
+        <a class="gen-map__step gen-map__step--data" href="#g5"><b>5</b>held-out pairs</a><span class="gen-map__arrow">→</span>
+        <a class="gen-map__step gen-map__step--data" href="#g6"><b>6</b>sample an expression</a><span class="gen-map__arrow">→</span>
+        <a class="gen-map__step" href="#g7"><b>7</b>evaluate it</a><span class="gen-map__arrow">→</span>
+        <a class="gen-map__step gen-map__step--data" href="#g8"><b>8</b>demos + splits</a><span class="gen-map__arrow">→</span>
+        <a class="gen-map__step" href="#g9"><b>9</b>measure π</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ---------------------------------------------------------------- 1 -->
+  <div class="gstep" id="g1">
+    <div class="gstep__head">
+      <span class="gstep__n">STEP 1</span><h3 class="gstep__title">The value space</h3>
+      <span class="gstep__layer gstep__layer--interp">interpreter</span>
+      <span class="gstep__src">data/grammar.py · data/tables.py</span>
+    </div>
     <p>
-      The order matters for reproducibility: every step draws from the same
-      stream, so two configs that differ anywhere produce unrelated instances
-      even at the same seed.
+      A value is a fixed-length string of digits, not an atomic symbol: three
+      digits in base 17 give 17³ = 4913 values, each digit written as a letter.
+      The tables later need a vector for every value, and they get it by sharing:
+      one random 16-dimensional vector per <em>(digit position, digit)</em> —
+      51 vectors in all — and a value's embedding is its three vectors
+      concatenated. That sharing is the only reason an entry nobody queried can
+      still be predicted.
+    </p>
+    <div class="fig" id="fig-value"></div>
+    <p class="figcap"><b>Figure 1:</b> one value of the example, from letters to digits to its 48-number embedding. Only 51 vectors exist; every value is built from three of them.</p>
+    <div class="knobs">
+      <span class="knobs__label">Related configuration fields:</span>
+      <span class="knob knob--table">base = <b>17</b></span>
+      <span class="knob knob--table">n_digits = <b>3</b></span>
+      <span class="knob knob--table">d_digit = <b>16</b></span>
+      <span class="knob">value_form = <b>letter_sep</b></span>
+    </div>
+  </div>
+
+  <!-- ---------------------------------------------------------------- 2 -->
+  <div class="gstep" id="g2">
+    <div class="gstep__head">
+      <span class="gstep__n">STEP 2</span><h3 class="gstep__title">The public syntax</h3>
+      <span class="gstep__layer gstep__layer--interp">interpreter</span>
+      <span class="gstep__src">data/grammar.py</span>
+    </div>
+    <p>
+      The syntax is handed to the agent; nothing in it reveals what an operator
+      does. It fixes how an expression is written and what counts as legal, and
+      for <span class="mono">mid_3</span> it has four parts:
+    </p>
+    <ul class="syntax-parts">
+      <li><b>Values</b> — the 4,913 strings from step 1,
+          <span class="mono">v_a_a_a</span> … <span class="mono">v_q_q_q</span>.</li>
+      <li><b>Structural operators</b> — 7 of them, <span class="mono">s0…s6</span>,
+          taken from a fixed public table of twelve.</li>
+      <li><b>Atomic operators</b> — 5 of them: three unary,
+          <span class="mono">u0…u2</span>, each taking one value, and two binary,
+          <span class="mono">b0</span> and <span class="mono">b1</span>, each
+          taking two.</li>
+      <li><b>Two size limits</b> — how deeply an expression may nest, and how
+          long a list literal may be.</li>
+    </ul>
+    <p>
+      Every structural operator takes exactly one list — the expression it
+      transforms — plus at most one extra argument: a unary operator, a binary
+      operator, or a small integer <span class="mono">k</span>. That gives four
+      <em>shapes</em>: map-like (<span class="mono">UL</span>), fold-like
+      (<span class="mono">LB</span>, the only one that returns a single value),
+      pure (<span class="mono">L</span>) and integer-parameterised
+      (<span class="mono">KL</span>). In form this resembles the list DSLs used
+      in program synthesis.<sup class="fn"><a href="#ref-1" id="cite-1">1</a></sup>
+      The public table of twelve holds each shape once in every block of four,
+      and an instance enables a prefix of it.
+    </p>
+    <div class="fig">
+      <div class="fig__body">
+        <div class="shapes" id="shape-grid"></div>
+        <p class="small muted" style="margin:.8rem 0 0">
+          <span class="mono">mid_3</span> enables the first 7
+          (<code>n_structural</code> = 7).
+          The shape names: <span class="mono">UL</span> (unary, list) → list ·
+          <span class="mono">LB</span> (list, binary) → value ·
+          <span class="mono">L</span> (list) → list ·
+          <span class="mono">KL</span> (int, list) → list.
+        </p>
+      </div>
+    </div>
+    <p>
+      The two size limits: <code>max_expr_depth</code> = 4 caps how many
+      structural operators may nest inside one another, and
+      <code>list_len_range</code> = (2, 4) says how many values a list literal
+      holds. An expression outside either limit is a syntax error.
+    </p>
+    <details>
+      <summary class="small">The syntax spec mid_3's agent receives, verbatim</summary>
+      <pre id="syntax-spec"></pre>
+    </details>
+    <div class="example">
+      <span class="example__label">in the example</span>
+      <code>s1(…, b1)</code> is legal because <span class="mono">s1</span> has shape
+      <span class="mono">LB</span> and returns a value; its list argument
+      <code>s0(u1, […])</code> is legal because <span class="mono">s0</span> is
+      <span class="mono">UL</span> and returns a list. The literal holds 4 values
+      (2–4 allowed) and nests 2 deep (at most 4 allowed).
+    </div>
+    <div class="knobs">
+      <span class="knobs__label">Related configuration fields:</span>
+      <span class="knob knob--skel">n_structural = <b>7</b></span>
+      <span class="knob knob--table">n_unary = <b>3</b></span>
+      <span class="knob knob--table">n_binary = <b>2</b></span>
+      <span class="knob">max_expr_depth = <b>4</b></span>
+      <span class="knob">list_len_range = <b>(2, 4)</b></span>
+    </div>
+  </div>
+
+  <!-- ---------------------------------------------------------------- 3 -->
+  <div class="gstep" id="g3">
+    <div class="gstep__head">
+      <span class="gstep__n">STEP 3</span><h3 class="gstep__title"><span class="skel">The skeleton</span> — what each structural operator does</h3>
+      <span class="gstep__layer gstep__layer--interp">interpreter</span>
+      <span class="gstep__src">data/semantics.py</span>
+    </div>
+    <p>
+      Each enabled structural operator gets a hidden meaning drawn from a small,
+      finite grammar. Every primitive rearranges a list and never looks at what a
+      value means; the only ones that touch the tables are
+      <span class="mono">map_all</span> and <span class="mono">map_skip</span>,
+      which apply the operator's unary argument. Fold-like operators then fold
+      the list with their binary argument, left or right. A map-like operator
+      must use its unary argument, an int-taking one its integer, and a pure one
+      may not touch the table.
+    </p>
+<div class="bnf">structural ::= transform
+             | if guard then transform else transform        <span class="faint"># chosen with probability guard_prob</span>
+
+transform  ::= ident | reverse | rotate k | dedup | take k | drop k
+             | map_all u | map_skip u j                      <span class="faint"># only in map-like (UL) operators</span>
+             | transform ; transform                         <span class="faint"># "do A, then B" — 45%, while max_transform_depth lasts</span>
+
+guard      ::= len is even | len &gt; k | first == last
+
+fold-like (LB) operators add:   then fold the list with b, left or right (50/50)</div>
+    <div class="fig" id="fig-deriv"></div>
+    <p class="figcap"><b>Figure 2:</b> how the hidden meanings of <span class="mono">s0</span> and <span class="mono">s1</span> were drawn — one grammar choice per step, each tied to the knob that weighs it.</p>
+    <details>
+      <summary class="small">All seven hidden meanings of mid_3</summary>
+      <div class="table-scroll"><table id="skel-table"></table></div>
+    </details>
+    <div class="knobs">
+      <span class="knobs__label">Related configuration fields:</span>
+      <span class="knob knob--skel">max_transform_depth = <b>2</b></span>
+      <span class="knob knob--skel">guard_prob = <b>0.5</b></span>
+      <span class="knob knob--skel">n_structural = <b>7</b></span>
+    </div>
+  </div>
+
+  <!-- ---------------------------------------------------------------- 4 -->
+  <div class="gstep" id="g4">
+    <div class="gstep__head">
+      <span class="gstep__n">STEP 4</span><h3 class="gstep__title"><span class="table">The tables</span> — what each atomic operator does</h3>
+      <span class="gstep__layer gstep__layer--interp">interpreter</span>
+      <span class="gstep__src">data/tables.py</span>
+    </div>
+    <p>
+      A table is never stored. It is a function: split the value into digits,
+      look up the digits' vectors, push them through frozen random MLPs, and
+      round the result to the nearest legal value. Each digit position has its
+      own small MLP — the digit-wise part — and one larger MLP sees the whole
+      value; the coupling weight α sets how much of the answer comes from it.
+      With α = 0 a unary table falls apart into 51 independent pieces (a binary
+      one into 867) that an agent could enumerate; with α large nothing can be
+      learned from a sample. Tabulated,
+      a unary table has 4913 entries and a binary one about 24 million.
+    </p>
+    <div class="fig" id="fig-table"></div>
+    <p class="figcap"><b>Figure 3:</b> one unary and one binary lookup from the example, computed the way the generator computes every table entry.</p>
+    <div class="knobs">
+      <span class="knobs__label">Related configuration fields:</span>
+      <span class="knob knob--table">unary_coupling = <b>0.25</b></span>
+      <span class="knob knob--table">binary_coupling = <b>0.25</b></span>
+      <span class="knob knob--table">mlp_width = <b>64</b></span>
+      <span class="knob knob--table">mlp_temp = <b>1.0</b></span>
+      <span class="knob knob--table">decode = <b>whiten</b></span>
+      <span class="knob knob--table">d_digit = <b>16</b></span>
+    </div>
+    <p class="note">
+      With steps 1–4 done, <span class="mono">P</span> is fixed. Nothing below
+      changes what any operator does — only which expressions are asked about.
     </p>
   </div>
+
+  <!-- ---------------------------------------------------------------- 5 -->
+  <div class="gstep" id="g5">
+    <div class="gstep__head">
+      <span class="gstep__n">STEP 5</span><h3 class="gstep__title">Held-out operator pairs</h3>
+      <span class="gstep__layer gstep__layer--data">data</span>
+      <span class="gstep__src">data/instance.py · _draw_held_pairs</span>
+    </div>
+    <p>
+      A third of the directly nested <span class="mono">(outer, inner)</span>
+      pairs are kept out of the demos, so the <span class="mono">comp</span>
+      split can test compositions the agent has never seen. Only buildable pairs
+      count — no operator takes a value argument, so a value-returning operator
+      can never be the inner one — and the third is spread over every
+      (outer shape, inner shape) class in proportion to its size, so which
+      <em>kinds</em> of composition are held out does not depend on the seed.
+    </p>
+    <div class="fig" id="fig-held"></div>
+    <p class="figcap"><b>Figure 4:</b> mid_3's operator pairs. Held-out pairs (amber) never appear in demos, validation, iid or depth; comp requires one.</p>
+    <div class="knobs">
+      <span class="knobs__label">Related configuration fields:</span>
+      <span class="knob knob--data">n_structural = <b>7</b> → 42 buildable pairs → 14 held</span>
+    </div>
+  </div>
+
+  <!-- ---------------------------------------------------------------- 6 -->
+  <div class="gstep" id="g6">
+    <div class="gstep__head">
+      <span class="gstep__n">STEP 6</span><h3 class="gstep__title">Sampling an expression</h3>
+      <span class="gstep__layer gstep__layer--data">data</span>
+      <span class="gstep__src">data/instance.py · _sample</span>
+    </div>
+    <p>
+      Expressions are grown top-down. Each node is asked for a type — a list or
+      a value — and a depth budget. Below the root it may stop early and become
+      a literal; otherwise it picks an operator of the right type. Where there is
+      a choice, a coin weighted by <code>atomic_ratio</code> decides between the
+      operators that consume a table (map-like, fold-like) and the purely
+      structural ones. This one coin is what moves π most.
+    </p>
+    <div class="fig" id="fig-sample"></div>
+    <p class="figcap"><b>Figure 5:</b> the example expression grown top-down. Blue nodes are structural operators; green slots name a table.</p>
+    <div class="knobs">
+      <span class="knobs__label">Related configuration fields:</span>
+      <span class="knob knob--data">atomic_ratio = <b>0.5</b></span>
+      <span class="knob knob--data">binary_freq = <b>0.35</b></span>
+      <span class="knob knob--data">depth_stop_prob = <b>0.15</b></span>
+      <span class="knob knob--data">list_len_range = <b>(2, 4)</b></span>
+      <span class="knob knob--data">budget = demo_max_depth = <b>2</b></span>
+    </div>
+  </div>
+
+  <!-- ---------------------------------------------------------------- 7 -->
+  <div class="gstep" id="g7">
+    <div class="gstep__head">
+      <span class="gstep__n">STEP 7</span><h3 class="gstep__title">Evaluating it — the answer</h3>
+      <span class="gstep__layer">uses P</span>
+      <span class="gstep__src">data/interp.py</span>
+    </div>
+    <p>
+      The answer is whatever <span class="mono">P</span> returns. Evaluation is
+      bottom-up: the inner operator runs on the literal, its output feeds the
+      outer one. Blue steps are the skeleton rearranging lists; orange steps are
+      table lookups — the only places a value's meaning matters.
+    </p>
+    <div class="fig" id="fig-eval"></div>
+    <p class="figcap"><b>Figure 6:</b> P evaluating the example bottom-up. Blue rows rearrange lists; green rows are table lookups.</p>
+  </div>
+
+  <!-- ---------------------------------------------------------------- 8 -->
+  <div class="gstep" id="g8">
+    <div class="gstep__head">
+      <span class="gstep__n">STEP 8</span><h3 class="gstep__title">Demos and the three test splits</h3>
+      <span class="gstep__layer gstep__layer--data">data</span>
+      <span class="gstep__src">data/instance.py</span>
+    </div>
+    <p>
+      Steps 6 and 7 repeat inside a rejection loop: draw, check the split's
+      rules, keep or discard. Demos, validation and <span class="mono">iid</span>
+      stay at or below <code>demo_max_depth</code> and avoid every held pair;
+      <span class="mono">comp</span> must contain one; <span class="mono">depth</span>
+      must be strictly deeper than any demo. A split that cannot be filled raises
+      with a diagnosis instead of returning a short test set.
+    </p>
+    <div class="example">
+      <span class="example__label">in the example</span>
+      depth 2 ≤ <code>demo_max_depth</code> = 2 ✓ · its one pair
+      <span class="mono">(s1, s0)</span> is not held ✓ · it parses and checks ✓
+      → kept, as demo #1.
+    </div>
+    <div class="splits" id="splits"></div>
+    <div class="knobs">
+      <span class="knobs__label">Related configuration fields:</span>
+      <span class="knob knob--data">n_demos = <b>30</b></span>
+      <span class="knob knob--data">n_iid = <b>6500</b></span>
+      <span class="knob knob--data">n_comp = <b>2300</b></span>
+      <span class="knob knob--data">n_depth = <b>1200</b></span>
+      <span class="knob knob--data">n_val = <b>5000</b></span>
+      <span class="knob knob--data">demo_max_depth = <b>2</b></span>
+      <span class="knob knob--data">max_expr_depth = <b>4</b></span>
+    </div>
+  </div>
+
+  <!-- ---------------------------------------------------------------- 9 -->
+  <div class="gstep" id="g9">
+    <div class="gstep__head">
+      <span class="gstep__n">STEP 9</span><h3 class="gstep__title">Measuring π for the instance</h3>
+      <span class="gstep__layer">recorded with every run</span>
+      <span class="gstep__src">data/measure.py</span>
+    </div>
+    <p>
+      π asks which half of <span class="mono">P</span> the difficulty sits in.
+      Answer the test items twice with one half crippled: the true skeleton with
+      an identity table, and a textbook skeleton with the true tables. The loss
+      each one takes is the difficulty of the half it is missing.
+      (<a href="#pi">More on π</a>.)
+    </p>
+    <div class="fig"><div class="fig__body" id="pi-body"></div></div>
+  </div>
+
+  <!-- ------------------------------------------------------------ presets -->
+  <div class="gstep" id="presets">
+    <div class="gstep__head">
+      <h3 class="gstep__title">Presets: three configurations</h3>
+      <span class="gstep__src">data/config.py · PRESETS</span>
+    </div>
+    <p>
+      That is one task, traced end to end. The benchmark ships three
+      configurations, called presets. They share 20 of the 25 fields and differ
+      only in the five knobs, which move the difficulty between the two halves
+      of <span class="mono">P</span>. <span class="mono">mid_3</span> above is
+      drawn from <span class="mono">pi_mid</span>.
+    </p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>knob</th><th>part</th><th class="num">pi_low</th><th class="num">pi_mid</th><th class="num">pi_high</th><th>moves π through</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">n_structural</td><td>P</td><td class="num">5</td><td class="num">7</td><td class="num">9</td><td>how many structural operators exist</td></tr>
+          <tr><td class="mono">max_transform_depth</td><td>P</td><td class="num">0</td><td class="num">2</td><td class="num">3</td><td>how long an operator's meaning can be</td></tr>
+          <tr><td class="mono">guard_prob</td><td>P</td><td class="num">0.0</td><td class="num">0.5</td><td class="num">0.9</td><td>how often an operator branches</td></tr>
+          <tr><td class="mono">atomic_ratio</td><td>data</td><td class="num">0.85</td><td class="num">0.5</td><td class="num">0.15</td><td>how often expressions touch the tables</td></tr>
+          <tr><td class="mono">max_expr_depth</td><td>data</td><td class="num">3</td><td class="num">4</td><td class="num">5</td><td>how deep the deepest test items go</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      Moving left to right, the skeleton grows richer and expressions reach for
+      the tables less, so the difficulty shifts from the tables to the skeleton.
+      The names carry the <em>intended</em> π; each instance's actual π is
+      measured, and neighbouring presets overlap
+      (<a href="#pi">Data validation</a>).
+    </p>
+  </div>
+
+  <!-- ------------------------------------------------------------ summary -->
+  <h3 id="params">All 25 configuration fields</h3>
+  <p class="muted small">
+    <span class="lay lay--syntax">syntax</span> public rules the agent is given ·
+    <span class="lay lay--interp">interpreter</span> the hidden meaning,
+    <span class="mono">P</span> ·
+    <span class="lay lay--dist">distribution</span> which expressions are drawn
+    from <span class="mono">P</span>. Values in bold differ between presets.
+  </p>
+  <div class="table-scroll">
+    <table class="params">
+      <thead><tr><th>parameter</th><th>pi_low / pi_mid / pi_high</th><th>acts on</th><th>defines</th><th>what it controls</th><th class="num">step</th></tr></thead>
+      <tbody>
+        <tr class="grp"><td colspan="6">value space</td></tr>
+        <tr><td>base</td><td class="vals"><span class="faint">all</span> 17</td><td>values</td><td class="layer"><span class="lay lay--syntax">syntax</span><span class="lay lay--interp">interpreter</span></td><td>digits per position; with n_digits, the set of legal values</td><td class="num">1</td></tr>
+        <tr><td>n_digits</td><td class="vals"><span class="faint">all</span> 3</td><td>values</td><td class="layer"><span class="lay lay--syntax">syntax</span><span class="lay lay--interp">interpreter</span></td><td>digit positions — 17³ = 4913 values</td><td class="num">1</td></tr>
+        <tr><td>value_form</td><td class="vals"><span class="faint">all</span> letter_sep</td><td>values</td><td class="layer"><span class="lay lay--syntax">syntax</span></td><td>how a value is written: <span class="mono">v_m_h_e</span></td><td class="num">1</td></tr>
+        <tr class="grp"><td colspan="6"><span class="skel">structural operators — the skeleton</span></td></tr>
+        <tr><td>n_structural</td><td class="vals"><b>5 / 7 / 9</b></td><td><span class="skel">structural ops</span></td><td class="layer"><span class="lay lay--syntax">syntax</span><span class="lay lay--interp">interpreter</span></td><td>which of <span class="mono">s0…s11</span> exist, as a prefix</td><td class="num">2, 3</td></tr>
+        <tr><td>max_transform_depth</td><td class="vals"><b>0 / 2 / 3</b></td><td><span class="skel">structural ops</span></td><td class="layer"><span class="lay lay--interp">interpreter</span></td><td>how far a meaning can nest <span class="mono">A ; B</span></td><td class="num">3</td></tr>
+        <tr><td>guard_prob</td><td class="vals"><b>0.0 / 0.5 / 0.9</b></td><td><span class="skel">structural ops</span></td><td class="layer"><span class="lay lay--interp">interpreter</span></td><td>chance a meaning is <span class="mono">if … then … else …</span></td><td class="num">3</td></tr>
+        <tr class="grp"><td colspan="6"><span class="table">atomic operators — the tables</span></td></tr>
+        <tr><td>n_unary</td><td class="vals"><span class="faint">all</span> 3</td><td><span class="table">atomic ops</span></td><td class="layer"><span class="lay lay--syntax">syntax</span><span class="lay lay--interp">interpreter</span></td><td>how many <span class="mono">u*</span> tables</td><td class="num">2, 4</td></tr>
+        <tr><td>n_binary</td><td class="vals"><span class="faint">all</span> 2</td><td><span class="table">atomic ops</span></td><td class="layer"><span class="lay lay--syntax">syntax</span><span class="lay lay--interp">interpreter</span></td><td>how many <span class="mono">b*</span> tables</td><td class="num">2, 4</td></tr>
+        <tr><td>d_digit</td><td class="vals"><span class="faint">all</span> 16</td><td><span class="table">atomic ops</span></td><td class="layer"><span class="lay lay--interp">interpreter</span></td><td>dimensions of each digit's shared vector</td><td class="num">1, 4</td></tr>
+        <tr><td>mlp_width</td><td class="vals"><span class="faint">all</span> 64</td><td><span class="table">atomic ops</span></td><td class="layer"><span class="lay lay--interp">interpreter</span></td><td>hidden width — how varied a table's outputs are</td><td class="num">4</td></tr>
+        <tr><td>mlp_temp</td><td class="vals"><span class="faint">all</span> 1.0</td><td><span class="table">atomic ops</span></td><td class="layer"><span class="lay lay--interp">interpreter</span></td><td>pre-activation scale — how rough a table is</td><td class="num">4</td></tr>
+        <tr><td>unary_coupling</td><td class="vals"><span class="faint">all</span> 0.25</td><td><span class="table">atomic ops</span></td><td class="layer"><span class="lay lay--interp">interpreter</span></td><td>α for <span class="mono">u*</span>: distance from digit-wise (None = one joint MLP)</td><td class="num">4</td></tr>
+        <tr><td>binary_coupling</td><td class="vals"><span class="faint">all</span> 0.25</td><td><span class="table">atomic ops</span></td><td class="layer"><span class="lay lay--interp">interpreter</span></td><td>α for <span class="mono">b*</span>: distance from digit-wise</td><td class="num">4</td></tr>
+        <tr><td>decode</td><td class="vals"><span class="faint">all</span> whiten</td><td><span class="table">atomic ops</span></td><td class="layer"><span class="lay lay--interp">interpreter</span></td><td>how an MLP output is rounded back to a value</td><td class="num">4</td></tr>
+        <tr class="grp"><td colspan="6">expression sampling</td></tr>
+        <tr><td>atomic_ratio</td><td class="vals"><b>0.85 / 0.5 / 0.15</b></td><td>both kinds</td><td class="layer"><span class="lay lay--dist">distribution</span></td><td>chance a node picks a table-consuming operator</td><td class="num">6</td></tr>
+        <tr><td>binary_freq</td><td class="vals"><span class="faint">all</span> 0.35</td><td>expressions</td><td class="layer"><span class="lay lay--dist">distribution</span></td><td>chance the root asks for a value rather than a list</td><td class="num">6</td></tr>
+        <tr><td>depth_stop_prob</td><td class="vals"><span class="faint">all</span> 0.15</td><td>expressions</td><td class="layer"><span class="lay lay--dist">distribution</span></td><td>chance a non-root node stops early</td><td class="num">6</td></tr>
+        <tr><td>list_len_range</td><td class="vals"><span class="faint">all</span> (2, 4)</td><td>expressions</td><td class="layer"><span class="lay lay--syntax">syntax</span><span class="lay lay--dist">distribution</span></td><td>legal, and sampled, list-literal lengths</td><td class="num">2, 6</td></tr>
+        <tr><td>max_expr_depth</td><td class="vals"><b>3 / 4 / 5</b></td><td>expressions</td><td class="layer"><span class="lay lay--syntax">syntax</span><span class="lay lay--dist">distribution</span></td><td>legal nesting depth; budget of the <span class="mono">depth</span> split</td><td class="num">2, 8</td></tr>
+        <tr><td>demo_max_depth</td><td class="vals"><span class="faint">all</span> 2</td><td>expressions</td><td class="layer"><span class="lay lay--dist">distribution</span></td><td>seen/unseen depth boundary; also the strict query depth cap</td><td class="num">6, 8</td></tr>
+        <tr class="grp"><td colspan="6">dataset sizes</td></tr>
+        <tr><td>n_demos</td><td class="vals"><span class="faint">all</span> 30</td><td>data</td><td class="layer"><span class="lay lay--dist">distribution</span></td><td>worked examples given for free</td><td class="num">8</td></tr>
+        <tr><td>n_iid · n_comp · n_depth</td><td class="vals"><span class="faint">all</span> 6500 · 2300 · 1200</td><td>data</td><td class="layer"><span class="lay lay--dist">distribution</span></td><td>the 10,000-item hidden test</td><td class="num">8</td></tr>
+        <tr><td>n_val</td><td class="vals"><span class="faint">all</span> 5000</td><td>data</td><td class="layer"><span class="lay lay--dist">distribution</span></td><td>visible validation set, scored in aggregate</td><td class="num">8</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="small muted">
+    Fixed in code rather than configurable: the shape of each of
+    <span class="mono">s0…s11</span>; integer arguments 1–3; the 45% chance of
+    splitting a transform into a sequence; uniform choice of primitive and guard;
+    the 50/50 fold direction; holding out one third of the buildable pairs.
+    Changing any of these means changing the generator.
+  </p>
 </section>
 
 <div class="wrap"><hr></div>
 
-<!-- ====================================================================== PI -->
-<section class="section wrap" id="pi">
-  <h2>π — which half is the difficulty in?</h2>
+<!-- ============================================================== VALIDATION -->
+<section class="section wrap" id="validation">
+  <h2>Data validation</h2>
 
   <p class="section__lede">
+    Once an instance exists, it is measured before any agent touches it: one
+    number that says where its difficulty sits, and a battery of reference
+    oracles that say how far each kind of knowledge can get. Every score an
+    agent later earns is read against these.
+  </p>
+
+  <!-- ---------------------------------------------------------------- pi -->
+  <h3 id="pi">π — which half is the difficulty in?</h3>
+  <p>
     The interpreter is <span class="mono">P = skeleton ∘ tables</span>, exactly
-    two rule sets. Each crippled oracle is the real interpreter with one field
-    swapped, which is what makes π measurable at all.
+    two rule sets. Each crippled oracle is the real interpreter with one half
+    swapped for a fixed baseline, which is what makes π measurable at all.
   </p>
 
   <div class="formula">a_skel = accuracy(true skeleton + identity table)     # only the table is missing
@@ -362,7 +626,9 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
       fixed once and never changed. The <span class="mono">trivial</span>
       skeleton is textbook defaults rather than "do nothing" — if the structural
       operators did nothing, the atomic operators would never be invoked and the
-      baseline would silently ablate the table as well.
+      baseline would silently ablate the table as well. π is the one place a
+      lenient, per-digit grader is used; it keeps both losses from saturating
+      near 1. Every score below is exact match.
     </p>
     <p>
       <b>A preset is a sampler, not a condition.</b> Five of twenty
@@ -389,24 +655,72 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
       </tbody>
     </table>
   </div>
-  <p class="muted" style="font-size:.85rem">
-    20 seeds per preset, full 10<sup>4</sup> test sets, 60/60 generating.
-    <code>atomic_ratio</code> is the primary knob — holding everything else
-    fixed and moving only it sweeps π from 0.36 to 0.77 monotonically.
+  <p class="small muted">
+    20 seeds per preset, full 10<sup>4</sup> test sets, 60/60 generating; skeleton
+    ceiling is the median. <code>atomic_ratio</code> is the primary knob — holding
+    everything else fixed and moving only it sweeps π from 0.36 to 0.77
+    monotonically.
   </p>
-</section>
 
-<div class="wrap"><hr></div>
+  <!-- ----------------------------------------------------------- metrics -->
+  <h3>How a score is reported</h3>
+  <p>Every oracle and every arm reports the same four things, by exact match:</p>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>metric</th><th>what it is</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">overall</td><td>accuracy over the scored items</td></tr>
+        <tr><td class="mono">by_split</td><td>the same per test split — <span class="mono">iid</span>, <span class="mono">comp</span>, <span class="mono">depth</span></td></tr>
+        <tr><td class="mono">tail</td><td>accuracy on items needing a table entry that was never seen or bought</td></tr>
+        <tr><td class="mono">headroom</td><td><span class="mono">(score − skeleton ceiling) / (1 − skeleton ceiling)</span>: 0 means no better than knowing every structural rule and no table entry, 1 is perfect, and negative is kept, not clipped</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>
+    Oracles are scored on a <b>paired subset</b>: 500 test items per instance,
+    stratified by split and seed-fixed, so every oracle on an instance answers
+    exactly the same items. Arms are scored on the full 10,000 — the size that
+    gives a standard error near 0.5%, enough to separate arms by 1–2 points.
+  </p>
 
-<!-- ================================================================= CEILING -->
-<section class="section wrap" id="ceiling">
-  <h2>How far weights reach, as a function of what they saw<span class="tag tag--done">measured</span></h2>
+  <!-- ------------------------------------------------------------ oracles -->
+  <h3>The reference oracles</h3>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>oracle</th><th>what it knows</th><th>measures</th><th>cost</th><th>status</th></tr></thead>
+      <tbody>
+        <tr><td class="mono skel">skeleton</td><td>the true skeleton over identity tables</td><td>how far structure alone gets</td><td>CPU</td><td>all 15 frozen instances</td></tr>
+        <tr><td class="mono table">table</td><td>the true tables under the textbook skeleton</td><td>how far the tables alone get</td><td>CPU</td><td>all 15 frozen instances</td></tr>
+        <tr><td class="mono">perfect</td><td>both true halves</td><td>that the instance is solvable and scoring is wired (1.000 by construction)</td><td>CPU</td><td>all 15 frozen instances</td></tr>
+        <tr><td class="mono">weights</td><td>the true skeleton over a student's learned tables, trained on a fraction of the cells</td><td>knowledge held in weights, at a given coverage</td><td>GPU</td><td>being re-measured</td></tr>
+        <tr><td class="mono">A0′</td><td>a frontier model with purchased facts in context, answering end to end</td><td>knowledge held in context, at a given coverage</td><td>API</td><td>deferred</td></tr>
+      </tbody>
+    </table>
+  </div>
 
-  <p class="section__lede">
-    A third oracle — true skeleton over tables a student learned — puts a top on
-    the band the arms operate in. It depends entirely on how much of the table
-    the student was allowed to see, which is the parameter that turns a number
-    into a curve.
+  <h3>The 15 frozen instances</h3>
+  <p>
+    The benchmark is fifteen instances, five per band, spread evenly across a
+    narrow π window at the centre of each band. Their cheap ceilings, from
+    <code>docs/benchmark/reference_ceilings.json</code>:
+  </p>
+  <div class="fig">
+    <div class="fig__body" id="fig-frozen"></div>
+  </div>
+  <p class="figcap"><b>Figure 7:</b> skeleton and table ceilings of the 15 frozen instances on their paired 500-item subsets, against measured π. Amber bands are the selection windows.</p>
+  <p class="small muted">
+    As π rises the skeleton ceiling climbs and the table ceiling falls: the two
+    halves trade places along the axis, which is what π was built to show. Near
+    π = 0.5 they meet — on <span class="mono">mid_3</span>, the instance the
+    data-generation walkthrough follows, both sit near 0.24.
+  </p>
+
+  <!-- ----------------------------------------------------- weights reach -->
+  <h3>How far weights reach, as a function of what they saw</h3>
+  <p>
+    The weights oracle puts a top on the band the arms operate in. It depends
+    entirely on how much of the table the student was allowed to see, which is
+    the parameter that turns a number into a curve.
   </p>
 
   <div class="table-scroll">
@@ -432,9 +746,18 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
       </tbody>
     </table>
   </div>
-  <p class="muted" style="font-size:.85rem">
+  <p class="small muted">
     Qwen3-1.7B, full fine-tune, lr 1e-4, 6000 steps, on one instance's tables
-    across all five atomic operators. Skeleton ceiling on the same items: 0.248.
+    across all five atomic operators, scored on the paired subset of
+    <span class="mono">pi_mid</span> instance seed 1001. Skeleton ceiling on the
+    same items: 0.248.
+  </p>
+  <p class="note">
+    Measured on <span class="mono">pi_mid</span> as it stood before 2026-09-30
+    (5 structural operators, since raised to 7), with the student trained on
+    an earlier, private prompt format. Numbers on the current frozen instances
+    are being re-measured; the shape of the curve, not the exact figures, is
+    what carries over.
   </p>
 
   <div class="callout">
@@ -460,110 +783,21 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
       diagram.
     </p>
   </div>
-</section>
 
-<div class="wrap"><hr></div>
-
-<!-- =============================================================== SITUATION -->
-<section class="section wrap" id="situation">
-  <h2>The agent's situation</h2>
-  <div class="prose">
-    <p>
-      A run has two phases. In <b>practice</b> the agent gets the syntax and 30
-      worked demos for free, plus a visible validation set and a metered query
-      oracle, and must buy everything else. In the <b>final</b> phase the oracle
-      is gone: the hidden test set is revealed and the agent commits its answers
-      exactly once.
-    </p>
-  </div>
-
-  <div class="grid grid--3">
-    <div class="card">
-      <span class="card__key">free</span>
-      <h3>Syntax spec + 30 demos</h3>
-      <p>Operator names are opaque — <span class="mono">s0</span>,
-         <span class="mono">u2</span> — so naming priors leak nothing.</p>
-    </div>
-    <div class="card">
-      <span class="card__key">metered</span>
-      <h3>Query oracle</h3>
-      <p>Evaluate expressions against the hidden interpreter. Malformed queries
-         cost the same as well-formed ones.</p>
-    </div>
-    <div class="card">
-      <span class="card__key">final</span>
-      <h3>One committed answer</h3>
-      <p>The held-out test is revealed with no answers and no oracle; the agent
-         commits once with <span class="mono">final_answer</span> and the run ends.</p>
-    </div>
-  </div>
-
-  <h3>Splits</h3>
-  <div class="table-scroll">
-    <table>
-      <thead><tr><th>Split</th><th class="num">n</th><th>What it tests</th></tr></thead>
-      <tbody>
-        <tr><td class="mono">iid</td><td class="num">6500</td>
-            <td>in-distribution, held-out pairs forbidden</td></tr>
-        <tr><td class="mono">comp</td><td class="num">2300</td>
-            <td>compositional generalisation: requires a held-out operator pair</td></tr>
-        <tr><td class="mono">depth</td><td class="num">1200</td>
-            <td>deeper than anything in the demos</td></tr>
-        <tr><td class="mono">tail</td><td>derived</td>
-            <td>items whose table entries <em>this run</em> never bought — derived
-                per run, because "never seen" is only knowable afterwards</td></tr>
-      </tbody>
-    </table>
-  </div>
-</section>
-
-<div class="wrap"><hr></div>
-
-<!-- ==================================================================== ARMS -->
-<section class="section wrap" id="arms">
-  <h2>The arms<span class="tag tag--todo">in progress</span></h2>
-  <p class="section__lede">
-    Two arms for the same purchased knowledge, compared at equal stop
-    conditions. An arm is defined by which tools it is given, enforced in the
-    harness rather than by asking the model to abstain.
+  <h3>Weights and context are not measured the same way</h3>
+  <p>
+    The two partial-coverage oracles differ in more than where the knowledge
+    lives, and those differences have to be reconciled before "weights versus
+    context at the same coverage" is a fair comparison:
   </p>
-
   <div class="table-scroll">
     <table>
-      <thead>
-        <tr><th>Arm</th><th>What it has</th><th>Status</th></tr>
-      </thead>
+      <thead><tr><th></th><th>knowledge lives in</th><th>trained or shown</th><th>composition</th></tr></thead>
       <tbody>
-        <tr><td class="mono">no_train</td><td>the frontier model only</td>
-            <td><span class="tag tag--todo">pilot in progress</span></td></tr>
-        <tr><td class="mono">train</td>
-            <td>the frontier model <b>plus</b> a trainable Qwen3-1.7B student it
-                builds a dataset for, fine-tunes, and runs inference with</td>
-            <td><span class="tag tag--todo">pilot in progress</span></td></tr>
+        <tr><td class="mono">weights</td><td>a student's weights</td><td>single table cells, <span class="mono">u0(v_…) = v_…</span></td><td>given: the true skeleton runs over the student's tables</td></tr>
+        <tr><td class="mono">A0′</td><td>the frontier's context</td><td>whole purchased expressions with their answers</td><td>done by the frontier, in context</td></tr>
       </tbody>
     </table>
-  </div>
-
-  <div class="placeholder">
-    <p>
-      <b>Arm results are not published yet, deliberately.</b> Protocol v2
-      replaced the earlier explore/prepare/seal design and its four containers
-      (A2/A4/A6/A7); pilot calibration of the caps is in progress before the
-      grid runs.
-    </p>
-    <p>
-      Two harness asymmetries that would have contaminated the old comparison
-      are resolved by v2's design. Self-assessment is uniform — both arms submit
-      to the same visible validation set for an aggregate score, rather than one
-      arm running an evaluate loop the other lacked — and feedback is
-      aggregate-only. The validation set is drawn from the
-      <span class="mono">iid</span> distribution, not the agent's own purchases,
-      and every report carries the validation-vs-test gap that explains a
-      miscalibrated self-estimate.
-    </p>
-    <p>
-      Both arms run at the same caps, paired on the instance.
-    </p>
   </div>
 </section>
 
@@ -571,98 +805,127 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
 
 <!-- ================================================================ PROTOCOL -->
 <section class="section wrap" id="protocol">
-  <h2>Evaluation protocol<span class="tag tag--todo">being settled</span></h2>
-  <div class="placeholder">
+  <h2>Evaluation protocol</h2>
+
+  <p class="section__lede">
+    A run has two phases and compares two arms at equal stop conditions. The
+    agent decides how to spend its budget, when to stop practising and whether
+    to train; the harness only enforces the caps and meters the spend.
+  </p>
+
+  <div class="phases">
+    <div class="phase">
+      <span class="phase__k">phase 1</span>
+      <h3>Practice</h3>
+      <p class="phase__given"><b>Given free:</b> the syntax spec, 30 worked demos, and a visible validation set of 5,000 expressions without answers.</p>
+      <ul>
+        <li><code>query</code> — evaluate expressions against <span class="mono">P</span>. Metered, cap Q = 1000. Malformed queries are charged; queries that would read a validation or test item are refused and not charged.</li>
+        <li><code>submit</code> — score an answer file on the validation set. Up to 20 times; returns only <span class="mono">overall</span> and a by-depth breakdown, never per item or per split.</li>
+        <li><code>check_answers</code> — a free legality check of an answer file.</li>
+        <li><code>finish_practice</code> — stop early.</li>
+        <li class="muted">train arm only: <code>build_dataset</code>, <code>train</code>, <code>student_infer</code>.</li>
+      </ul>
+      <p class="phase__end">Ends at the 20th submit, on <code>finish_practice</code>, after 100 turns, at the $300 safety line, or after 3 idle turns.</p>
+    </div>
+    <div class="phase__arrow" aria-hidden="true">→</div>
+    <div class="phase">
+      <span class="phase__k">phase 2</span>
+      <h3>Final</h3>
+      <p class="phase__given"><b>Revealed:</b> the hidden 10,000-item test (<span class="mono">iid</span>, <span class="mono">comp</span>, <span class="mono">depth</span>) plus per-op probe items, with no answers. The oracle is gone.</p>
+      <ul>
+        <li><code>check_answers</code> — legality check against the test file.</li>
+        <li><code>final_answer</code> — commit once. An illegal file is not committed and may be fixed; a legal one ends the run and is what gets scored.</li>
+        <li class="muted">train arm only: <code>student_infer</code>, to answer the test with a trained student.</li>
+      </ul>
+      <p class="phase__end">At most 30 turns. The agent never sees a test score.</p>
+    </div>
+  </div>
+
+  <h3>The two arms</h3>
+  <p>
+    The arms differ in exactly one thing: whether a small trainable student is
+    present. It is enforced by which tools exist in each phase, not by asking the
+    model to abstain.
+  </p>
+  <div class="table-scroll">
+    <table class="matrix-tools">
+      <thead>
+        <tr><th>tool</th><th>no_train · practice</th><th>no_train · final</th><th>train · practice</th><th>train · final</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="mono">query</td><td>✓</td><td>—</td><td>✓</td><td>—</td></tr>
+        <tr><td class="mono">submit</td><td>✓</td><td>—</td><td>✓</td><td>—</td></tr>
+        <tr><td class="mono">check_answers</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td></tr>
+        <tr><td class="mono">finish_practice</td><td>✓</td><td>—</td><td>✓</td><td>—</td></tr>
+        <tr><td class="mono">build_dataset</td><td>—</td><td>—</td><td class="train">✓</td><td>—</td></tr>
+        <tr><td class="mono">train</td><td>—</td><td>—</td><td class="train">✓</td><td>—</td></tr>
+        <tr><td class="mono">student_infer</td><td>—</td><td>—</td><td class="train">✓</td><td class="train">✓</td></tr>
+        <tr><td class="mono">final_answer</td><td>—</td><td>✓</td><td>—</td><td>✓</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="small muted">
+    The train arm's student is a Qwen3-1.7B model by default (the base model is
+    a parameter). <code>build_dataset</code> uses only what the agent has bought;
+    <code>train</code> fine-tunes under a GPU-seconds budget (1800 s per call,
+    7200 s in total) that is metered like any other spend; students can be
+    continued or kept side by side.
+  </p>
+
+  <h3>Scoring a run</h3>
+  <div class="prose">
     <p>
-      Scoring is exact match, one path for every arm, so a difference in the
-      harness cannot masquerade as a difference in the container. Every score
-      now ships beside the skeleton-only and table-only ceilings computed on the
-      same items, because a raw number is not comparable across splits or
-      instances — the skeleton ceiling alone ranges 0.148 to 0.744 across seeds.
+      The committed answers are scored by exact match against all 10,000 test
+      items, with the same four metrics as the oracles, plus a by-depth
+      breakdown and <span class="mono">headroom</span> on every split. A run
+      that ends without committing has its last legality-checked test file
+      committed for it; with neither, it scores zero. Per-op probes are scored apart from
+      <span class="mono">overall</span>, each op split into cells the run did
+      and did not buy. The report also carries the validation-versus-test gap —
+      never shown to the agent mid-run — and the run's spend: queries,
+      submissions, turns, model tokens and GPU seconds, all through one ledger.
     </p>
-    <p>
-      Dev-time and test-time scoring share one path, so the number an agent
-      steers on and the number it is graded by cannot drift apart — and the gap
-      between them is reported rather than hidden.
-    </p>
-    <p>
-      Still to fix here: how many items each arm is scored on (pairing every arm
-      on the same subset halves the standard error on a difference), and the
-      query cap Q, which now also decides how clean the
-      <span class="mono">tail</span> split is.
-    </p>
+  </div>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>split</th><th class="num">n</th><th>what it tests</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">iid</td><td class="num">6500</td><td>in-distribution, held-out pairs forbidden</td></tr>
+        <tr><td class="mono">comp</td><td class="num">2300</td><td>compositional generalisation: requires a held-out operator pair</td></tr>
+        <tr><td class="mono">depth</td><td class="num">1200</td><td>deeper than anything in the demos</td></tr>
+        <tr><td class="mono">tail</td><td>derived</td><td>items whose table entries <em>this run</em> never bought — derived per run, because "never seen" is only knowable afterwards</td></tr>
+      </tbody>
+    </table>
   </div>
 </section>
 
 <div class="wrap"><hr></div>
 
-<!-- ============================================================= EXPERIMENTS -->
-<section class="section wrap" id="experiments">
-  <h2>Experiments<span class="tag tag--todo">planned</span></h2>
+<!-- ================================================================= RESULTS -->
+<section class="section wrap" id="results">
+  <h2>Results<span class="tag tag--todo">not yet published</span></h2>
+
+  <p class="section__lede">
+    No arm results are published yet. Pilot calibration of the caps is in
+    progress; both arms will then run on the 15 frozen instances at the same
+    caps.
+  </p>
+
   <div class="placeholder">
+    <p><b>What will be reported here.</b></p>
     <p>
-      The main figure is a (π, Q) phase diagram: where does each container
-      succeed, as a function of where the difficulty sits and how much of the
-      table the agent could see. Instances are sampled along a continuous π axis
-      rather than grouped into three settings, since the presets' measured
-      ranges overlap.
+      The main figure is a (π, Q) phase diagram: where each arm succeeds, as a
+      function of where the difficulty sits and how much of the table the agent
+      could buy. Instances lie along a continuous π axis rather than in three
+      groups, since the presets' ranges overlap.
     </p>
     <p>
-      Also planned: a variance decomposition separating "some interpreters are
-      harder" from "this run got lucky" — the two seeds are kept apart in the
-      config for exactly that — and a second task where deployment is expensive
-      by construction, which is what carries the amortisation argument Glyph
-      cannot.
+      Alongside it: the train arm against the no_train arm at matched coverage,
+      read as headroom over the reference ceilings; whether the agent's own
+      choice to train, or not, was the right one; and a variance decomposition
+      separating "some interpreters are harder" from "this run got lucky".
     </p>
   </div>
-</section>
-
-<div class="wrap"><hr></div>
-
-<!-- =================================================================== START -->
-<section class="section wrap" id="start">
-  <h2>Quick start</h2>
-
-<pre><code>pip install -e ".[dev]"
-pytest -m "not slow"                                   # 194 tests (slow = real-API + GPU)
-python -c "from glyph.data import PRESETS, generate; print(generate(1001, PRESETS['pi_mid']).measured_pi())"
-
-# run the protocol (real, metered: needs the Agent SDK, gateway, bwrap, Vertex creds)
-python -m glyph.v2 run --arm no_train --preset pi_mid --seed 1001
-
-python scripts/bench_scan.py --presets pi_mid --seeds 20    # π and the ceilings
-python scripts/table_ceiling.py --seen-frac 0.10            # how far weights reach
-python scripts/run_a0p.py --n-facts 2000 --n-test 500       # the saturated frontier</code></pre>
-
-  <h3>Layout</h3>
-<pre><code>src/glyph/
-├── data/          <b>the data layer — makes an instance, never scores one</b>
-│   ├── config.py      GlyphConfig + presets (pi_low / pi_mid / pi_high / smoke)
-│   ├── grammar.py     public syntax: AST, value codec, printer, parser, checker
-│   ├── semantics.py   combinator grammar → skeleton; the trivial-skeleton baseline
-│   ├── tables.py      digit embeddings, frozen MLPs, the identity-table baseline
-│   ├── interp.py      P = Interpreter(skeleton, tables); lookup logging
-│   ├── instance.py    generation, demos, query oracle, splits, tail derivation
-│   └── measure.py     π via two crippled oracles
-├── v2/            protocol v2 — session · tools · mcp · harness · gateway
-│                  · sandbox/bridge · student · ledger · answers · report
-├── train/         full fine-tuning · vLLM inference
-└── seal.py        scoring primitives — headroom, score_answers</code></pre>
-
-  <p class="muted" style="font-size:.88rem">
-    Nothing in <code>data/</code> imports from outside it, and
-    <code>tests/test_data_boundary.py</code> holds that line. The arrow runs one
-    way — the protocol layer (<code>v2/</code>) imports the generator, never the
-    reverse — so the generator can be lifted whole into a second task
-    without dragging along an evaluation protocol written for this one.
-  </p>
-
-  <p class="muted" style="font-size:.88rem">
-    <code>docs/progress.md</code> is the append-only record of what was run and
-    what it showed, corrections included.
-    <code>docs/open_questions.md</code> is the standing list of what is still
-    undecided, edited in place, with one GitHub issue per item.
-  </p>
 </section>
 
 <div class="wrap"><hr></div>
@@ -681,6 +944,22 @@ python scripts/run_a0p.py --n-facts 2000 --n-test 500       # the saturated fron
   </div>
 </section>
 
+<div class="wrap"><hr></div>
+
+<!-- ============================================================== REFERENCES -->
+<section class="section wrap" id="references">
+  <h2>References</h2>
+  <ol class="refs">
+    <li id="ref-1">
+      Matej Balog, Alexander L. Gaunt, Marc Brockschmidt, Sebastian Nowozin and
+      Daniel Tarlow.
+      <a href="https://arxiv.org/abs/1611.01989">DeepCoder: Learning to Write Programs</a>.
+      ICLR 2017.
+      <a class="refs__back" href="#cite-1" aria-label="Back to the text">↩</a>
+    </li>
+  </ol>
+</section>
+
 </main>
 
 <footer class="footer">
@@ -692,6 +971,8 @@ python scripts/run_a0p.py --n-facts 2000 --n-test 500       # the saturated fron
   </div>
 </footer>
 
-<script src="assets/js/main.js"></script>
+<script src="assets/js/example-data.js?v=6a6dfb92e8"></script>
+<script src="assets/js/main.js?v=ea7fc422a4"></script>
+<script src="assets/js/pipeline.js?v=1c49c8eb5a"></script>
 </body>
 </html>
