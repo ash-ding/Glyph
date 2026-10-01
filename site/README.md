@@ -9,9 +9,11 @@ site/
 ├── 404.html
 ├── .nojekyll             serve files starting with _ verbatim
 └── assets/
-    ├── css/style.css     design tokens + layout (light/dark)
-    ├── js/main.js        theme toggle, copy buttons, nav highlighting
-    └── img/              figures, teaser, og.png
+    ├── css/style.css         design tokens + layout (white, light only)
+    ├── js/main.js            copy buttons, nav highlighting
+    ├── js/pipeline.js        the step-through figures in "Data generation"
+    ├── js/example-data.js    the running example those figures show (generated)
+    └── img/                  figures, teaser, og.png
 ```
 
 ## Preview locally
@@ -33,7 +35,7 @@ Run workflow**).
 deployment* → Source → **GitHub Actions**. Until that is set, the workflow run
 fails at the deploy step.
 
-The site then lives at <https://ash-ding.github.io/glyph/>.
+The site then lives at <https://ash-ding.github.io/Glyph/>.
 
 ## Editing
 
@@ -41,9 +43,19 @@ The site then lives at <https://ash-ding.github.io/glyph/>.
   (`<!-- ===== ABSTRACT ===== -->`). Points still to be decided are marked
   `TODO`: the paper link, the author list, the phase-diagram figure, the
   results table, and the BibTeX entry.
-- **Look** — every colour is a token at the top of `style.css`, defined three
-  times (light, `prefers-color-scheme: dark`, explicit `[data-theme="dark"]`).
-  Change a token, not a rule.
+- **Look** — every colour is a token at the top of `style.css`. Blue means the
+  skeleton (structural operators), orange means the tables (atomic
+  operators); everything else is greyscale. Change a token, not a rule.
+- **The running example** — `assets/js/example-data.js` is exported from the
+  generator, so every number in the "Data generation" walkthrough is real.
+  Regenerate it after any change to the data layer:
+
+  ```bash
+  PYTHONPATH=src python scripts/export_site_example.py > site/assets/js/example-data.js
+  ```
+
+  The script asserts that its re-derived sampling decisions and evaluation
+  trace agree with the real code paths, and fails if they do not.
 - **Figures** — drop files in `assets/img/` and swap the `.placeholder` div for
   an `<img>`. SVG is preferred so plots stay sharp and can pick up the theme.
 - **Social preview** — add `assets/img/og.png` (1200×630) and uncomment the
@@ -53,4 +65,4 @@ The site then lives at <https://ash-ding.github.io/glyph/>.
 
 Put the hostname in a `site/CNAME` file (one line, no scheme) and set it under
 Settings → Pages. The `404.html` links assume the project-page path prefix
-`/glyph/`; on a custom domain at the apex, change those two paths to `/`.
+`/Glyph/` (case-sensitive); on a custom domain at the apex, change those two paths to `/`.
