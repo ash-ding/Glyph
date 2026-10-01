@@ -565,4 +565,90 @@
     body.appendChild(el("p", { class: "mono small", text: "π = L_skel / (L_skel + L_table) = " + Ls.toFixed(3) + " / " +
       (Ls + Lt).toFixed(3) + " = " + pi.pi.toFixed(3) + "   — mid_3 sits almost exactly between the two halves." }));
   })();
+
+  /* ========================================= Validation: frozen instances */
+  (function () {
+    var body = document.getElementById("fig-frozen");
+    if (!body || !D.frozen) return;
+    var F = D.frozen;
+    var W = 640, H = 346, m = { l: 46, r: 118, t: 34, b: 44 };
+    var x = function (p) { return m.l + (p - 0.1) / 0.8 * (W - m.l - m.r); };
+    var y = function (a) { return m.t + (1 - a) * (H - m.t - m.b); };
+    var s = sv("svg", { class: "chart", viewBox: "0 0 " + W + " " + H, role: "img",
+      "aria-label": "Skeleton and table ceilings of the 15 frozen instances against measured π" });
+
+    [0, 0.25, 0.5, 0.75, 1].forEach(function (t) {
+      s.appendChild(sv("line", { class: "grid", x1: m.l, x2: W - m.r, y1: y(t), y2: y(t) }));
+      s.appendChild(sv("text", { class: "tick", x: m.l - 8, y: y(t) + 4, "text-anchor": "end", text: t.toFixed(2) }));
+    });
+    [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8].forEach(function (t) {
+      s.appendChild(sv("text", { class: "tick", x: x(t), y: H - m.b + 18, "text-anchor": "middle", text: t.toFixed(1) }));
+    });
+    s.appendChild(sv("text", { class: "axis", x: (m.l + W - m.r) / 2, y: H - 6, "text-anchor": "middle", text: "measured π  (skeleton's share of the difficulty)" }));
+    s.appendChild(sv("text", { class: "axis", x: m.l - 30, y: 14, text: "ceiling (overall accuracy)" }));
+
+    [["low", 0.2, 0.3], ["mid", 0.45, 0.53], ["high", 0.7, 0.8]].forEach(function (b) {
+      s.appendChild(sv("rect", { class: "band-win", x: x(b[1]), y: m.t, width: x(b[2]) - x(b[1]), height: H - m.t - m.b }));
+      s.appendChild(sv("text", { class: "tick", x: (x(b[1]) + x(b[2])) / 2, y: m.t + 12, "text-anchor": "middle", text: b[0] }));
+    });
+
+    var tip = el("div", { class: "chart-tip", role: "status" });
+    function show(r, ev) {
+      tip.textContent = r.id + " · " + r.preset + " seed " + r.seed + " · π " + r.pi.toFixed(3) +
+        " · skeleton " + r.skeleton.overall.toFixed(3) + " · table " + r.table.overall.toFixed(3);
+      tip.classList.add("is-on");
+      var box = body.getBoundingClientRect(), w = tip.offsetWidth;
+      tip.style.left = Math.max(0, Math.min(box.width - w - 4, ev.clientX - box.left - w / 2)) + "px";
+      tip.style.top = Math.max(0, ev.clientY - box.top - 46) + "px";
+    }
+    function hide() { tip.classList.remove("is-on"); }
+
+    F.forEach(function (r) {
+      var g = sv("g", { class: "inst", tabindex: "0", "aria-label": r.id + ", π " + r.pi.toFixed(3) +
+        ", skeleton ceiling " + r.skeleton.overall.toFixed(3) + ", table ceiling " + r.table.overall.toFixed(3) });
+      g.appendChild(sv("line", { class: "pair", x1: x(r.pi), x2: x(r.pi), y1: y(r.skeleton.overall), y2: y(r.table.overall) }));
+      g.appendChild(sv("circle", { class: "dot dot--skel", cx: x(r.pi), cy: y(r.skeleton.overall), r: 5 }));
+      g.appendChild(sv("circle", { class: "dot dot--table", cx: x(r.pi), cy: y(r.table.overall), r: 5 }));
+      g.appendChild(sv("rect", { class: "hit", x: x(r.pi) - 8, y: m.t, width: 16, height: H - m.t - m.b }));
+      g.addEventListener("mousemove", function (ev) { show(r, ev); });
+      g.addEventListener("mouseleave", hide);
+      g.addEventListener("focus", function () {
+        var b = g.getBoundingClientRect(); show(r, { clientX: b.left + b.width / 2, clientY: b.top + 30 });
+      });
+      g.addEventListener("blur", hide);
+      s.appendChild(g);
+    });
+
+    var last = F[F.length - 1];
+    s.appendChild(sv("text", { class: "lab lab--skel", x: x(last.pi) + 12, y: y(last.skeleton.overall) + 4, text: "skeleton ceiling" }));
+    s.appendChild(sv("text", { class: "lab lab--table", x: x(last.pi) + 12, y: y(last.table.overall) + 4, text: "table ceiling" }));
+    var ex3 = F.filter(function (r) { return r.id === D.instance.frozen_id; })[0];
+    if (ex3) {
+      var lo = Math.min(ex3.skeleton.overall, ex3.table.overall);
+      s.appendChild(sv("line", { class: "leader", x1: x(ex3.pi) - 2, y1: y(lo) + 7, x2: x(ex3.pi) - 10, y2: y(0.1) - 4 }));
+      s.appendChild(sv("text", { class: "tick", x: x(ex3.pi) - 12, y: y(0.1) + 6, "text-anchor": "end", text: ex3.id + " (walkthrough)" }));
+    }
+
+    body.appendChild(el("div", { class: "chart-wrap" }, [s, tip]));
+    body.appendChild(el("div", { class: "legend" }, [
+      el("span", {}, [el("i", { class: "sw sw--skel" }), txt("skeleton ceiling — true skeleton, identity tables")]),
+      el("span", {}, [el("i", { class: "sw sw--table" }), txt("table ceiling — textbook skeleton, true tables")]),
+      el("span", {}, [el("i", { class: "sw sw--win" }), txt("selection window")])
+    ]));
+
+    var t = el("table");
+    t.appendChild(el("thead", {}, [el("tr", {}, ["instance", "preset", "seed", "π", "skeleton", "table", "perfect"].map(function (h, k) {
+      return el("th", { class: k >= 2 ? "num" : "", text: h });
+    }))]));
+    var tb = el("tbody");
+    F.forEach(function (r) {
+      tb.appendChild(el("tr", {}, [el("td", { class: "mono", text: r.id }), el("td", { class: "mono", text: r.preset }),
+        el("td", { class: "num", text: String(r.seed) }), el("td", { class: "num", text: r.pi.toFixed(3) }),
+        el("td", { class: "num", text: r.skeleton.overall.toFixed(3) }), el("td", { class: "num", text: r.table.overall.toFixed(3) }),
+        el("td", { class: "num", text: r.perfect.overall.toFixed(3) })]));
+    });
+    t.appendChild(tb);
+    body.appendChild(el("details", {}, [el("summary", { class: "small", text: "Table view" }),
+      el("div", { class: "table-scroll" }, [t])]));
+  })();
 })();

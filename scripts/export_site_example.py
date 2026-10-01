@@ -329,7 +329,26 @@ crippled = {"skeleton_only": render_out(skel_only.eval(expr)),
             "table_only": render_out(tab_only.eval(expr)), "gold": gold}
 
 
+# ------------------------------------------------- frozen instance battery
+with open("docs/benchmark/frozen_instances.json") as f:
+    frozen_manifest = json.load(f)["instances"]
+with open("docs/benchmark/reference_ceilings.json") as f:
+    ceilings = json.load(f)
+frozen = []
+for entry in frozen_manifest:
+    c = ceilings[entry["id"]]
+    frozen.append({
+        "id": entry["id"], "band": entry["band"], "preset": entry["preset"], "seed": entry["seed"],
+        "pi": round(entry["measured_pi"], 4),
+        **{o: {"overall": round(c[o]["overall"], 4),
+               "by_split": {k: round(v, 4) for k, v in c[o]["by_split"].items()}}
+           for o in ("skeleton", "table", "perfect")},
+    })
+assert any(r["id"] == FROZEN_ID and r["seed"] == SEED and r["preset"] == PRESET for r in frozen)
+
+
 data = {
+    "frozen": frozen,
     "instance": {"preset": PRESET, "seed": SEED, "frozen_id": FROZEN_ID,
                  "n_values": cfg.n_values, "pi": {k: round(float(v), 4) for k, v in pi.items()}},
     "presets": presets,
