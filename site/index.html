@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <title>Glyph — a hidden-semantics DSL execution benchmark</title>
-<meta name="description" content="A hidden-semantics DSL execution benchmark that evaluates how well frontier agents can build and use their own tools.">
+<meta name="description" content="A hidden-semantics DSL execution benchmark that evaluates how well frontier agents can build (train) and use (interact with) another model as their own tool.">
 
 <!-- Social cards. Replace the URL below with the deployed page URL, and drop
      an image at assets/img/og.png (1200x630) to enable the preview image. -->
@@ -48,19 +48,20 @@
   <h1 class="hero__title"><img class="hero__mark" src="assets/img/logo.svg?v=e699a42fc0" alt="" width="64" height="64">Glyph</h1>
   <p class="hero__lede">
     A hidden-semantics DSL execution benchmark that evaluates how well frontier
-    agents can build and use their own tools.
+    agents can build (train) and use (interact with) another model as their own
+    tool.
   </p>
 
   <ol class="rqs">
     <li>
       <span class="rq__k">RQ1</span>
       <p>Given a problem that inference-time scaling alone cannot solve, can a
-         frontier agent identify the gap and train a small model as its own
-         tool?</p>
+         frontier agent identify the gap and choose to train another model as its
+         own tool?</p>
     </li>
     <li>
       <span class="rq__k">RQ2</span>
-      <p>How well can the frontier model use that tool?</p>
+      <p>How well can the frontier model build and use that tool?</p>
     </li>
   </ol>
 </header>
