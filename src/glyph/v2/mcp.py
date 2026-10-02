@@ -51,11 +51,12 @@ _DESCRIPTIONS = {
               "characters (e.g. 'a1b2c3d4'). A new id starts a fresh student "
               "from the base model; an existing id continues training that "
               "student from its latest checkpoint. Several students may "
-              "coexist. Returns a checkpoint_id (format ck_xxxxxxxx) to pass "
-              "back verbatim."),
+              "coexist. Returns a checkpoint_id in the format "
+              "<student_id>_ck_xxxxxxxx, to pass back verbatim."),
     "infer_model": ("Run inference with a trained student (train arm). "
-                      "checkpoint accepts 'base', a ck_xxxxxxxx checkpoint_id "
-                      "exactly as returned by train, or an 8-hex student_id "
+                      "checkpoint accepts 'base', a checkpoint_id exactly as "
+                      "returned by train_model (<student_id>_ck_xxxxxxxx), "
+                      "or an 8-hex student_id "
                       "(meaning that student's latest checkpoint)."),
     "submit_final_answer": "Commit the final held-out-test answers and end the run.",
 }

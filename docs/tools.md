@@ -109,9 +109,10 @@ characters (`^[0-9a-f]{8}$`, e.g. `a1b2c3d4`); anything else is rejected with
 a structured error. A new id starts a fresh student from the base model, an
 existing id continues training that student from its latest checkpoint, and
 students coexist. Each `train_model` call returns a `checkpoint_id` in the fixed
-format `ck_xxxxxxxx` (8 hex, hashed from the lineage position), which must be
+format `<student_id>_ck_xxxxxxxx` (owner prefix + 8 hex hashed from the
+lineage position, so names are stable against other students' interleaving), which must be
 echoed back verbatim. `infer_model`'s `checkpoint` accepts `"base"`, a
-`ck_xxxxxxxx` checkpoint_id, or an 8-hex student_id (that student's latest
+`<student_id>_ck_xxxxxxxx` checkpoint_id, or an 8-hex student_id (that student's latest
 checkpoint) — the three forms are disjoint by construction, so resolution is
 unambiguous; malformed or unknown references return a structured error.
 
