@@ -159,7 +159,7 @@ skeleton 组合。（真正的 frontier 调用是后续的 `[API]` 步骤；模�
 | `instance_seed` | `1001` | `generate()` 的种子 |
 | `instance_id` | `None` | 设了就用固化 manifest 实例（校验 fingerprint） |
 | `model` | `"claude-opus-4-8"` | frontier 模型（网关处锁定） |
-| `student_model` | `"Qwen/Qwen3-1.7B"` | train arm 的本地 student（与 `model` 不同） |
+| `student_model` | `"Qwen/Qwen3-0.6B"` | train arm 的本地 student（与 `model` 不同） |
 | `q_cap` | `1000` | 总查询预算 |
 | `submit_cap` | `20` | 强制切到 final 前的验证提交次数 |
 | `tp` | `100` | practice 阶段轮数上限 |
