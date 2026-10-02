@@ -182,7 +182,11 @@ def result_type(e: Expr) -> Type:
 
 
 def depth(e: Expr) -> int:
-    if isinstance(e, (Val, Lit)):
+    """Levels of STRUCTURAL-operator nesting.  Val/Lit are leaves and a bare
+    atomic application contains no structural operator, so all three are the
+    depth-0 stratum (an AtomApp still costs one table lookup -- depth counts
+    structure, not computation)."""
+    if isinstance(e, (Val, Lit, AtomApp)):
         return 0
     return 1 + max((depth(a) for a in e.args if isinstance(a, (Val, Lit, App))), default=0)
 
@@ -404,6 +408,8 @@ def syntax_spec(cfg: GlyphConfig) -> str:
         "    u*(value) -> value",
         "    b*(value, value) -> value",
         "Their arguments must be value literals -- no nesting, no lists.",
+        "A bare atomic application has nesting depth 0; the nesting-depth",
+        "cap below counts structural operators only.",
     ]
     lo, hi = cfg.list_len_range
     lines += [
