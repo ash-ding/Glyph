@@ -3908,3 +3908,27 @@ Ran on lumen1: `pytest -q -m "not slow"` → **308 passed, 6 deselected
 (0:11:06)**; frozen-integrity and data-boundary gates unmodified and green.
 No agent run or GPU run — next real v2 run picks the new probes up
 automatically via the harness's `probe_set(inst)`.
+
+## 2026-10-02 — protocol id formats normalized (student_id / checkpoint_id)
+
+The train-arm id surface is now format-constrained, closing the resolution
+ambiguity where an agent-chosen student name could collide with checkpoint
+ids:
+
+- **student_id**: minted by the AGENT, must match `^[0-9a-f]{8}$` (8 lowercase
+  hex chars, e.g. `a1b2c3d4`). Anything else is rejected with a structured
+  error at the tool layer AND in `StudentPool.train` (defense in depth),
+  before any GPU work.
+- **checkpoint_id**: returned by `train` in the fixed format `ck_xxxxxxxx`
+  (sha256 of `student_id:global_seq`, first 8 hex — deterministic per run).
+  Agents must echo it back verbatim.
+- `student_infer`'s `checkpoint` accepts exactly three disjoint-by-construction
+  forms: `"base"`, `ck_xxxxxxxx`, or an 8-hex student_id (its latest
+  checkpoint). Malformed or unknown references return structured errors
+  instead of raising.
+- Prompt paragraph / MCP descriptions / docs/tools.md updated (mechanics
+  only, no strategy hints).
+
+`pytest tests/v2 -q` → 129 passed, 1 skipped (one fixture updated to the new
+checkpoint format); targeted id-format tests cover rejection, format,
+uniqueness, and resolution.
