@@ -452,3 +452,6 @@ sup.fn a:hover { text-decoration: underline; }
 .setgroup--test { border-radius: 14px; padding: .8rem; background: var(--data-soft); }
 .setgroup--test .setgroup__label { color: var(--data-ink); }
 .setgroup--test .split { background: var(--bg); }
+.setgroup--probe { border-radius: 14px; padding: .8rem; background: var(--panel); }
+.setgroup--probe .split { background: var(--bg); }
+.setgroup--probe .splits { grid-template-columns: minmax(0, 1fr); max-width: 22rem; }

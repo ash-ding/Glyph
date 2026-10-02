@@ -22,7 +22,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
-<link rel="stylesheet" href="assets/css/style.css?v=3e03ae40d8">
+<link rel="stylesheet" href="assets/css/style.css?v=e69134d1b2">
 </head>
 
 <body>
@@ -114,7 +114,8 @@
   <p class="section__lede">
     An evaluation task in Glyph has two parts: a hidden interpreter
     <span class="mono">P</span>, and a set of evaluation data — demos, a
-    validation set and a held-out test — drawn from <span class="mono">P</span>.
+    validation set, a held-out test and a probe set — drawn from
+    <span class="mono">P</span>.
   </p>
 
   <p>
@@ -202,7 +203,7 @@
         <a class="gen-map__step gen-map__step--data" href="#g5"><b>5</b>held-out pairs</a><span class="gen-map__arrow">→</span>
         <a class="gen-map__step gen-map__step--data" href="#g6"><b>6</b>sample an expression</a><span class="gen-map__arrow">→</span>
         <a class="gen-map__step" href="#g7"><b>7</b>evaluate it</a><span class="gen-map__arrow">→</span>
-        <a class="gen-map__step gen-map__step--data" href="#g8"><b>8</b>demos + held-out test</a>
+        <a class="gen-map__step gen-map__step--data" href="#g8"><b>8</b>demos, test + probes</a>
       </div>
     </div>
   </div>
@@ -479,26 +480,29 @@ fold-like (LB) operators add:   then fold the list with b, left or right (50/50)
       or below <code>demo_max_depth</code> and avoid every held pair.
     </p>
     <p>
-      <b>The held-out test</b>, revealed only in the final phase, has four
-      splits. Three are drawn like the demos and differ in what they test:
+      <b>The held-out test</b>, revealed only in the final phase, has three
+      splits drawn like the demos that differ in what they test:
       <span class="mono">iid</span> stays within the demos' depth and avoids
       every held pair; <span class="mono">comp</span> must contain a held pair;
-      <span class="mono">depth</span> is strictly deeper than any demo. The
-      fourth, <span class="mono">probe</span>, is different in kind: it tests
-      single operators in isolation. Each atomic operator gets 100 bare atomic
-      expressions at depth 0. Each pure-structure operator (shapes
-      <span class="mono">L</span> and <span class="mono">KL</span>) gets single
-      applications to a literal list at depth 1 — 16 for an
-      <span class="mono">L</span> operator, 48 for a <span class="mono">KL</span>
-      one — chosen to cover what its meaning can branch on: list length, a
-      repeated element or matching ends, and <span class="mono">k</span>.
-      Map- and fold-like operators cannot be isolated, because they always call
-      a table. Probes come from a separate random stream, are scored per
-      operator and are kept out of <span class="mono">overall</span>. For an
-      atomic operator, which probes count as <em>seen</em> or <em>unseen</em>
-      is not fixed in advance; it is decided after the run, from the table
-      cells the agent actually queried. Structural probes have no such split:
-      what they test is a rule, not a set of cells.
+      <span class="mono">depth</span> is strictly deeper than any demo.
+    </p>
+    <p>
+      <b>The probe set</b> sits beside the held-out test and is revealed with
+      it, but is a separate set: it tests single operators in isolation. Each
+      atomic operator gets 100 bare atomic expressions at depth 0. Each
+      pure-structure operator (shapes <span class="mono">L</span> and
+      <span class="mono">KL</span>) gets single applications to a literal list
+      at depth 1 — 16 for an <span class="mono">L</span> operator, 48 for a
+      <span class="mono">KL</span> one — chosen to cover what its meaning can
+      branch on: list length, a repeated element or matching ends, and
+      <span class="mono">k</span>. Map- and fold-like operators cannot be
+      isolated, because they always call a table. Probes come from a separate
+      random stream and are scored per operator, never in the held-out test's
+      <span class="mono">overall</span>. For an atomic operator, which probes
+      count as <em>seen</em> or <em>unseen</em> is not fixed in advance; it is
+      decided after the run, from the table cells the agent actually queried.
+      Structural probes have no such split: what they test is a rule, not a set
+      of cells.
     </p>
     <div class="example">
       <span class="example__label">in the example</span>
@@ -513,6 +517,10 @@ fold-like (LB) operators add:   then fold the list with b, left or right (50/50)
     <div class="setgroup setgroup--test">
       <p class="setgroup__label">the held-out test — revealed only in the final phase</p>
       <div class="splits" id="splits-test"></div>
+    </div>
+    <div class="setgroup setgroup--probe">
+      <p class="setgroup__label">the probe set — single operators in isolation, revealed with the test</p>
+      <div class="splits" id="splits-probe"></div>
     </div>
     <div class="knobs">
       <span class="knobs__label">Related configuration fields:</span>
@@ -650,6 +658,12 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
       lenient, per-digit grader is used; it keeps both losses from saturating
       near 1. Every score below is exact match.
     </p>
+    <p>
+      π is measured over the whole held-out test — <span class="mono">iid</span>,
+      <span class="mono">comp</span> and <span class="mono">depth</span>, the
+      items an arm is scored on — and π restricted to each split is recorded
+      alongside. The probe set never enters.
+    </p>
   </div>
 
   <p>
@@ -679,11 +693,11 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
       </thead>
       <tbody>
         <tr><td class="mono">pi_low</td><td class="num">5</td><td class="num">0.85</td>
-            <td class="num">0.13 – 0.53</td><td class="num">0.11</td></tr>
+            <td class="num">0.19 – 0.58</td><td class="num">0.11</td></tr>
         <tr><td class="mono">pi_mid</td><td class="num">7</td><td class="num">0.50</td>
-            <td class="num">0.33 – 0.76</td><td class="num">0.34</td></tr>
+            <td class="num">0.35 – 0.71</td><td class="num">0.34</td></tr>
         <tr><td class="mono">pi_high</td><td class="num">9</td><td class="num">0.15</td>
-            <td class="num">0.66 – 0.87</td><td class="num">0.72</td></tr>
+            <td class="num">0.65 – 0.85</td><td class="num">0.72</td></tr>
       </tbody>
     </table>
   </div>
@@ -863,7 +877,7 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
     <div class="phase">
       <span class="phase__k">phase 2</span>
       <h3>Final</h3>
-      <p class="phase__given"><b>Revealed:</b> the hidden 10,000-item test (<span class="mono">iid</span>, <span class="mono">comp</span>, <span class="mono">depth</span>) plus per-op probe items, with no answers. The oracle is gone.</p>
+      <p class="phase__given"><b>Revealed:</b> the hidden 10,000-item test (<span class="mono">iid</span>, <span class="mono">comp</span>, <span class="mono">depth</span>) and the separate probe set, with no answers. The oracle is gone.</p>
       <ul>
         <li><code>check_answers</code> — legality check against the test file.</li>
         <li><code>final_answer</code> — commit once. An illegal file is not committed and may be fixed; a legal one ends the run and is what gets scored.</li>
@@ -920,12 +934,12 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
   </div>
   <div class="table-scroll">
     <table>
-      <thead><tr><th>split</th><th class="num">n</th><th>what it tests</th></tr></thead>
+      <thead><tr><th>split or set</th><th class="num">n</th><th>what it tests</th></tr></thead>
       <tbody>
         <tr><td class="mono">iid</td><td class="num">6500</td><td>in-distribution, held-out pairs forbidden</td></tr>
         <tr><td class="mono">comp</td><td class="num">2300</td><td>compositional generalisation: requires a held-out operator pair</td></tr>
         <tr><td class="mono">depth</td><td class="num">1200</td><td>deeper than anything in the demos</td></tr>
-        <tr><td class="mono">probe</td><td class="num">628 in mid_3</td><td>single operators in isolation: 100 bare atomic expressions per atomic operator (depth 0), and single applications of each pure-structure operator (depth 1); scored per operator, outside <span class="mono">overall</span>; atomic probes are split seen / unseen after the run by what the agent queried</td></tr>
+        <tr><td class="mono">probe set</td><td class="num">628 in mid_3</td><td>single operators in isolation: 100 bare atomic expressions per atomic operator (depth 0), and single applications of each pure-structure operator (depth 1); scored per operator, outside <span class="mono">overall</span>; atomic probes are split seen / unseen after the run by what the agent queried</td></tr>
         <tr><td class="mono">tail</td><td>derived</td><td>items whose table entries <em>this run</em> never bought — derived per run, because "never seen" is only knowable afterwards</td></tr>
       </tbody>
     </table>
@@ -1004,8 +1018,8 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
   </div>
 </footer>
 
-<script src="assets/js/example-data.js?v=515f6e5629"></script>
+<script src="assets/js/example-data.js?v=f020657a0f"></script>
 <script src="assets/js/main.js?v=ea7fc422a4"></script>
-<script src="assets/js/pipeline.js?v=9a87e1423e"></script>
+<script src="assets/js/pipeline.js?v=ee9d447b60"></script>
 </body>
 </html>
