@@ -684,4 +684,225 @@
     body.appendChild(el("details", {}, [el("summary", { class: "small", text: "Table view" }),
       el("div", { class: "table-scroll" }, [t])]));
   })();
+  /* ========================================= PROTOCOL: practice and final */
+  (function () {
+    var PR = D.protocol;
+    var hostP = document.getElementById("fig-practice"), hostF = document.getElementById("fig-final");
+    if (!PR || !hostP || !hostF) return;
+    var TOOLS = ["query", "submit_validation_answer", "check_answers", "finish_practice",
+                 "build_dataset", "train_model", "infer_model", "submit_final_answer"];
+    var TRAIN = { build_dataset: 1, train_model: 1, infer_model: 1 };
+    var AVAIL = {
+      practice: { no_train: ["query", "submit_validation_answer", "check_answers", "finish_practice"],
+                  train: ["query", "submit_validation_answer", "check_answers", "finish_practice", "build_dataset", "train_model", "infer_model"] },
+      final: { no_train: ["check_answers", "submit_final_answer"],
+               train: ["check_answers", "infer_model", "submit_final_answer"] }
+    };
+    var fmtN = function (n) { return Number(n).toLocaleString("en-US"); };
+    var r3 = function (x) { return x == null ? "—" : Number(x).toFixed(3); };
+
+    function jv(x) {
+      if (typeof x === "number" && !Number.isInteger(x)) return String(Math.round(x * 1e4) / 1e4);
+      return JSON.stringify(x);
+    }
+    function kv(obj, skip) {
+      var box = el("div", { class: "call__kv" });
+      Object.keys(obj).forEach(function (k) {
+        if (skip && skip[k]) return;
+        var val = obj[k];
+        var row = el("div", { class: "call__row" }, [el("span", { class: "call__k", text: k })]);
+        if (Array.isArray(val) && val.length && (typeof val[0] === "object" || val.length > 1)) {
+          var list = el("div", { class: "call__list" });
+          val.forEach(function (o) { list.appendChild(el("div", { text: JSON.stringify(o) })); });
+          row.appendChild(list);
+        } else if (val && typeof val === "object" && !Array.isArray(val)) {
+          row.appendChild(el("span", { class: "call__v", text: "{" + Object.keys(val).map(function (k2) {
+            return k2 + ": " + jv(val[k2]); }).join(", ") + "}" }));
+        } else {
+          row.appendChild(el("span", { class: "call__v" + (val === "…" ? " faint" : ""), text: jv(val) }));
+        }
+        box.appendChild(row);
+      });
+      return box;
+    }
+    var REM = { q_remaining: 1, submissions_remaining: 1 };
+    function summary(c) {
+      var r = c.result;
+      if (r.error) return "error";
+      switch (c.tool) {
+        case "query":
+          var ok = r.results.filter(function (x) { return "out" in x; }).length;
+          return ok + " answered, " + (r.results.length - ok) + " not · q_used " + r.q_used;
+        case "check_answers": return r.ok ? "ok" : "illegal · " + Object.keys(r.violations).map(function (k) { return k + " " + fmtN(r.violations[k]); }).join(", ");
+        case "submit_validation_answer": return "submission " + r.submission + " · overall " + r3(r.overall);
+        case "build_dataset": return r.dataset_id + " · " + r.size + " rows";
+        case "train_model": return r.checkpoint_id + (r.continued_from ? " ← " + r.continued_from : " (new student)");
+        case "infer_model": return fmtN(r.rows) + " rows answered";
+        case "finish_practice": return "ok";
+        case "submit_final_answer": return "committed · " + r.digest;
+      }
+      return "";
+    }
+
+    function callCard(c, state) {
+      var head = el("div", { class: "call__head" }, [
+        el("code", { class: "call__tool" + (TRAIN[c.tool] ? " train" : ""), text: c.tool }),
+        el("span", { class: "call__sum", text: summary(c) })]);
+      var card = el("div", { class: "call " + state }, [head]);
+      if (state === "is-cur") {
+        card.appendChild(el("div", { class: "call__dir", text: "call" }));
+        card.appendChild(kv(c.args));
+        card.appendChild(el("div", { class: "call__dir", text: "result" }));
+        card.appendChild(kv(c.result, REM));
+        var rem = Object.keys(REM).filter(function (k) { return k in c.result; });
+        if (rem.length) card.appendChild(el("div", { class: "call__rem", text: rem.map(function (k) { return k + " " + jv(c.result[k]); }).join(" · ") }));
+      }
+      return card;
+    }
+
+    function fileCard(title, rows, note, cur) {
+      var card = el("div", { class: "call call--file " + (cur ? "is-cur" : "is-past") }, [
+        el("div", { class: "call__head" }, [el("code", { class: "call__tool", text: title }), el("span", { class: "call__sum", text: note })])]);
+      if (!cur) return card;
+      var list = el("div", { class: "call__list" });
+      rows.forEach(function (r) { list.appendChild(el("div", { text: JSON.stringify(r) })); });
+      list.appendChild(el("div", { class: "faint", text: "…" }));
+      card.appendChild(list);
+      return card;
+    }
+
+    function reportCard(rep) {
+      var card = el("div", { class: "call is-cur call--report" }, [
+        el("div", { class: "call__head" }, [el("code", { class: "call__tool", text: "report.json" }),
+          el("span", { class: "call__sum", text: "written by the harness after the run" })])]);
+      var atomic = [], structural = [];
+      Object.keys(rep.probe).forEach(function (op) { (rep.probe[op].kind === "atomic" ? atomic : structural).push(op); });
+      var mean = function (ops) {
+        var n = 0, s = 0; ops.forEach(function (op) { n += rep.probe[op].n; s += rep.probe[op].overall * rep.probe[op].n; });
+        return n ? s / n : null;
+      };
+      var rows = [
+        ["overall", r3(rep.overall)],
+        ["by_split", Object.keys(rep.by_split).map(function (k) { return k + " " + r3(rep.by_split[k]); }).join(" · ")],
+        ["tail", r3(rep.tail)],
+        ["headroom", Object.keys(rep.headroom).map(function (k) { return k + " " + r3(rep.headroom[k]); }).join(" · ")],
+        ["probe", "atomic " + atomic.join(" ") + ": " + r3(mean(atomic)) + " · structural " + structural.join(" ") + ": " + r3(mean(structural))]
+      ];
+      var box = el("div", { class: "call__kv" });
+      rows.forEach(function (r) {
+        box.appendChild(el("div", { class: "call__row" }, [el("span", { class: "call__k", text: r[0] }), el("span", { class: "call__v", text: r[1] })]));
+      });
+      card.appendChild(box);
+      return card;
+    }
+
+    function statePanel(arm, phase, calls, extra) {
+      var last = null;
+      calls.forEach(function (c) { if ("q_remaining" in c.result) last = c.result; });
+      var qUsed = last ? last.q_remaining == null ? null : 1000 - last.q_remaining : 0;
+      var subLeft = last ? last.submissions_remaining : 20;
+      var answered = 0;
+      calls.forEach(function (c) { if (c.tool === "query" && c.result.results) c.result.results.forEach(function (x) { if ("out" in x) answered++; }); });
+      var mine = [];
+      calls.forEach(function (c) {
+        ["path", "output_path", "prefix_path"].forEach(function (k) {
+          var p = c.args[k];
+          if (p && p.indexOf("task/") !== 0 && mine.indexOf(p) < 0) mine.push(p);
+        });
+      });
+      var meter = function (label, used, cap) {
+        var w = Math.max(used / cap * 100, used ? 1.5 : 0);
+        return el("div", { class: "meter" }, [
+          el("div", { class: "meter__top" }, [txt(label), txt(fmtN(used) + " / " + fmtN(cap), "mono")]),
+          el("div", { class: "meter__track" }, [el("div", { class: "meter__fill", style: "width:" + w.toFixed(1) + "%" })])]);
+      };
+      var p = el("div", { class: "run__state" });
+      p.appendChild(el("div", { class: "run__k", text: "phase" }));
+      p.appendChild(el("div", { class: "run__phase run__phase--" + phase, text: phase + " · " + arm + " arm" }));
+      p.appendChild(el("div", { class: "run__k", text: "spent" }));
+      p.appendChild(meter("queries", qUsed || 0, 1000));
+      p.appendChild(meter("validation submissions", 20 - subLeft, 20));
+      p.appendChild(el("div", { class: "run__k", text: "tools" }));
+      var chips = el("div", { class: "run__tools" });
+      TOOLS.forEach(function (t) {
+        var on = AVAIL[phase][arm].indexOf(t) >= 0;
+        if (!on && TRAIN[t] && arm === "no_train") return;
+        chips.appendChild(el("code", { class: "tchip" + (on ? "" : " is-off") + (TRAIN[t] ? " train" : ""), text: t }));
+      });
+      p.appendChild(chips);
+      p.appendChild(el("div", { class: "run__k", text: "workspace" }));
+      var files = [["task/demos.jsonl", fmtN(PR.workspace["demos.jsonl"])],
+                   ["task/validation.jsonl", fmtN(PR.workspace["validation.jsonl"])],
+                   ["task/queries.jsonl", fmtN(answered)],
+                   ["task/final/test.jsonl", phase === "final" ? fmtN(extra.nTest) : "—"]];
+      var fl = el("div", { class: "run__files" });
+      files.forEach(function (f) { fl.appendChild(el("div", {}, [mono(f[0]), txt(f[1], "faint")])); });
+      mine.forEach(function (f) { fl.appendChild(el("div", { class: "is-mine" }, [mono(f), txt("agent", "faint")])); });
+      p.appendChild(fl);
+      return p;
+    }
+
+    function captionFor(c, k, all) {
+      var r = c.result;
+      if (r.error && c.tool === "query") return "The oracle is gone: query now returns an error naming the phase and arm, and costs nothing.";
+      switch (c.tool) {
+        case "query":
+          if (r.results.every(function (x) { return "out" in x; }))
+            return r.results.length + " answered — a bare atomic and the running example — at one query each, and appended to queries.jsonl.";
+          return "None answered. A validation item, a held-out pair and an expression deeper than the demos are refused and cost nothing; the malformed one is charged, so q_used is " + r.q_used + ".";
+        case "check_answers":
+          if (c.args.set === "test") return "The answer file covers every row, probes included, and passes; the harness remembers it in case the run times out.";
+          return r.ok ? "The full file passes. Checking is free, so it costs no submission."
+                      : "A free legality check on a file with " + (PR.workspace["validation.jsonl"] - r.violations.missing_ids) + " of " + fmtN(PR.workspace["validation.jsonl"]) + " ids: illegal, and nothing is spent.";
+        case "submit_validation_answer":
+          return "Submission " + r.submission + " returns only overall (" + r3(r.overall) + ") and a by-depth split. The file is the skeleton-only interpreter's, so this is what structure alone earns on validation.";
+        case "build_dataset":
+          return r.size + " rows — the queries bought so far and the 30 demos. Each is labelled by provenance: " + r.provenance.purchased + " purchased, " + r.provenance.demo + " demo.";
+        case "train_model":
+          return r.continued_from ? "The same student_id continues that student from " + r.continued_from + "; the new checkpoint is " + r.checkpoint_id + "."
+                                  : "A new student_id starts a fresh Qwen3-0.6B student; the call returns " + r.checkpoint_id + ".";
+        case "infer_model":
+          return c.phase === "final" ? "The student answers all " + fmtN(r.rows) + " rows, test and probe, in one call. (This replay commits the skeleton-only file instead, as in the other arm.)"
+                                     : "A student_id means its latest checkpoint. " + fmtN(r.rows) + " answers are written to " + c.args.output_path + ", to be checked and submitted like any file.";
+        case "finish_practice":
+          return "finish_practice ends practice with " + r.submissions_remaining + " submissions left; the harness switches to the final phase.";
+        case "submit_final_answer":
+          return "Committed: the run ends here. The digest identifies the file that will be scored.";
+      }
+      return "";
+    }
+
+    function build(host, phase) {
+      var tabs = ["no_train", "train"].map(function (arm) {
+        var A = PR.arms[arm];
+        var calls = A.calls.filter(function (c) { return c.phase === phase; });
+        var before = phase === "final" ? A.calls.filter(function (c) { return c.phase === "practice"; }) : [];
+        var steps = [];
+        if (phase === "practice") steps.push({ caption: "Practice opens. The workspace is written and the oracle is open; nothing is spent yet.", n: 0, file: true });
+        else steps.push({ caption: "At the switch the harness writes final/test.jsonl: " + fmtN(A.test_file.n_test) + " test rows and " + A.test_file.n_probe +
+                          " probe rows, ids shuffled, no split labels. The practice tools close.", n: 0, file: true });
+        calls.forEach(function (c, k) { steps.push({ caption: captionFor(c, k, calls), n: k + 1 }); });
+        if (phase === "final") steps.push({ caption: "After the run the harness scores the file: overall " + r3(A.report.overall) +
+          ". Headroom is 0 everywhere — the file knows every structural rule and no table entry, which is exactly the skeleton ceiling. Structural probes are all right, atomic ones all wrong.", n: calls.length, report: true });
+        return {
+          label: arm === "train" ? "train arm" : "no_train arm",
+          steps: steps,
+          render: function (body, i, st) {
+            body.innerHTML = "";
+            var shown = calls.slice(0, st.n);
+            var log = el("div", { class: "run__log" });
+            if (phase === "final") log.appendChild(fileCard("task/final/test.jsonl", A.test_file.head, fmtN(A.test_file.n) + " rows written", st.file));
+            else log.appendChild(fileCard("task/validation.jsonl", PR.val_head, fmtN(PR.workspace["validation.jsonl"]) + " rows, no answers", st.file));
+            shown.forEach(function (c, k) { log.appendChild(callCard(c, k === shown.length - 1 && !st.report ? "is-cur" : "is-past")); });
+            if (st.report) log.appendChild(reportCard(A.report));
+            body.appendChild(el("div", { class: "run" }, [log,
+              statePanel(arm, phase, before.concat(shown), { nTest: A.test_file.n })]));
+          }
+        };
+      });
+      Stepper(host, tabs[0].steps, tabs[0].render, { tabs: tabs, interval: 2600 });
+    }
+    build(hostP, "practice");
+    build(hostF, "final");
+  })();
 })();
