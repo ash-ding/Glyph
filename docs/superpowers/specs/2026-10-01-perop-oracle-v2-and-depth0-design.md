@@ -95,3 +95,33 @@ problems, both measured on 2026-10-01:
 - fail-fast: unknown op name raises ValueError before any torch import.
 - `run_reference` arg plumbing: `--n-seen` parsed, keys rendered as
   `"n=1000"`.
+
+## C. Structural probes (added later the same day)
+
+Pure-structure ops (shapes L and KL) can be isolated: a single application
+`op([…])` / `op(k, […])` is a legal depth-1 expression whose answer depends
+only on the skeleton. UL/LB ops cannot be isolated — any expression containing
+them entangles the tables — and stay diagnosed indirectly via comp/depth.
+
+- `probe_set` gains structural items: for every enabled L/KL op,
+  `struct_reps` (default 2) items per BEHAVIOR cell. Values are mere cargo for
+  pure-structure ops, so the cells enumerate what transforms/guards actually
+  branch on: list length {2,3,4} × variant {all-distinct, first==last,
+  internal-duplicate (len ≥ 3)} × k {1..3} (KL only) — 8 cells for an L op,
+  24 for a KL op.
+- Items colliding with test/val sources are redrawn: unlike bare atomics,
+  single-application structural items CAN coincide with depth-1 iid items,
+  and test/val must stay sealed.
+- `split` = op name; `needs_u`/`needs_b` empty; same probe RNG stream (the
+  atomic prefix of the set is unchanged byte-for-byte).
+- Report: seen/unseen does not apply (structural knowledge is a rule, not
+  cells; `is_tail` would classify everything as seen). `by_op` entries carry
+  `kind: "atomic" | "structural"`, with seen/unseen null for structural ops.
+  An exposure covariate (how often the op appeared in demos / purchased
+  queries) is noted as future work.
+- Reference side unchanged: `weights-per-op` filters probes by atomic op
+  names, so structural probes never reach the specialists; their reference
+  ceiling is trivially 1.0 (the skeleton oracle knows every rule).
+- Positioning fix: the probe set is now the SINGLE-OPERATOR ISOLATION
+  stratum — bare atomics at depth 0, pure-structure ops at depth 1 — no
+  longer only "the depth-0 stratum".
