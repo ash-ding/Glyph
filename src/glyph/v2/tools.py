@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from glyph.v2.answers import check_file, score_file
+from glyph.v2.student import CHECKPOINT_ID_RE, STUDENT_ID_RE
 
 
 def default_id_of(prefix: str, items: list) -> Callable[[Any], str]:
@@ -199,6 +200,10 @@ def t_build_dataset(session, path) -> dict:
 def t_train(session, dataset_id, epochs, lr, student_id) -> dict:
     if not session.tool_available("train"):
         return _gate_error(session, "train")
+    if not STUDENT_ID_RE.match(student_id or ""):
+        return {"error": "student_id must be exactly 8 lowercase hex "
+                         "characters (e.g. 'a1b2c3d4')",
+                **_remaining(session)}
 
     student, err = _student_or_error(session)
     if err is not None:
@@ -212,10 +217,21 @@ def t_student_infer(session, checkpoint, input_path, output_path,
     if not session.tool_available("student_infer"):
         return _gate_error(session, "student_infer")
 
+    if not (checkpoint == "base"
+            or CHECKPOINT_ID_RE.match(checkpoint or "")
+            or STUDENT_ID_RE.match(checkpoint or "")):
+        return {"error": "checkpoint must be 'base', a ck_xxxxxxxx "
+                         "checkpoint_id as returned by train, or an 8-hex "
+                         "student_id (meaning its latest checkpoint)",
+                **_remaining(session)}
+
     student, err = _student_or_error(session)
     if err is not None:
         return err
-    rec = student.infer(checkpoint, input_path, output_path, prefix_path)
+    try:
+        rec = student.infer(checkpoint, input_path, output_path, prefix_path)
+    except ValueError as exc:
+        return {"error": str(exc), **_remaining(session)}
     return {**rec, **_remaining(session)}
 
 

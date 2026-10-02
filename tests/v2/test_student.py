@@ -47,7 +47,7 @@ def test_train_delegates_and_meters(tmp_path):
     inst = generate(1001, CFG); pool = _pool(tmp_path, inst)
     ds = tmp_path/"d.jsonl"; ds.write_text(json.dumps({"expr": inst.demos[0][0], "answer":"v_a_a"})+"\n")
     dsid = pool.build_dataset(ds, inst)["dataset_id"]
-    r = pool.train(dsid, epochs=1, lr=1e-5)
+    r = pool.train(dsid, epochs=1, lr=1e-5, student_id="cccc0003")
     assert r["checkpoint_id"] and abs(r["final_loss"]-0.001) < 1e-9 and r["gpu_seconds"] == 100.0
     assert r["stopped_at_cap"] is False
     assert pool.ledger.summary()["gpu_seconds"]["train"] == 100.0
@@ -57,8 +57,8 @@ def test_cumulative_cap_refuses_without_calling_backend(tmp_path):
     pool = _pool(tmp_path, inst, gpu_cap_total_s=50.0)   # below one call's 100s
     ds = tmp_path/"d.jsonl"; ds.write_text(json.dumps({"expr": inst.demos[0][0], "answer":"v_a_a"})+"\n")
     dsid = pool.build_dataset(ds, inst)["dataset_id"]
-    r1 = pool.train(dsid, 1, 1e-5)   # first call: 100s used, exceeds 50 total afterwards
-    r2 = pool.train(dsid, 1, 1e-5)   # second: pre-check sees used>=cap -> refuse without backend
+    r1 = pool.train(dsid, 1, 1e-5, student_id="cccc0003")   # first call: 100s used, exceeds 50 total afterwards
+    r2 = pool.train(dsid, 1, 1e-5, student_id="cccc0003")   # second: pre-check sees used>=cap -> refuse without backend
     assert r2["stopped_at_cap"] is True and r2.get("checkpoint_id") is None
     assert pool.backend.train_calls == 1    # backend NOT called the second time
 
@@ -92,7 +92,7 @@ def test_full_finetune_checkpoint_served_as_base_not_lora(tmp_path):
     ds = tmp_path / "d.jsonl"
     ds.write_text(json.dumps({"expr": inst.demos[0][0], "answer": "v_a_a"}) + "\n")
     dsid = pool.build_dataset(ds, inst)["dataset_id"]
-    ckid = pool.train(dsid, 1, 1e-5)["checkpoint_id"]
+    ckid = pool.train(dsid, 1, 1e-5, student_id="cccc0003")["checkpoint_id"]
     ck_dir = pool.checkpoints[ckid]
     inp = tmp_path / "in.jsonl"
     out = tmp_path / "out.jsonl"
@@ -117,29 +117,29 @@ def _dsid(tmp_path, inst, pool):
 def test_new_student_id_trains_from_base(tmp_path):
     inst = generate(1001, CFG); pool = _pool(tmp_path, inst)
     dsid = _dsid(tmp_path, inst, pool)
-    rec = pool.train(dsid, epochs=1, lr=1e-5, student_id="alpha")
+    rec = pool.train(dsid, epochs=1, lr=1e-5, student_id="aaaa0001")
     assert pool.backend.inits == [None]
-    assert rec["student_id"] == "alpha" and rec["continued_from"] is None
-    assert pool.students["alpha"] == [rec["checkpoint_id"]]
+    assert rec["student_id"] == "aaaa0001" and rec["continued_from"] is None
+    assert pool.students["aaaa0001"] == [rec["checkpoint_id"]]
 
 
 def test_existing_student_id_continues_from_latest(tmp_path):
     inst = generate(1001, CFG); pool = _pool(tmp_path, inst)
     dsid = _dsid(tmp_path, inst, pool)
-    r1 = pool.train(dsid, epochs=1, lr=1e-5, student_id="alpha")
-    r2 = pool.train(dsid, epochs=1, lr=1e-5, student_id="alpha")
+    r1 = pool.train(dsid, epochs=1, lr=1e-5, student_id="aaaa0001")
+    r2 = pool.train(dsid, epochs=1, lr=1e-5, student_id="aaaa0001")
     assert pool.backend.inits[1] == str(pool.checkpoints[r1["checkpoint_id"]])
     assert r2["continued_from"] == r1["checkpoint_id"]
-    assert pool.students["alpha"] == [r1["checkpoint_id"], r2["checkpoint_id"]]
+    assert pool.students["aaaa0001"] == [r1["checkpoint_id"], r2["checkpoint_id"]]
 
 
 def test_two_student_ids_are_independent(tmp_path):
     inst = generate(1001, CFG); pool = _pool(tmp_path, inst)
     dsid = _dsid(tmp_path, inst, pool)
-    pool.train(dsid, epochs=1, lr=1e-5, student_id="alpha")
-    pool.train(dsid, epochs=1, lr=1e-5, student_id="beta")
+    pool.train(dsid, epochs=1, lr=1e-5, student_id="aaaa0001")
+    pool.train(dsid, epochs=1, lr=1e-5, student_id="bbbb0002")
     assert pool.backend.inits == [None, None]
-    assert set(pool.students) == {"alpha", "beta"}
+    assert set(pool.students) == {"aaaa0001", "bbbb0002"}
 
 
 def test_infer_accepts_student_id_as_latest_checkpoint(tmp_path):
@@ -148,11 +148,48 @@ def test_infer_accepts_student_id_as_latest_checkpoint(tmp_path):
     pool = StudentPool("Qwen/Qwen3-1.7B", Ledger(), work_dir=tmp_path / "ck",
                        queries_path=None, backend=be)
     dsid = _dsid(tmp_path, inst, pool)
-    pool.train(dsid, epochs=1, lr=1e-5, student_id="alpha")
-    r2 = pool.train(dsid, epochs=1, lr=1e-5, student_id="alpha")
+    pool.train(dsid, epochs=1, lr=1e-5, student_id="aaaa0001")
+    r2 = pool.train(dsid, epochs=1, lr=1e-5, student_id="aaaa0001")
     inp = tmp_path / "in.jsonl"; out = tmp_path / "out.jsonl"
     inp.write_text(json.dumps({"id": "t0", "expr": inst.test[0].expr_src}) + "\n")
-    rec = pool.infer("alpha", inp, out, None)
+    rec = pool.infer("aaaa0001", inp, out, None)
     # the student id resolved to its LATEST checkpoint, served as a full model
     assert be.last_make == (str(pool.checkpoints[r2["checkpoint_id"]]), None)
     assert rec["rows"] == 1
+
+
+def test_student_id_format_enforced(tmp_path):
+    inst = generate(1001, CFG); pool = _pool(tmp_path, inst)
+    dsid = _dsid(tmp_path, inst, pool)
+    for bad in ("alpha", "s1", "AAAA0001", "aaaa000", "aaaa00011", "ck_aaaa0001", ""):
+        rec = pool.train(dsid, epochs=1, lr=1e-5, student_id=bad)
+        assert "error" in rec and rec.get("checkpoint_id") is None, bad
+    assert pool.backend.train_calls == 0        # rejected before any training
+    assert pool.students == {}
+
+
+def test_checkpoint_id_format_and_uniqueness(tmp_path):
+    import re
+    inst = generate(1001, CFG); pool = _pool(tmp_path, inst)
+    dsid = _dsid(tmp_path, inst, pool)
+    r1 = pool.train(dsid, epochs=1, lr=1e-5, student_id="aaaa0001")
+    r2 = pool.train(dsid, epochs=1, lr=1e-5, student_id="aaaa0001")
+    r3 = pool.train(dsid, epochs=1, lr=1e-5, student_id="bbbb0002")
+    cks = [r["checkpoint_id"] for r in (r1, r2, r3)]
+    assert all(re.fullmatch(r"ck_[0-9a-f]{8}", c) for c in cks)
+    assert len(set(cks)) == 3
+
+
+def test_infer_rejects_malformed_and_unknown_refs(tmp_path):
+    import json
+    import pytest
+    inst = generate(1001, CFG); pool = _pool(tmp_path, inst)
+    inp = tmp_path / "in.jsonl"; out = tmp_path / "out.jsonl"
+    inp.write_text(json.dumps({"id": "t0", "expr": inst.test[0].expr_src}) + "\n")
+    for bad in ("latest", "ck1", "AAAA0001", "ck_zzzzzzzz"):
+        with pytest.raises(ValueError):
+            pool.infer(bad, inp, out, None)
+    with pytest.raises(ValueError):
+        pool.infer("dddd0004", inp, out, None)       # well-formed but unknown
+    with pytest.raises(ValueError):
+        pool.infer("ck_12345678", inp, out, None)    # well-formed but unknown

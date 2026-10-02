@@ -24,7 +24,9 @@ Two things this is careful about, both load-bearing:
 
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -123,6 +125,15 @@ def _default_backend():
     return _RealBackend()
 
 
+# ID formats are part of the protocol surface: the agent must mint a
+# student_id itself (8 lowercase hex chars) and must echo checkpoint_ids back
+# verbatim in the format train() returns.  The three reference forms --
+# "base", ck_xxxxxxxx, and an 8-hex student_id -- are disjoint by
+# construction, so student_infer's resolution is unambiguous.
+STUDENT_ID_RE = re.compile(r"^[0-9a-f]{8}$")
+CHECKPOINT_ID_RE = re.compile(r"^ck_[0-9a-f]{8}$")
+
+
 class StudentPool:
     """Owns dataset construction, full fine-tuning, and inference for the
     train arm's student model, under a cumulative GPU-seconds budget."""
@@ -216,7 +227,17 @@ class StudentPool:
         }
 
     # -- train --------------------------------------------------------
-    def train(self, dataset_id, epochs, lr, student_id="s1") -> dict:
+    def train(self, dataset_id, epochs, lr, student_id) -> dict:
+        if not STUDENT_ID_RE.match(student_id or ""):
+            return {
+                "error": "student_id must be exactly 8 lowercase hex "
+                         "characters (e.g. 'a1b2c3d4')",
+                "stopped_at_cap": False,
+                "gpu_seconds": 0.0,
+                "checkpoint_id": None,
+                "student_id": student_id,
+                "final_loss": None,
+            }
         if self.gpu_used_s >= self.gpu_cap_total_s:
             return {
                 "stopped_at_cap": True,
@@ -239,7 +260,8 @@ class StudentPool:
                            if continued_from else None)
 
         self._ck_n += 1
-        checkpoint_id = f"ck{self._ck_n}"
+        checkpoint_id = "ck_" + hashlib.sha256(
+            f"{student_id}:{self._ck_n}".encode()).hexdigest()[:8]
         out_dir = self.work_dir / checkpoint_id
 
         rec = self.backend.train_fn(examples, hp, base_model=self.base_model,
@@ -297,11 +319,20 @@ class StudentPool:
 
         if checkpoint == "base":
             base_model, adapter_path = self.base_model, None
+        elif CHECKPOINT_ID_RE.match(checkpoint or ""):
+            if checkpoint not in self.checkpoints:
+                raise ValueError(f"unknown checkpoint_id {checkpoint!r}")
+            base_model, adapter_path = self._resolve_checkpoint(self.checkpoints[checkpoint])
+        elif STUDENT_ID_RE.match(checkpoint or ""):
+            lineage = self.students.get(checkpoint)
+            if not lineage:
+                raise ValueError(f"unknown student_id {checkpoint!r}")
+            base_model, adapter_path = self._resolve_checkpoint(
+                self.checkpoints[lineage[-1]])  # a student id means its latest ck
         else:
-            ck = checkpoint
-            if ck not in self.checkpoints and ck in self.students and self.students[ck]:
-                ck = self.students[ck][-1]      # a student id means its latest ck
-            base_model, adapter_path = self._resolve_checkpoint(self.checkpoints[ck])
+            raise ValueError(
+                "checkpoint must be 'base', a ck_xxxxxxxx checkpoint_id, "
+                "or an 8-hex student_id")
 
         prefix = None
         if prefix_path is not None:

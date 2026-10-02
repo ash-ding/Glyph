@@ -98,16 +98,22 @@ Voluntarily end practice before the caps are hit; flags the switch to final.
 
 ```
 build_dataset(path: str)                              -> {dataset_id, ..., <remaining>}
-train(dataset_id: str, epochs: int, lr: float, student_id: str) -> {checkpoint, student_id, continued_from, ..., <remaining>}
+train(dataset_id: str, epochs: int, lr: float, student_id: str) -> {checkpoint_id, student_id, continued_from, ..., <remaining>}
 ```
 `build_dataset` assembles a student training set from **purchased queries** — the
 agent cannot manufacture labels it has not bought. `train` fine-tunes a
 Qwen3-1.7B student; GPU time is metered into the ledger like any other spend, so
 training competes with querying under one budget line. `student_id` selects the
-lineage: a new id starts a fresh student from the base model, an existing id
-continues training that student from its latest checkpoint, and students
-coexist. `student_infer`'s `checkpoint` accepts a checkpoint id, `"base"`, or a
-student_id (that student's latest checkpoint).
+lineage and is minted by the AGENT in a fixed format — exactly 8 lowercase hex
+characters (`^[0-9a-f]{8}$`, e.g. `a1b2c3d4`); anything else is rejected with
+a structured error. A new id starts a fresh student from the base model, an
+existing id continues training that student from its latest checkpoint, and
+students coexist. Each `train` call returns a `checkpoint_id` in the fixed
+format `ck_xxxxxxxx` (8 hex, hashed from the lineage position), which must be
+echoed back verbatim. `student_infer`'s `checkpoint` accepts `"base"`, a
+`ck_xxxxxxxx` checkpoint_id, or an 8-hex student_id (that student's latest
+checkpoint) — the three forms are disjoint by construction, so resolution is
+unambiguous; malformed or unknown references return a structured error.
 
 ### Both phases — the student (train arm only)
 

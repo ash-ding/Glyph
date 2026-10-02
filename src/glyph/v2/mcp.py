@@ -46,13 +46,17 @@ _DESCRIPTIONS = {
     "check_answers": "Check an answer file for legality (set='validation' or 'test').",
     "finish_practice": "Signal that the practice phase is done.",
     "build_dataset": "Build a student training dataset from purchased queries (train arm).",
-    "train": ("Fine-tune a student model on a dataset (train arm). A new "
-              "student_id starts a fresh student from the base model; an "
-              "existing student_id continues training that student from its "
-              "latest checkpoint. Several students may coexist."),
+    "train": ("Fine-tune a student model on a dataset (train arm). "
+              "student_id is an id YOU choose: exactly 8 lowercase hex "
+              "characters (e.g. 'a1b2c3d4'). A new id starts a fresh student "
+              "from the base model; an existing id continues training that "
+              "student from its latest checkpoint. Several students may "
+              "coexist. Returns a checkpoint_id (format ck_xxxxxxxx) to pass "
+              "back verbatim."),
     "student_infer": ("Run inference with a trained student (train arm). "
-                      "checkpoint accepts a checkpoint id, 'base', or a "
-                      "student_id (meaning that student's latest checkpoint)."),
+                      "checkpoint accepts 'base', a ck_xxxxxxxx checkpoint_id "
+                      "exactly as returned by train, or an 8-hex student_id "
+                      "(meaning that student's latest checkpoint)."),
     "final_answer": "Commit the final held-out-test answers and end the run.",
 }
 
