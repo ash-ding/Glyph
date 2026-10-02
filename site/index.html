@@ -22,7 +22,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
-<link rel="stylesheet" href="assets/css/style.css?v=4d7db70c44">
+<link rel="stylesheet" href="assets/css/style.css?v=7c3c785248">
 </head>
 
 <body>
@@ -631,17 +631,26 @@ fold-like (LB) operators add:   then fold the list with b, left or right (50/50)
   <h2>Data validation</h2>
 
   <p class="section__lede">
-    An instance is measured before any agent touches it: a π that says where
-    its difficulty sits, and a battery of reference oracles that say how far
-    each kind of knowledge gets. Every score — an agent's or an oracle's — is
-    reported with the same metrics, so the two can be read against each other.
+    Once an instance is generated, it is measured before any agent touches it.
+    Several measurements check its quality and its features, and a set of
+    reference oracles is run on it, so that every later evaluation has fixed
+    points to compare against.
+  </p>
+  <p>
+    This section covers two things. The first is π, which only data validation
+    computes: it says which half of <span class="mono">P</span> the instance's
+    difficulty sits in. The second is the evaluation metrics. The same metrics
+    score the reference oracles here and the agents in the evaluation proper,
+    so most of this section is about how each one is computed. It ends with the
+    reference oracles each instance is given.
   </p>
 
   <!-- ---------------------------------------------------------------- pi -->
-  <h3 id="pi">Every instance has a π</h3>
+  <details class="fold" id="pi">
+  <summary><span class="fold__t">Computing π</span><span class="fold__hint">which half of <span class="mono">P</span> the difficulty sits in</span></summary>
+  <div class="fold__body">
   <p>
-    π says which half of <span class="mono">P</span> an instance's difficulty
-    sits in. The interpreter is <span class="mono">P = skeleton ∘ tables</span>, exactly
+    The interpreter is <span class="mono">P = skeleton ∘ tables</span>, exactly
     two rule sets. Each crippled oracle is the real interpreter with one half
     swapped for a fixed baseline, which is what makes π measurable at all.
   </p>
@@ -658,8 +667,8 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
       skeleton is textbook defaults rather than "do nothing" — if the structural
       operators did nothing, the atomic operators would never be invoked and the
       baseline would silently ablate the table as well. π is the one place a
-      lenient, per-digit grader is used; it keeps both losses from saturating
-      near 1. Every score below is exact match.
+      lenient grader is used: <span class="em-red">partial credit per
+      digit</span>, which keeps both losses from saturating near 1.
     </p>
     <p>
       π is measured over the whole held-out test — <span class="mono">iid</span>,
@@ -711,11 +720,15 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
     monotonically.
   </p>
 
+  </div>
+  </details>
+
   <!-- ----------------------------------------------------------- metrics -->
-  <h3 id="metrics">The metrics</h3>
+  <h3 id="metrics">Evaluation metrics</h3>
   <p>
-    A score is a small set of numbers in three groups. All are exact match; the
-    lenient grader belongs to π alone.
+    A score is a small set of numbers in three groups. Every one is
+    <span class="em-red">exact match</span>: an answer counts only if all of it
+    is right. Partial credit belongs to π alone.
   </p>
 
   <div class="metric-groups">
@@ -1081,6 +1094,6 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
 
 <script src="assets/js/example-data.js?v=f020657a0f"></script>
 <script src="assets/js/main.js?v=ea7fc422a4"></script>
-<script src="assets/js/pipeline.js?v=ee9d447b60"></script>
+<script src="assets/js/pipeline.js?v=4df54c97e4"></script>
 </body>
 </html>
