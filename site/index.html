@@ -22,7 +22,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
-<link rel="stylesheet" href="assets/css/style.css?v=7c3c785248">
+<link rel="stylesheet" href="assets/css/style.css?v=a38e77b9a9">
 </head>
 
 <body>
@@ -646,9 +646,7 @@ fold-like (LB) operators add:   then fold the list with b, left or right (50/50)
   </p>
 
   <!-- ---------------------------------------------------------------- pi -->
-  <details class="fold" id="pi">
-  <summary><span class="fold__t">Computing π</span><span class="fold__hint">which half of <span class="mono">P</span> the difficulty sits in</span></summary>
-  <div class="fold__body">
+  <h3 id="pi">Computing π</h3>
   <p>
     The interpreter is <span class="mono">P = skeleton ∘ tables</span>, exactly
     two rule sets. Each crippled oracle is the real interpreter with one half
@@ -687,9 +685,12 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
   </p>
   <div class="fig"><div class="fig__body" id="pi-body"></div></div>
 
+  <details class="fold">
+  <summary><span class="fold__t">A preset is a sampler, not a condition</span><span class="fold__hint">measured π per preset</span></summary>
+  <div class="fold__body">
   <div class="prose">
     <p>
-      <b>A preset is a sampler, not a condition.</b> Five of twenty
+      Five of twenty
       <span class="mono">pi_mid</span> seeds fall inside
       <span class="mono">pi_high</span>'s measured range, so an instance at
       π = 0.70 cannot be attributed to a preset. Every run records its own
@@ -719,7 +720,6 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
     everything else fixed and moving only it sweeps π from 0.36 to 0.77
     monotonically.
   </p>
-
   </div>
   </details>
 
@@ -1094,6 +1094,6 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
 
 <script src="assets/js/example-data.js?v=f020657a0f"></script>
 <script src="assets/js/main.js?v=ea7fc422a4"></script>
-<script src="assets/js/pipeline.js?v=4df54c97e4"></script>
+<script src="assets/js/pipeline.js?v=ee9d447b60"></script>
 </body>
 </html>

@@ -685,17 +685,3 @@
       el("div", { class: "table-scroll" }, [t])]));
   })();
 })();
-
-(function () {
-  function openTarget() {
-    var id = decodeURIComponent(location.hash.slice(1));
-    var d = id && document.getElementById(id);
-    if (d && d.tagName === "DETAILS") d.open = true;
-  }
-  window.addEventListener("hashchange", openTarget);
-  document.addEventListener("click", function (e) {
-    var a = e.target.closest && e.target.closest('a[href^="#"]');
-    if (a && a.getAttribute("href") === location.hash) openTarget();
-  });
-  openTarget();
-})();
