@@ -124,3 +124,12 @@ def test_cli_exposes_student_model():
     assert args.student_model == "Qwen/Qwen3-0.6B"
     rc = build_run_config(args)
     assert rc.student_model == "Qwen/Qwen3-0.6B"
+
+
+def test_cli_q_accepts_none_for_uncapped():
+    p = build_parser()
+    args = p.parse_args(["run", "--arm", "no_train", "--q", "none"])
+    assert args.q is None
+    assert build_run_config(args).q_cap is None
+    args = p.parse_args(["run", "--arm", "no_train", "--q", "500"])
+    assert build_run_config(args).q_cap == 500

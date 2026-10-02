@@ -49,3 +49,10 @@ def test_tool_available_uses_arm_and_phase():
 def test_note_appends_event():
     s = _session(); s.note(kind='x', v=1)
     assert s.events[-1] == {'kind':'x','v':1}
+
+
+def test_q_cap_none_means_unlimited():
+    s = _session(q_cap=None)
+    assert s.q_remaining() is None
+    s.q_used = 10 ** 6
+    assert s.q_remaining() is None          # never exhausts

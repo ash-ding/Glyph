@@ -86,6 +86,13 @@ def cmd_grid(args: argparse.Namespace) -> int:
     return 0
 
 
+def _q_type(s: str):
+    """--q accepts an integer cap or none/null/unlimited for no cap."""
+    if s.lower() in ("none", "null", "unlimited"):
+        return None
+    return int(s)
+
+
 def _add_run_args(s: argparse.ArgumentParser) -> None:
     s.add_argument("--arm", required=True, choices=["train", "no_train"])
     s.add_argument("--preset", default="pi_mid")
@@ -93,7 +100,8 @@ def _add_run_args(s: argparse.ArgumentParser) -> None:
     s.add_argument("--student-model", default="Qwen/Qwen3-1.7B",
                    help="the trainable student's base model (train arm); "
                         "NOT the frontier model id")
-    s.add_argument("--q", type=int, default=1000, help="query cap (q_cap)")
+    s.add_argument("--q", type=_q_type, default=1000,
+                   help="query cap (q_cap); none/null/unlimited lifts the cap")
     s.add_argument("--submit-cap", type=int, default=20)
     s.add_argument("--tp", type=int, default=100, help="practice turn cap")
     s.add_argument("--tf", type=int, default=30, help="final turn cap")
@@ -123,7 +131,7 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--student-model", default="Qwen/Qwen3-1.7B",
                    help="the trainable student's base model (train arm); "
                         "NOT the frontier model id")
-    g.add_argument("--q", type=int, default=1000)
+    g.add_argument("--q", type=_q_type, default=1000)
     g.add_argument("--submit-cap", type=int, default=20)
     g.add_argument("--tp", type=int, default=100)
     g.add_argument("--tf", type=int, default=30)

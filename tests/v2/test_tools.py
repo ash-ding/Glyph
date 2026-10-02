@@ -334,3 +334,13 @@ def test_student_infer_tool_rejects_malformed_ref(inst, tmp_path):
     out = T.t_student_infer(s, checkpoint="latest", input_path="a",
                             output_path="b", prefix_path=None)
     assert "error" in out
+
+
+def test_query_uncapped_keeps_billing_and_never_exhausts(inst, tmp_path):
+    s = make_session(inst, tmp_path, q_cap=None)
+    s.q_used = 5000                          # far past any former cap
+    src = novel_expr(inst, CFG)
+    out = T.t_query(s, exprs=[src], why="t")
+    assert "out" in out["results"][0]        # answered, not q_exhausted
+    assert out["q_used"] == 5001             # billing continues uncapped
+    assert out["q_remaining"] is None        # null = no cap
