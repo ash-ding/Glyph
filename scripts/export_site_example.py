@@ -356,7 +356,188 @@ for entry in frozen_manifest:
 assert any(r["id"] == FROZEN_ID and r["seed"] == SEED and r["preset"] == PRESET for r in frozen)
 
 
+# ------------------------------------------------- protocol walkthrough
+# The protocol figures replay a short run on this instance through the real
+# v2 tool handlers, in a scratch workspace: no SDK, no model, no GPU. The
+# answer files are written by the skeleton-only interpreter, so every score
+# shown is a real score of a real file. The train arm's student is a stub:
+# ids and lineage come from the real StudentPool, GPU-dependent fields are
+# elided rather than invented.
+import os
+import re
+import tempfile
+
+from glyph.v2 import tools as V2
+from glyph.v2 import workspace as W2
+from glyph.v2.ledger import Ledger
+from glyph.v2.report import build_report
+from glyph.v2.session import Session
+from glyph.v2.student import StudentPool
+
+ELIDED = "…"
+
+
+class _StubBackend:
+    def train_fn(self, examples, hp, base_model, out_dir, ledger, init_checkpoint=None):
+        return {}
+
+    def make_student(self, base_model, adapter_path, prefix):
+        class _S:
+            last_truncated = 0
+
+            def answer(self, exprs):
+                return ["" for _ in exprs]
+
+            def close(self):
+                pass
+        return _S()
+
+
+def _shown(res, elide=()):
+    out = {k: v for k, v in res.items() if k != "turns_remaining"}
+    if "violations" in out:
+        out["violations"] = {k: n for k, n in out["violations"].items() if n}
+    for k in elide:
+        if k in out:
+            out[k] = ELIDED
+    return out
+
+
+def protocol_walkthrough():
+    pinst = generate(SEED, cfg)
+    skel = Interpreter(cfg, pinst.skeleton, IdentityTables())
+
+    def skel_answer(src):
+        o = skel.eval(parse(src, cfg))
+        return R(o) if isinstance(o, (int, np.integer)) else render_list(o, cfg)
+
+    def write_answers(path, rows):
+        with open(path, "w") as f:
+            for i, a in rows:
+                f.write(json.dumps({"id": i, "answer": a}) + "\n")
+
+    cwd = os.getcwd()
+    with tempfile.TemporaryDirectory() as tmp:
+        run_dir = os.path.join(tmp, "run")
+        paths, val_id_of, test_id_of = W2.build_workspace(pinst, run_dir)
+        os.chdir(paths.root)
+        try:
+            out = {}
+            for arm in ("no_train", "train"):
+                pinst.query_log = type(pinst.query_log)()
+                pinst.query_count = 0
+                open(paths.queries, "w").close()
+                s = Session(pinst, Ledger(), run_dir, arm=arm)
+                s.val_id_of, s.test_id_of = val_id_of, test_id_of
+                s.queries_path, s.work_root = paths.queries, paths.root
+                s.probes = probe_set(pinst)
+                s.probe_id_of = W2.probe_ids_for(pinst, s.probes)
+                calls = []
+
+                def call(tool, args, elide=()):
+                    res = getattr(V2, "t_" + tool)(s, **args)
+                    calls.append({"tool": tool, "args": args, "result": _shown(res, elide),
+                                  "phase": s.phase})
+                    return res
+
+                u0_probe = next(t for t in s.probes if t.split == "u0").expr_src
+                call("query", {"exprs": [u0_probe, src], "why": "a bare atomic; the running example"})
+
+                comp_src = splits["comp"]["example"]["expr"]
+                depth_src = splits["depth"]["example"]["expr"]
+
+                def fresh(e):
+                    tok = re.search(r"v_[^\s,()\[\]]+", e).group()
+                    for k in range(cfg.n_values):
+                        cand = e.replace(tok, R(k), 1)
+                        if cand != e and pinst.query_violation(cand) not in ("is_test_item", "is_validation_item"):
+                            return cand
+                    raise AssertionError(e)
+
+                held_src, deep_src = fresh(comp_src), fresh(depth_src)
+                assert pinst.query_violation(held_src) == "contains_held_out_pair"
+                assert pinst.query_violation(deep_src) == "deeper_than_demos"
+                assert pinst.query_violation(pinst.val[0].expr_src) == "is_validation_item"
+                call("query", {"exprs": [pinst.val[0].expr_src, held_src, deep_src, src[:-1]],
+                               "why": "edges of the query policy"})
+
+                if arm == "no_train":
+                    val_rows = [(val_id_of(t), skel_answer(t.expr_src)) for t in pinst.val]
+                    write_answers("val_partial.jsonl", val_rows[:10])
+                    call("check_answers", {"path": "val_partial.jsonl", "set": "validation"})
+                    write_answers("val_answers.jsonl", val_rows)
+                    call("check_answers", {"path": "val_answers.jsonl", "set": "validation"})
+                    call("submit_validation_answer", {"path": "val_answers.jsonl"})
+                else:
+                    s.student = StudentPool("Qwen/Qwen3-0.6B", s.ledger, work_dir=paths.root,
+                                            queries_path=paths.queries, backend=_StubBackend())
+                    with open(paths.queries) as f:
+                        bought = [json.loads(l) for l in f if l.strip()]
+                    with open("train.jsonl", "w") as f:
+                        for r in bought:
+                            f.write(json.dumps({"expr": r["expr"], "answer": r["out"]}) + "\n")
+                        for e, a in pinst.demos:
+                            f.write(json.dumps({"expr": e, "answer": a}) + "\n")
+                    call("build_dataset", {"path": "train.jsonl"})
+                    gpu = ("final_loss", "gpu_seconds", "gpu_seconds_remaining")
+                    call("train_model", {"dataset_id": "ds1", "epochs": 3, "lr": 1e-5,
+                                         "student_id": "a1b2c3d4"}, gpu)
+                    call("train_model", {"dataset_id": "ds1", "epochs": 1, "lr": 1e-5,
+                                         "student_id": "a1b2c3d4"}, gpu)
+                    open("prefix.txt", "w").close()
+                    call("infer_model", {"checkpoint": "a1b2c3d4", "input_path": "task/validation.jsonl",
+                                         "output_path": "val_student.jsonl", "prefix_path": "prefix.txt"},
+                         ("truncated", "gpu_seconds"))
+                call("finish_practice", {"reason": "done practising"})
+
+                s.switch_to_final()
+                test_path = W2.write_test_file(paths, pinst, test_id_of, probes=s.probes,
+                                               probe_id_of=s.probe_id_of)
+                with open(test_path) as f:
+                    test_rows = [json.loads(l) for l in f if l.strip()]
+                gated = call("query", {"exprs": [u0_probe], "why": "is the oracle still open?"})
+                if arm == "train":
+                    call("infer_model", {"checkpoint": "a1b2c3d4", "input_path": "task/final/test.jsonl",
+                                         "output_path": "test_student.jsonl", "prefix_path": "prefix.txt"},
+                         ("truncated", "gpu_seconds"))
+                write_answers("test_answers.jsonl", [(r["id"], skel_answer(r["expr"])) for r in test_rows])
+                call("check_answers", {"path": "test_answers.jsonl", "set": "test"})
+                call("submit_final_answer", {"path": "test_answers.jsonl"})
+
+                rep = build_report(s, os.path.abspath("test_answers.jsonl"), test_id_of)
+                probe_ops = rep["probe"]["by_op"]
+                out[arm] = {
+                    "calls": calls,
+                    "gate_error": gated["error"],
+                    "test_file": {"n": len(test_rows),
+                                  "n_test": sum(r["id"].startswith("test_") for r in test_rows),
+                                  "n_probe": sum(r["id"].startswith("probe_") for r in test_rows),
+                                  "head": test_rows[:2] + [next(r for r in test_rows if r["id"].startswith("probe_"))]},
+                    "report": {
+                        "overall": round(rep["overall"], 4),
+                        "by_split": {k: round(v, 4) for k, v in sorted(rep["by_split"].items())},
+                        "tail": round(rep["tail"], 4),
+                        "headroom": {k: (None if v is None else round(v, 4)) for k, v in rep["headroom"].items()},
+                        "probe": {op: {"kind": d["kind"], "n": d["n"], "overall": round(d["overall"], 4),
+                                       "seen": d["seen"] and {"n": d["seen"]["n"], "acc": d["seen"]["acc"] and round(d["seen"]["acc"], 4)},
+                                       "unseen": d["unseen"] and {"n": d["unseen"]["n"], "acc": d["unseen"]["acc"] and round(d["unseen"]["acc"], 4)}}
+                                  for op, d in sorted(probe_ops.items())},
+                        "q_used": rep["covariates"]["q_used"],
+                        "submissions": rep["covariates"]["submissions"],
+                    },
+                }
+        finally:
+            os.chdir(cwd)
+    files = {"syntax.md": None, "demos.jsonl": len(pinst.demos), "validation.jsonl": len(pinst.val)}
+    val_head = [{"id": val_id_of(v), "expr": v.expr_src} for v in pinst.val[:2]]
+    return {"arms": out, "workspace": files, "n_test": len(pinst.test), "val_head": val_head}
+
+
+protocol = protocol_walkthrough()
+
+
 data = {
+    "protocol": protocol,
     "frozen": frozen,
     "instance": {"preset": PRESET, "seed": SEED, "frozen_id": FROZEN_ID,
                  "n_values": cfg.n_values, "pi": {k: round(float(v), 4) for k, v in pi.items()}},
