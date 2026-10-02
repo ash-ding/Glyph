@@ -65,9 +65,12 @@ has depth 0 (the depth-0 stratum is {`Val`, `Lit`, `AtomApp`}; an `AtomApp` stil
 lookup — depth counts structure, not computation). And they are **root-only**: the parser accepts
 only value literals as their arguments, while every structural slot is LIST-typed and `AtomApp`
 is VAL-typed, so a bare atomic can never appear inside another expression. The per-op probe set
-is exactly this language's depth-0 stratum, administered separately from the frozen test/val
-(folding depth-0 items into the test would mechanically deflate measured π, because the table
-oracle gets them right for free).
+is this language's SINGLE-OPERATOR ISOLATION stratum, administered separately from the frozen
+test/val: bare atomics at depth 0, and single applications of the pure-structure ops (L/KL
+shapes) at depth 1 — UL/LB ops cannot be isolated, since any expression containing them
+entangles the tables. Folding such items into the test would mechanically deflate measured π
+(the table oracle gets depth-0 items right for free, and the skeleton oracle the structural
+ones).
 
 **Table sizes** (`tables.py:6-8`) — a table is a function, not a stored array:
 

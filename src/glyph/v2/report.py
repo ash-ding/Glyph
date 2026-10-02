@@ -61,9 +61,22 @@ def build_report(session, committed_path, id_of) -> dict:
         by_op: dict[str, dict] = {}
         for op in sorted({t.split for t in probes}):
             its = [t for t in probes if t.split == op]
+            if not any(t.needs_u or t.needs_b for t in its):
+                # Structural probe: knowledge is a rule, not cells, so there
+                # is no seen/unseen split (is_tail would call every table-free
+                # item "seen").
+                by_op[op] = {
+                    "kind": "structural",
+                    "overall": _acc(its),
+                    "n": len(its),
+                    "seen": None,
+                    "unseen": None,
+                }
+                continue
             unseen = [t for t in its if inst.is_tail(t)]
             seen = [t for t in its if not inst.is_tail(t)]
             by_op[op] = {
+                "kind": "atomic",
                 "overall": _acc(its),
                 "n": len(its),
                 "seen": {"n": len(seen), "acc": _acc(seen)},

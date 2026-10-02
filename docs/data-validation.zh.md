@@ -222,6 +222,12 @@ final test 一起下发，是 `final/test.jsonl` 里的 `probe_*` 行；合法�
 输出、通常无法反推中间值——因此 `unseen` 才是干净的下界泛化读数。另外 demos 不进
 `query_log`（它们在生成期算好），demo 摸过的 cell 记为 unseen。
 
+**结构探针。**探针集同样隔离每个**纯结构算子**（L/KL shape）：单层应用 `op([…])` /
+`op(k, […])`——depth-1、不碰表，答案只依赖 skeleton。出题按行为格覆盖（列表长度 × 相等模式 ×
+k），值只是过路货；与密封 test/val 撞车的题会重抽。它们的 `by_op` 条目带
+`kind: "structural"`、seen/unseen 置空——结构知识是规则不是 cell。UL/LB 类继续靠组合题间接
+诊断。reference 专家永远收不到结构探针（它们的 skeleton 上界平凡为 1.0）。
+
 ### 4.5 practice 与 final 阶段
 
 - **practice**（`drive_practice`，`harness.py:111-144`）—— agent 探索：可以 `query`、对验证

@@ -56,9 +56,10 @@ token；更关键的是，让每个值都带有内部的**数字结构**，table
 围绕它有两条不变量：**depth 只数结构算子**，所以裸原子应用的 depth = 0（depth-0 层 =
 {`Val`, `Lit`, `AtomApp`}；`AtomApp` 仍有一次查表——depth 数的是结构，不是计算量）。其次它
 **只能出现在根位置**：parser 只接受 value 字面量作它的实参，而所有结构算子槽位都要求 LIST 型、
-`AtomApp` 是 VAL 型，因此裸原子永远嵌不进别的表达式。per-op 探针集正是这门语言的 depth-0 层，
-以独立方式施测——若把 depth-0 题混入冻结 test/val，table oracle 会白拿这些题，机械地压低测得
-的 π。
+`AtomApp` 是 VAL 型，因此裸原子永远嵌不进别的表达式。per-op 探针集是这门语言的**单算子隔离层**，
+以独立方式施测：裸原子在 depth 0，纯结构算子（L/KL shape）的单层应用在 depth 1——UL/LB 类
+无法隔离（含它们的表达式必然纠缠表）。若把这类题混入冻结 test/val，会机械地压低测得的 π
+（depth-0 题被 table oracle 白拿，结构题被 skeleton oracle 白拿）。
 
 **表的大小**（`tables.py:6-8`）——表是**函数**，不是存下来的数组：
 

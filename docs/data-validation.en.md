@@ -253,6 +253,14 @@ cannot invert the intermediates — so `unseen` is the clean lower-bound general
 demos never enter `query_log` (they are computed at generation time), so demo-touched cells count
 as unseen.
 
+**Structural probes.** The probe set also isolates every PURE-STRUCTURE op (L/KL shapes): single
+applications `op([…])` / `op(k, […])` — depth-1, table-free items whose answer depends only on
+the skeleton. Coverage enumerates behavior cells (list length × equality pattern × k), values
+being mere cargo; items colliding with the sealed test/val are redrawn. Their `by_op` entries
+carry `kind: "structural"` with seen/unseen null — structural knowledge is a rule, not cells.
+UL/LB ops stay diagnosed indirectly. Reference specialists never see structural probes (their
+skeleton ceiling is trivially 1.0).
+
 ### 4.5 Practice vs final phases
 
 - **practice** (`drive_practice`, `harness.py:111-144`) — the agent explores: it can `query`,
