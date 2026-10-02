@@ -3879,3 +3879,32 @@ frac-mode ≡ frozen hash cell-for-cell, holdout clamp rules, explicit-set
 probe scoring. Suggested first v2 sweep (user-gated):
 `tools/run_reference.py --instance mid_1 --only weights-per-op
 --seen-frac 0.02 0.05 0.10 --n-seen 100 300 1000 --student-model Qwen/Qwen3-0.6B`.
+
+## 2026-10-01 — structural probes (implementation; runs deferred)
+
+Per §C of the 2026-10-01 spec: the probe set now also isolates every
+PURE-STRUCTURE op (L/KL shapes) with single applications `op([…])` /
+`op(k, […])` — depth-1, table-free items whose answer depends only on the
+skeleton. UL/LB ops cannot be isolated and stay diagnosed indirectly.
+
+- Coverage enumerates BEHAVIOR cells, values being mere cargo: list length
+  {2,3,4} × equality pattern {distinct, first==last, internal-dup (len≥3)}
+  × k {1..3} (KL only) → 8 cells per L op, 24 per KL op, `struct_reps=2`
+  items each. Collisions with the sealed test/val are redrawn (unlike bare
+  atomics, single-application items CAN coincide with depth-1 iid items).
+- The atomic prefix of the probe set is byte-identical to before (same RNG
+  stream, structural draws appended) — pinned by a test.
+- Report `by_op` entries carry `kind: "atomic" | "structural"`; structural
+  ops have seen/unseen = null (structural knowledge is a rule, not cells;
+  `is_tail` would classify every table-free item as seen). Exposure covariate
+  (op occurrences in demos/purchased queries) noted as future work.
+- Reference side unchanged: weights-per-op filters by atomic op names, so
+  specialists never see structural probes.
+- Positioning fixed in both doc sets: the probe set is the SINGLE-OPERATOR
+  ISOLATION stratum (atomics at depth 0, pure-structure ops at depth 1), no
+  longer "the depth-0 stratum".
+
+Ran on lumen1: `pytest -q -m "not slow"` → **308 passed, 6 deselected
+(0:11:06)**; frozen-integrity and data-boundary gates unmodified and green.
+No agent run or GPU run — next real v2 run picks the new probes up
+automatically via the harness's `probe_set(inst)`.
