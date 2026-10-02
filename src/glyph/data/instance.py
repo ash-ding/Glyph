@@ -312,11 +312,10 @@ class GlyphInstance:
         attributed to a preset, and a figure keyed on the name would be
         grouping instances that differ more within a group than between.
 
-        Which items this is measured on is still open (#3): `measure_pi`
-        samples `test[:1500]`, which at full size is entirely `iid`. The whole
-        dict is recorded rather than the ratio alone so that a later change of
-        definition can be recomputed from `a_skel` and `a_tab` without
-        regenerating anything.
+        Measured on the whole held-out test, with pi per split alongside. The
+        whole dict is recorded rather than the ratio alone so that a later
+        change of definition can be recomputed from `a_skel` and `a_tab`
+        without regenerating anything.
         """
         if self._pi is None:
             from .measure import measure_pi

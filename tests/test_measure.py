@@ -52,3 +52,11 @@ def test_pi_is_in_range_and_full_is_exact():
     m = generate(1001, _fast("pi_mid")).measured_pi()
     assert m["full"] == pytest.approx(1.0)
     assert 0.0 <= m["pi"] <= 1.0
+
+
+def test_pi_is_measured_on_the_whole_held_out_test():
+    inst = generate(1001, _fast("pi_mid"))
+    m = inst.measured_pi()
+    assert m["n"] == len(inst.test)
+    for split in ("iid", "comp", "depth"):
+        assert 0.0 <= m[f"pi_{split}"] <= 1.0

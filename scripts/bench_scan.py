@@ -5,11 +5,9 @@ Two things this settles, both prerequisites for finalising the data layer:
 **E-1, the pi axis.** The presets carry an *intended* pi and the phase diagram
 uses the measured one, so what matters is the measured distribution per preset:
 its spread, its overlap with neighbours, and how many seeds fail to generate at
-all. It also reports pi two ways -- the current definition and a stratified one
--- because `measure_pi` samples `test[:1500]`, and at full size the first 6500
-items are *all* `iid`. Under the current definition `comp` and `depth` have
-never entered a pi measurement, and those are exactly the splits where the
-skeleton carries weight.
+all. It reports pi under the current definition (`measure_pi`, the whole
+held-out test), on a 1500-item stratified sample, and per split, because the
+skeleton carries different weight in `iid`, `comp` and `depth`.
 
 **E-2, the ceilings.** An arm's score is uninterpretable without them. On
 pi_mid/1001 the true skeleton with an identity table scores 0.222, exactly the
@@ -79,7 +77,7 @@ def scan_one(preset: str, seed: int) -> dict:
     rng = np.random.default_rng(seed)
 
     # -- E-1: pi under the current definition, and stratified ------------
-    cur = _pi_from(skel, tab, inst, inst.test[:1500])
+    cur = inst.measured_pi()
     strat = _pi_from(skel, tab, inst, _stratified(inst.test, 1500, rng))
     per_split_pi = {s: _pi_from(skel, tab, inst, inst.test_set(s))["pi"]
                     for s in ("iid", "comp", "depth")}
@@ -106,7 +104,7 @@ def scan_one(preset: str, seed: int) -> dict:
 
     return {
         "preset": preset, "seed": seed, "ok": True, "n_test": n_all,
-        "pi_current_iid_only": cur["pi"], "pi_stratified": strat["pi"],
+        "pi_current": cur["pi"], "pi_stratified": strat["pi"],
         "pi_per_split": per_split_pi,
         "a_skel_graded": cur["a_skel"], "a_tab_graded": cur["a_tab"],
         "ceiling_overall": {
@@ -142,7 +140,7 @@ def main() -> int:
                 fh.write(json.dumps(r) + "\n")
                 fh.flush()
                 tag = "ok  " if r["ok"] else "FAIL"
-                extra = (f"pi={r['pi_current_iid_only']} strat={r['pi_stratified']} "
+                extra = (f"pi={r['pi_current']} strat={r['pi_stratified']} "
                          f"ceil={r['ceiling_overall']['skeleton_ceiling']}"
                          if r["ok"] else f"split={r['failed_split']}")
                 print(f"{tag} {preset:8s} {seed}  {extra}  {r['seconds']}s")
@@ -156,12 +154,12 @@ def main() -> int:
         if not ok:
             print(f"{preset}: 0/{len(got)} generated")
             continue
-        cur = sorted(r["pi_current_iid_only"] for r in ok)
+        cur = sorted(r["pi_current"] for r in ok)
         strat = sorted(r["pi_stratified"] for r in ok)
         ceil = sorted(r["ceiling_overall"]["skeleton_ceiling"] for r in ok)
         by_reason = collections.Counter(r["failed_split"] for r in bad)
         print(f"{preset:8s} generated {len(ok)}/{len(got)}   unfillable={dict(by_reason)}")
-        print(f"         pi (current, iid only) median={cur[len(cur)//2]:.3f} "
+        print(f"         pi (current, full test) median={cur[len(cur)//2]:.3f} "
               f"range=[{cur[0]:.3f}, {cur[-1]:.3f}]")
         print(f"         pi (stratified)        median={strat[len(strat)//2]:.3f} "
               f"range=[{strat[0]:.3f}, {strat[-1]:.3f}]")

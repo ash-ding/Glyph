@@ -519,7 +519,8 @@
   (function () {
     var practice = document.getElementById("splits-practice");
     var test = document.getElementById("splits-test");
-    if (!practice || !test) return;
+    var probe = document.getElementById("splits-probe");
+    if (!practice || !test || !probe) return;
     var S = D.splits, PR = D.probes;
     var groups = [
       [practice, [
@@ -529,7 +530,9 @@
       [test, [
         { name: "iid", n: S.iid.n, hist: S.iid.depth_hist, rule: "depth 1–2 · held pairs forbidden", ex: S.iid.example },
         { name: "comp", n: S.comp.n, hist: S.comp.depth_hist, rule: "depth 1–2 · must contain a held pair", ex: S.comp.example },
-        { name: "depth", n: S.depth.n, hist: S.depth.depth_hist, rule: "depth 3–4 · deeper than any demo", ex: S.depth.example },
+        { name: "depth", n: S.depth.n, hist: S.depth.depth_hist, rule: "depth 3–4 · deeper than any demo", ex: S.depth.example }
+      ]],
+      [probe, [
         { name: "probe", n: PR.n, hist: PR.depth_hist, rule: "one operator at a time · atomic at depth 0, pure-structure at depth 1",
           ex: { expr: PR.examples.filter(function (x) { return x.op === "u0" || x.op === "s3"; }).map(function (x) { return x.expr; }).join("  ·  ") } }
       ]]
@@ -581,7 +584,7 @@
     ]));
     var Ls = pi.L_skel, Lt = pi.L_table;
     body.appendChild(el("p", { class: "small muted", text:
-      "Over " + pi.n + " test items (graded per digit, so one wrong lookup does not zero an item): " +
+      "Over the " + pi.n.toLocaleString("en-US") + "-item held-out test (graded per digit, so one wrong lookup does not zero an item): " +
       "the identity-table interpreter scores " + pi.a_skel.toFixed(3) + ", so missing the tables costs L_table = " + Lt.toFixed(3) +
       "; the textbook-skeleton one scores " + pi.a_tab.toFixed(3) + ", so missing the skeleton costs L_skel = " + Ls.toFixed(3) + "." }));
     var share = el("div", { class: "share", role: "img", "aria-label": "Skeleton share of the difficulty" });
@@ -592,6 +595,8 @@
     body.appendChild(share);
     body.appendChild(el("p", { class: "mono small", text: "π = L_skel / (L_skel + L_table) = " + Ls.toFixed(3) + " / " +
       (Ls + Lt).toFixed(3) + " = " + pi.pi.toFixed(3) + "   — mid_3 sits almost exactly between the two halves." }));
+    body.appendChild(el("p", { class: "small muted", text: "π per split: iid " + pi.pi_iid.toFixed(3) +
+      " · comp " + pi.pi_comp.toFixed(3) + " · depth " + pi.pi_depth.toFixed(3) + "." }));
   })();
 
   /* ========================================= Validation: frozen instances */

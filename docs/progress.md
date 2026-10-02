@@ -3909,6 +3909,71 @@ Ran on lumen1: `pytest -q -m "not slow"` → **308 passed, 6 deselected
 No agent run or GPU run — next real v2 run picks the new probes up
 automatically via the harness's `probe_set(inst)`.
 
+## 2026-10-02 — π measured on the whole held-out test
+
+**Change.** `measure_pi` scored `inst.test[:1500]`, which at full size is
+entirely `iid`; `comp` and `depth` never entered π (open question #3). It now
+scores the whole held-out test (`iid`, `comp`, `depth`, the items an arm is
+scored on) and records π per split alongside, as `pi_iid`, `pi_comp` and
+`pi_depth`. The probe set is separate and never enters. Grading is unchanged:
+per-digit partial credit, for π only.
+
+**The 15 frozen instances**, regenerated and fingerprint-checked:
+
+| id | old π | new π | iid | comp | depth |
+|---|---|---|---|---|---|
+| low_1 | 0.2037 | 0.2039 | 0.207 | 0.172 | 0.240 |
+| low_2 | 0.2256 | 0.2306 | 0.224 | 0.239 | 0.247 |
+| low_3 | 0.2493 | 0.2581 | 0.243 | 0.315 | 0.221 |
+| low_4 | 0.2724 | 0.2588 | 0.272 | 0.211 | 0.268 |
+| low_5 | 0.2965 | 0.2865 | 0.304 | 0.216 | 0.310 |
+| mid_1 | 0.4520 | 0.4564 | 0.439 | 0.539 | 0.394 |
+| mid_2 | 0.4694 | 0.4808 | 0.466 | 0.524 | 0.486 |
+| mid_3 | 0.4905 | 0.4818 | 0.490 | 0.466 | 0.471 |
+| mid_4 | 0.5080 | 0.5097 | 0.510 | 0.532 | 0.469 |
+| mid_5 | 0.5294 | 0.5168 | 0.527 | 0.493 | 0.503 |
+| high_1 | 0.7010 | 0.7028 | 0.707 | 0.737 | 0.630 |
+| high_2 | 0.7288 | 0.7177 | 0.736 | 0.714 | 0.637 |
+| high_3 | 0.7511 | 0.7402 | 0.751 | 0.723 | 0.717 |
+| high_4 | 0.7726 | 0.7861 | 0.782 | 0.858 | 0.698 |
+| high_5 | 0.7936 | 0.7938 | 0.795 | 0.732 | 0.891 |
+
+Every new π is still inside its band's selection window. **The frozen set is
+kept; only its recorded π changed.** Re-running `select_instances` on the
+rescanned pool would swap 10 of the 15, `mid_3` among them, because selection
+picks the candidate nearest to each target π. Keeping the set keeps the
+reference ceilings, the site's walkthrough and earlier runs valid. As a
+result, `frozen_instances.json` is no longer what `select_instances` would
+produce from `candidates.json`. Both files are rewritten (210 candidates
+rescanned).
+
+**Across presets the shift is not small for `pi_low`.**
+`scripts/bench_scan.py --seeds 20` (full 10k tests; `pi_current` is now the
+full-test π):
+
+| preset | median π, old (`test[:1500]`) | median π, new | new range |
+|---|---|---|---|
+| pi_low | 0.306 | **0.368** | 0.195 – 0.580 |
+| pi_mid | 0.543 | 0.537 | 0.345 – 0.707 |
+| pi_high | 0.736 | 0.743 | 0.646 – 0.851 |
+
+On `pi_low` the skeleton contributes mostly in `comp`, the split that is forced
+to use a held-out composition, so counting `comp` raises π. The five frozen
+low instances sit in [0.20, 0.30) and happen to move little; they are not
+representative of the preset. 5 of 20 `pi_mid` seeds still fall inside
+`pi_high`'s range.
+
+**Also changed.** `bench_scan.py` reports `pi_current` (renamed from
+`pi_current_iid_only`). Open question #3 is settled. The data-generation docs,
+the `measured_pi` docstring and the site (π text, per-split π, preset ranges,
+frozen chart) are updated to match.
+
+Ran on lumen1: `pytest -q -m "not slow"` → 308 passed, 1 failed, 6 deselected
+(0:10:14). The failure was the site asset-stamp check: `example-data.js` had
+been re-exported but not yet re-stamped. After stamping,
+`test_site_asset_versions.py`, `test_public_docs_are_english.py` and
+`test_frozen_instances.py` → 13 passed.
+
 ## 2026-10-02 — protocol id formats normalized (student_id / checkpoint_id)
 
 The train-arm id surface is now format-constrained, closing the resolution
