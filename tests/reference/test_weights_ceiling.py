@@ -58,29 +58,60 @@ def test_oracle_prompts_are_public_syntax():
         assert parse(p[:-2], cfg) == want
 
 
-def test_score_probes_perfect_student_and_seen_split():
-    """A perfect student scores 1.0 on its op's probes; seen/unseen n's are
-    decided by the training hash, not by any query log."""
+# ---------------------------------------------------------------------
+# per-op oracle v2: eligibility, holdout split, exposure-exact probe scoring
+# ---------------------------------------------------------------------
+
+def test_eligible_cells_n_mode_exact_and_deterministic():
+    import pytest
+    from glyph.reference.weights_ceiling import eligible_cells
+    inst = generate(1001, PRESETS["smoke"])
+    n_vals = inst.cfg.n_values
+    for op, width in (("u0", 1), ("b0", 2)):
+        a = eligible_cells(inst, op, n_seen=12)
+        b = eligible_cells(inst, op, n_seen=12)
+        assert a == b and len(a) == 12 == len(set(a))
+        assert all(len(c) == width and all(0 <= x < n_vals for x in c) for c in a)
+    assert eligible_cells(inst, "u0", n_seen=12) != eligible_cells(inst, "u1", n_seen=12)
+    with pytest.raises(ValueError):
+        eligible_cells(inst, "u9", n_seen=5)
+    with pytest.raises(ValueError):
+        eligible_cells(inst, "u0")                        # neither knob
+    with pytest.raises(ValueError):
+        eligible_cells(inst, "u0", seen_frac=0.1, n_seen=5)  # both knobs
+
+
+def test_eligible_cells_frac_mode_matches_frozen_hash():
+    from glyph.reference.weights_ceiling import eligible_cells, seen_b
+    inst = generate(1001, PRESETS["smoke"])
+    n_vals = inst.cfg.n_values
+    assert eligible_cells(inst, "u0", seen_frac=0.3) ==         [(i,) for i in range(n_vals) if seen_u(i, 0.3)]
+    assert eligible_cells(inst, "b1", seen_frac=0.3) ==         [(i, j) for i in range(n_vals) for j in range(n_vals) if seen_b(i, j, 0.3)]
+
+
+def test_split_holdout_rules():
+    from glyph.reference.weights_ceiling import split_holdout
+    cells = [(i,) for i in range(100)]
+    tr, ho = split_holdout(cells, seed=7)
+    tr2, ho2 = split_holdout(cells, seed=7)
+    assert (tr, ho) == (tr2, ho2)                      # deterministic
+    assert not (set(tr) & set(ho))
+    assert sorted(tr + ho) == cells
+    assert len(ho) == 10                               # round(0.1 * 100)
+    assert len(split_holdout([(i,) for i in range(20)], seed=7)[1]) == 8   # floor 8
+    assert len(split_holdout([(i,) for i in range(50000)], seed=7)[1]) == 1024  # cap
+    assert len(split_holdout([(i,) for i in range(5)], seed=7)[1]) == 4   # at most n-1
+
+
+def test_score_probes_with_explicit_seen_sets():
     from glyph.data.probe import probe_set
     from glyph.reference.weights_ceiling import score_probes
     inst = generate(1001, PRESETS["smoke"])
-    frac = 0.5
     probes = [t for t in probe_set(inst, n_per_op=10) if t.split == "u0"]
+    seen_cells = {next(iter(t.needs_u)) for t in probes[:3]}   # 3 full-keyed cells
     out = score_probes(
-        inst, probes, frac,
+        inst, probes, seen_cells,
         answer_unary=lambda name, i: inst.tables.apply_unary(name, i),
         answer_binary=lambda name, i, j: inst.tables.apply_binary(name, i, j))
     assert out["overall"] == 1.0 and out["n"] == len(probes)
-    n_seen = sum(1 for t in probes for (_, i) in t.needs_u if seen_u(i, frac))
-    assert out["seen"]["n"] == n_seen
-    assert out["seen"]["n"] + out["unseen"]["n"] == out["n"]
-
-
-def test_train_student_ops_restriction_signature():
-    """CPU-only: the ops filter must reject unknown op names before any GPU
-    work starts (fail fast on a typo, not 6000 steps in)."""
-    import pytest
-    from glyph.reference.weights_ceiling import train_student
-    inst = generate(1001, PRESETS["smoke"])
-    with pytest.raises(ValueError):
-        train_student(inst, 0.1, ops=["u9"])
+    assert out["seen"]["n"] == 3 and out["unseen"]["n"] == len(probes) - 3

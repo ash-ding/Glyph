@@ -29,6 +29,7 @@ from ..data.interp import Interpreter
 from ..seal import headroom as _headroom
 
 SEED = 20260831
+N_SEEN_SALT = 20261001
 
 
 # What the student is allowed to train on, as a fraction of the table.
@@ -158,11 +159,11 @@ def _score_on(inst, student_tables, items) -> dict:
 
 
 def train_student(inst, seen_frac, *, model="Qwen/Qwen3-1.7B", lr=1e-4,
-                  steps=6000, batch=128, device="cuda", ops=None):
+                  steps=6000, batch=128, device="cuda"):
     """Train one student model on a `seen_frac` slice of `inst`'s tables.
 
-    `ops` restricts the training stream to the given atomic operators (e.g.
-    `ops=["u0"]` trains a per-op specialist); None trains on all of them.
+    This is the GENERALIST oracle's frozen protocol (fixed 6000 steps); the
+    per-op specialists use `train_specialist`, which is budget-aware.
 
     [GPU] The training loop from `table_ceiling.py::main` (its `stream`/`pad`/
     optimizer section). Not exercised by the CPU unit test -- `torch` and
@@ -171,12 +172,6 @@ def train_student(inst, seen_frac, *, model="Qwen/Qwen3-1.7B", lr=1e-4,
     """
     cfg = inst.cfg
     us, bs = unary_names(cfg), binary_names(cfg)
-    if ops is not None:
-        unknown = [o for o in ops if o not in us + bs]
-        if unknown:
-            raise ValueError(f"unknown atomic op(s) {unknown!r}")
-        us = [o for o in us if o in ops]
-        bs = [o for o in bs if o in ops]
 
     import numpy as np
     import torch
@@ -298,10 +293,12 @@ def score_ceiling(inst, model, tok, items, *, device="cuda") -> dict:
     return _score_on(inst, student_tables, items)
 
 
-def score_probes(inst, probe_items, seen_frac, answer_unary, answer_binary) -> dict:
-    """Score a student on bare-atomic probe items, split seen/unseen by the
-    TRAINING hash (`seen_u`/`seen_b`) -- the reference-side analogue of the
-    agent report's LookupLog split. CPU-pure via the answer-callable seam."""
+def score_probes(inst, probe_items, seen_cells, answer_unary, answer_binary) -> dict:
+    """Score a student on bare-atomic probe items, split seen/unseen by an
+    EXPLICIT set of full-keyed cells -- ("u0", i) / ("b0", i, j) -- normally a
+    specialist's actual TRAIN split, so "seen" means EXPOSED, not merely
+    eligible (early-stop holdout cells therefore count as unseen).  CPU-pure
+    via the answer-callable seam."""
     cfg = inst.cfg
     need_u, need_b = set(), set()
     for t in probe_items:
@@ -310,10 +307,10 @@ def score_probes(inst, probe_items, seen_frac, answer_unary, answer_binary) -> d
     tables = _student_tables_from(answer_unary, answer_binary, need_u, need_b, cfg)
 
     def _is_seen(t) -> bool:
-        for (_, i) in t.needs_u:
-            return seen_u(i, seen_frac)
-        for (_, i, j) in t.needs_b:
-            return seen_b(i, j, seen_frac)
+        for cell in t.needs_u:
+            return cell in seen_cells
+        for cell in t.needs_b:
+            return cell in seen_cells
         return False
 
     seen = [t for t in probe_items if _is_seen(t)]
@@ -330,7 +327,7 @@ def score_probes(inst, probe_items, seen_frac, answer_unary, answer_binary) -> d
     }
 
 
-def score_probes_model(inst, model, tok, probe_items, seen_frac, *,
+def score_probes_model(inst, model, tok, probe_items, seen_cells, *,
                        device="cuda") -> dict:
     """[GPU] `score_probes` with the callables built from one batched
     `generate_answers` pass per operator kind."""
@@ -343,6 +340,238 @@ def score_probes_model(inst, model, tok, probe_items, seen_frac, *,
     au = generate_answers(model, tok, cfg, [prompt_unary(o, i, cfg) for o, i in nu], device)
     ab = generate_answers(model, tok, cfg, [prompt_binary(o, i, j, cfg) for o, i, j in nb], device)
     u_ans, b_ans = dict(zip(nu, au)), dict(zip(nb, ab))
-    return score_probes(inst, probe_items, seen_frac,
+    return score_probes(inst, probe_items, seen_cells,
                         lambda name, i: u_ans.get((name, i), -1),
                         lambda name, i, j: b_ans.get((name, i, j), -1))
+
+
+# ---------------------------------------------------------------------
+# Per-op specialists v2: two coverage knobs, budget-aware training.
+# See docs/superpowers/specs/2026-10-01-perop-oracle-v2-and-depth0-design.md
+# ---------------------------------------------------------------------
+
+def eligible_cells(inst, op, *, seen_frac=None, n_seen=None) -> list:
+    """The cells a per-op specialist may train on, materialized.
+
+    Exactly one knob:
+      - `seen_frac` -- fraction of THIS op's own table, via the frozen hash
+        (`seen_u`/`seen_b`), so frac-mode eligibility stays comparable with
+        the generalist oracle's coverage axis;
+      - `n_seen` -- exactly N distinct cells, same N for every op, drawn from
+        a dedicated RNG stream keyed by (instance seed, op, N_SEEN_SALT).
+        This is the agent-budget-relevant knob (Q=1000 bounds what an agent
+        could ever buy for one op).
+
+    Returns sorted cells: `(i,)` for a unary op, `(i, j)` for a binary one.
+    CPU-pure.  frac-mode binary materializes a |V|x|V| key grid (~400 MB
+    transient at 17**3); fine on the benchmark hosts.
+    """
+    import numpy as np
+
+    cfg = inst.cfg
+    us, bs = unary_names(cfg), binary_names(cfg)
+    if op not in us and op not in bs:
+        raise ValueError(f"unknown atomic op {op!r}")
+    if (seen_frac is None) == (n_seen is None):
+        raise ValueError("pass exactly one of seen_frac / n_seen")
+    unary = op in us
+    n = cfg.n_values
+
+    if seen_frac is not None:
+        if unary:
+            return [(i,) for i in range(n) if seen_u(i, seen_frac)]
+        keys = (np.arange(n, dtype=np.int64)[:, None] * 7919
+                + np.arange(n, dtype=np.int64)[None, :])
+        mask = (keys * 2654435761) % 100000 < seen_frac * 100000
+        ii, jj = np.nonzero(mask)
+        return [(int(i), int(j)) for i, j in zip(ii, jj)]
+
+    kind, idx = (0, us.index(op)) if unary else (1, bs.index(op))
+    rng = np.random.default_rng((inst.seed, kind, idx, N_SEEN_SALT))
+    if unary:
+        if n_seen > n:
+            raise ValueError(f"n_seen={n_seen} exceeds the {n}-entry unary table")
+        return sorted((int(i),) for i in rng.choice(n, size=n_seen, replace=False))
+    if n_seen > n * n:
+        raise ValueError(f"n_seen={n_seen} exceeds the {n * n}-entry binary table")
+    cells: set = set()
+    while len(cells) < n_seen:
+        cells.add((int(rng.integers(n)), int(rng.integers(n))))
+    return sorted(cells)
+
+
+def split_holdout(cells: list, *, seed, holdout_frac: float = 0.1) -> tuple:
+    """Deterministic early-stop split: (train, holdout).
+
+    Holdout size = round(holdout_frac * n), clamped to [8, 1024] and to at
+    most n-1 -- the holdout is NEVER trained on, and scoring counts it as
+    unseen (exposure-exact semantics)."""
+    import numpy as np
+
+    n = len(cells)
+    if n < 2:
+        raise ValueError("need at least 2 eligible cells to split")
+    k = int(round(holdout_frac * n))
+    k = max(8, min(k, 1024))
+    k = min(k, max(1, n - 1))
+    rng = np.random.default_rng(seed)
+    order = rng.permutation(n)
+    hold = {cells[int(i)] for i in order[:k]}
+    train = [c for c in cells if c not in hold]
+    return train, sorted(hold)
+
+
+def train_specialist(inst, op, *, seen_frac=None, n_seen=None,
+                     model="Qwen/Qwen3-0.6B", lr=1e-4, batch=128,
+                     max_epochs=300, max_steps=20000, patience=5,
+                     holdout_frac=0.1, eval_every_steps=500, device="cuda"):
+    """[GPU] Train one per-op specialist under a budget-aware schedule.
+
+    Replaces the fixed-6000-step `ops=[op]` path: the training set is the
+    materialized eligible pool minus an early-stop holdout; epochs shuffle
+    the finite set; holdout LOSS is evaluated each epoch (and every
+    `eval_every_steps` inside long epochs), with `patience` misses stopping
+    the run and the best state restored.  Hard caps: `max_epochs`,
+    `max_steps`.
+
+    Returns `(net, tok, record)`.  `record["train_cells"]` /
+    `record["holdout_cells"]` are FULL-KEYED cells (("u0", i) / ("b0", i, j))
+    for exposure-exact probe scoring via `score_probes`.
+    """
+    import copy
+    import math
+
+    import numpy as np
+    import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    cfg = inst.cfg
+    cells = eligible_cells(inst, op, seen_frac=seen_frac, n_seen=n_seen)
+    train_cells, hold_cells = split_holdout(
+        cells, seed=(inst.seed, N_SEEN_SALT + 1), holdout_frac=holdout_frac)
+    unary = len(cells[0]) == 1
+
+    def pa(c):
+        if unary:
+            return prompt_unary(op, c[0], cfg), inst.tables.apply_unary(op, c[0])
+        return prompt_binary(op, c[0], c[1], cfg), inst.tables.apply_binary(op, *c)
+
+    tok = AutoTokenizer.from_pretrained(model)
+    if tok.pad_token_id is None:
+        tok.pad_token = tok.eos_token
+
+    def encode(cs):
+        ids, labels = [], []
+        for c in cs:
+            prm, ans = pa(c)
+            pi = tok(prm, add_special_tokens=False)["input_ids"]
+            ai = tok(" " + render_value(ans, cfg),
+                     add_special_tokens=False)["input_ids"] + [tok.eos_token_id]
+            ids.append(pi + ai)
+            labels.append([-100] * len(pi) + ai)
+        return ids, labels
+
+    tr_ids, tr_labels = encode(train_cells)
+    ho_ids, ho_labels = encode(hold_cells)
+
+    def pad(seqs, fill):
+        m = max(len(s) for s in seqs)
+        return torch.tensor([[fill] * (m - len(s)) + s for s in seqs],
+                            device=device)
+
+    torch.manual_seed(SEED)
+    rng = np.random.default_rng(SEED)
+    net = AutoModelForCausalLM.from_pretrained(
+        model, dtype=torch.bfloat16, attn_implementation="sdpa").to(device)
+    net.gradient_checkpointing_enable()
+    net.config.use_cache = False
+    opt = torch.optim.AdamW(net.parameters(), lr=lr)
+
+    def holdout_loss() -> float:
+        net.eval()
+        tot, cnt = 0.0, 0
+        with torch.no_grad():
+            for s in range(0, len(ho_ids), batch):
+                x = pad(ho_ids[s:s + batch], tok.pad_token_id)
+                y = pad(ho_labels[s:s + batch], -100)
+                out = net(input_ids=x,
+                          attention_mask=(x != tok.pad_token_id).long(),
+                          labels=y)
+                ntok = int((y != -100).sum())
+                tot += float(out.loss) * ntok
+                cnt += ntok
+        net.train()
+        return tot / max(1, cnt)
+
+    best = math.inf
+    best_state = None
+    misses = 0
+    stopped_by = "max_epochs"
+
+    def evaluate() -> bool:
+        nonlocal best, best_state, misses
+        loss = holdout_loss()
+        if loss < best - 1e-4:
+            best, misses = loss, 0
+            best_state = {k: v.detach().cpu().clone()
+                          for k, v in net.state_dict().items()}
+        else:
+            misses += 1
+        return misses >= patience
+
+    steps = epochs = since_eval = 0
+    steps_per_epoch = math.ceil(len(tr_ids) / batch)
+    net.train()
+    done = False
+    while not done and epochs < max_epochs and steps < max_steps:
+        order = rng.permutation(len(tr_ids))
+        for s in range(0, len(order), batch):
+            idx = [int(i) for i in order[s:s + batch]]
+            x = pad([tr_ids[i] for i in idx], tok.pad_token_id)
+            y = pad([tr_labels[i] for i in idx], -100)
+            loss = net(input_ids=x,
+                       attention_mask=(x != tok.pad_token_id).long(),
+                       labels=y).loss
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(net.parameters(), 1.0)
+            opt.step()
+            opt.zero_grad(set_to_none=True)
+            steps += 1
+            since_eval += 1
+            if steps >= max_steps:
+                stopped_by = "max_steps"
+                done = True
+                break
+            if steps_per_epoch > eval_every_steps and since_eval >= eval_every_steps:
+                since_eval = 0
+                if evaluate():
+                    stopped_by = "early_stop"
+                    done = True
+                    break
+        epochs += 1
+        if not done and evaluate():
+            stopped_by = "early_stop"
+            done = True
+
+    if best_state is None:
+        evaluate()
+    if best_state is not None:
+        net.load_state_dict(best_state)
+    net.config.use_cache = True
+
+    key = (lambda c: (op,) + tuple(c))
+    record = {
+        "op": op,
+        "model": model,
+        "knob": {"seen_frac": seen_frac, "n_seen": n_seen},
+        "n_eligible": len(cells),
+        "n_train": len(train_cells),
+        "n_holdout": len(hold_cells),
+        "epochs": epochs,
+        "steps": steps,
+        "stopped_by": stopped_by,
+        "best_holdout_loss": None if best == math.inf else best,
+        "train_cells": {key(c) for c in train_cells},
+        "holdout_cells": {key(c) for c in hold_cells},
+    }
+    return net, tok, record
