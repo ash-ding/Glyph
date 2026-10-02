@@ -85,10 +85,22 @@ and `a_tab` rather than a rerun. `measured_pi()` caches (0.22 s once).
 Commits the paper to describing N instances along a continuous axis, not three
 settings. Figures key on `instance["pi"]["pi"]`.
 
-### [#3](https://github.com/ash-ding/Glyph/issues/3) — does π stay measured on `iid` only?
+### ~~[#3](https://github.com/ash-ding/Glyph/issues/3) — does π stay measured on `iid` only?~~ · settled
 
-`measure_pi` scores `inst.test[:1500]`; at full size the first 6500 items are
-all `iid`, so `comp` and `depth` have never entered a π measurement.
+**No — π is measured on the whole held-out test** (`iid`, `comp`, `depth`),
+the items an arm is scored on, with π per split recorded alongside
+(`pi_iid`, `pi_comp`, `pi_depth`). Settled 2026-10-01; the measurements are in
+`progress.md`. On the 15 frozen instances the switch moved π by at most 0.014
+and every instance stayed inside its band's window, so the frozen set was
+kept and only its recorded π updated. Across a preset the shift is larger for
+`pi_low`: its median over 20 seeds rose from 0.306 to 0.368, because its
+skeleton contributes mostly in `comp`. Per-split π differs from `iid` by up to
+~0.1 (e.g. `high_5` depth 0.891 vs iid 0.795), which the per-split fields now
+expose.
+
+The history that led here, kept for reference: `measure_pi` used to score
+`inst.test[:1500]`; at full size the first 6500 items are all `iid`, so `comp`
+and `depth` had never entered a π measurement.
 
 | preset | median \|iid-only − stratified\| | max |
 |---|---|---|

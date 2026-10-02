@@ -237,9 +237,10 @@ L_skel  = 1 - a_tab                                  # loss from not knowing the
 - **π → 0**: almost all loss traces to not knowing the *table* → a "memorization/training"
   instance.
 
-`measure_pi(inst, sample=1500)` (`measure.py:75-90`) measures on `inst.test[:1500]` (which at
-full size is entirely `iid`) and returns `pi_components`:
-`{full, a_skel, a_tab, L_table, L_skel, pi, n}`.
+`measure_pi(inst)` (`measure.py`) measures on the whole held-out test, `inst.test` (`iid`,
+`comp` and `depth`; the probe set is separate and never enters), and returns `pi_components`:
+`{full, a_skel, a_tab, L_table, L_skel, pi, n, pi_iid, pi_comp, pi_depth}` — the overall ratio
+plus π restricted to each split.
 
 The π measurement (only) is scored with a lenient **digit-match** (fraction of digit positions
 that agree, `measure.py:28-35`); the agent arms and the reference oracles are scored by **exact

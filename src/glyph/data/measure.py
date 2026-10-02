@@ -59,33 +59,53 @@ def _graded(pred: str, gold: str) -> float:
     return sum(_digit_match(x, y) for x, y in zip(pa, ga)) / n
 
 
-def _score(interp, inst, items, graded: bool = True) -> float:
-    tot = 0.0
+def _item_scores(interp, inst, items, graded: bool = True) -> list[float]:
+    out = []
     for t in items:
         try:
-            out = interp.eval(parse(t.expr_src, inst.cfg))
+            res = interp.eval(parse(t.expr_src, inst.cfg))
         except Exception:
+            out.append(0.0)
             continue
-        src = (render_value(out, inst.cfg) if isinstance(out, int)
-               else render_list(out, inst.cfg))
-        tot += _graded(src, t.answer_src) if graded else float(src == t.answer_src)
-    return tot / max(1, len(items))
+        src = (render_value(res, inst.cfg) if isinstance(res, int)
+               else render_list(res, inst.cfg))
+        out.append(_graded(src, t.answer_src) if graded else float(src == t.answer_src))
+    return out
 
 
-def measure_pi(inst, sample: int = 1500) -> dict[str, float]:
-    items = inst.test[:sample]
-    full = _score(inst.P, inst, items)
-    a_skel = _score(Interpreter(inst.cfg, inst.skeleton, IdentityTables()), inst, items)
-    a_tab = _score(Interpreter(inst.cfg, trivial_skeleton(inst.cfg), inst.tables),
-                   inst, items)
+def _score(interp, inst, items, graded: bool = True) -> float:
+    return sum(_item_scores(interp, inst, items, graded)) / max(1, len(items))
+
+
+def _ratio(a_skel: float, a_tab: float) -> float:
     l_table, l_skel = 1.0 - a_skel, 1.0 - a_tab
     denom = l_table + l_skel
-    return {
+    return (l_skel / denom) if denom > 0 else float("nan")
+
+
+def measure_pi(inst) -> dict[str, float]:
+    """pi over the whole held-out test (iid, comp and depth), the items an
+    arm is scored on.  The probe set is separate and never enters.  pi for
+    each split is recorded alongside the overall ratio."""
+    items = inst.test
+    full = _score(inst.P, inst, items)
+    skel = _item_scores(Interpreter(inst.cfg, inst.skeleton, IdentityTables()), inst, items)
+    tab = _item_scores(Interpreter(inst.cfg, trivial_skeleton(inst.cfg), inst.tables),
+                       inst, items)
+    n = max(1, len(items))
+    a_skel, a_tab = sum(skel) / n, sum(tab) / n
+    out = {
         "full": full,
         "a_skel": a_skel,
         "a_tab": a_tab,
-        "L_table": l_table,
-        "L_skel": l_skel,
-        "pi": (l_skel / denom) if denom > 0 else float("nan"),
+        "L_table": 1.0 - a_skel,
+        "L_skel": 1.0 - a_tab,
+        "pi": _ratio(a_skel, a_tab),
         "n": len(items),
     }
+    for split in ("iid", "comp", "depth"):
+        idx = [i for i, t in enumerate(items) if t.split == split]
+        if idx:
+            out[f"pi_{split}"] = _ratio(sum(skel[i] for i in idx) / len(idx),
+                                        sum(tab[i] for i in idx) / len(idx))
+    return out

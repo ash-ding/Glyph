@@ -213,8 +213,10 @@ L_skel  = 1 - a_tab                             # 不知道 skeleton 带来的�
 - **π → 1**：几乎所有损失都来自不知道 *skeleton*（表很容易/近乎平凡）→ "代码/推理"型实例。
 - **π → 0**：几乎所有损失都来自不知道 *表* → "记忆/训练"型实例。
 
-`measure_pi(inst, sample=1500)`（`measure.py:75-90`）在 `inst.test[:1500]`（满规模下全是 `iid`）
-上测，返回 `pi_components`：`{full, a_skel, a_tab, L_table, L_skel, pi, n}`。
+`measure_pi(inst)`（`measure.py`）在整个 held-out test `inst.test` 上测（`iid`、`comp`、`depth`；
+probe 集是单独的集合，不参与），返回 `pi_components`：
+`{full, a_skel, a_tab, L_table, L_skel, pi, n, pi_iid, pi_comp, pi_depth}`——整体比值，外加每个
+split 各自的 π。
 
 **只有 π 的测量**用宽松的**digit-match**（数字位一致的比例，`measure.py:28-35`）；agent 的
 arm 和参照 oracle 都用**精确匹配**（`measure.py:44-46`）。整个代码库里**没有任何 p 值 / 显著性
