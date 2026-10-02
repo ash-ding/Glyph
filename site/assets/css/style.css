@@ -32,6 +32,10 @@
   --data:        #f2cf6b;
   --data-soft:   #fcf3d6;
 
+  --probe-ink:   #4b3f8f;
+  --probe:       #b9aef0;
+  --probe-soft:  #f1eefb;
+
   --ok:          #0f6e56;
   --bad:         #be2121;
 
@@ -452,6 +456,11 @@ sup.fn a:hover { text-decoration: underline; }
 .setgroup--test { border-radius: 14px; padding: .8rem; background: var(--data-soft); }
 .setgroup--test .setgroup__label { color: var(--data-ink); }
 .setgroup--test .split { background: var(--bg); }
-.setgroup--probe { border-radius: 14px; padding: .8rem; background: var(--panel); }
+.setrow { display: grid; grid-template-columns: 3fr 1fr; gap: .6rem; align-items: stretch; margin-top: 1rem; }
+.setrow .setgroup { margin: 0; }
+.setgroup--probe { border-radius: 14px; padding: .8rem; background: var(--probe-soft); }
+.setgroup--probe .setgroup__label { color: var(--probe-ink); }
 .setgroup--probe .split { background: var(--bg); }
-.setgroup--probe .splits { grid-template-columns: minmax(0, 1fr); max-width: 22rem; }
+.setgroup--probe .splits { grid-template-columns: minmax(0, 1fr); }
+.setgroup--probe .bar__fill { background: var(--probe); }
+@media (max-width: 760px) { .setrow { grid-template-columns: 1fr; } }
