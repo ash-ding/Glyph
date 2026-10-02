@@ -100,7 +100,7 @@ def write_answers(path, items, id_of, correct=True):
 # iter_tool_calls helper
 # ---------------------------------------------------------------------
 def test_iter_tool_calls_fake_and_terminal():
-    assert iter_tool_calls(FakeAssistant(["submit", "query"])) == ["submit", "query"]
+    assert iter_tool_calls(FakeAssistant(["submit_validation_answer", "query"])) == ["submit_validation_answer", "query"]
     assert iter_tool_calls(FakeAssistant([])) == []
     assert iter_tool_calls(FakeTerminal()) == []
 
@@ -126,7 +126,7 @@ def test_submit_cap_switches_and_final_phase_gates(inst, tmp_path):
     s, paths, val_id_of, test_id_of = make_session(inst, tmp_path, submit_cap=2)
     f = tmp_path / "val_ans.jsonl"
     write_answers(f, inst.val, val_id_of, correct=True)
-    turns = [[("submit", {"path": str(f)})], [("submit", {"path": str(f)})]]
+    turns = [[("submit_validation_answer", {"path": str(f)})], [("submit_validation_answer", {"path": str(f)})]]
     client = FakeClient(s, turns)
     reason = asyncio.run(drive_practice(s, client, opener="go"))
     assert reason == "should_switch"
@@ -187,7 +187,7 @@ def test_legal_final_answer_ends_run(inst, tmp_path):
     write_test_file(paths, inst, test_id_of)
     tf_ans = tmp_path / "final.jsonl"
     write_answers(tf_ans, inst.test, test_id_of, correct=True)
-    turns = [[("final_answer", {"path": str(tf_ans)})]]
+    turns = [[("submit_final_answer", {"path": str(tf_ans)})]]
     client = FakeClient(s, turns)
     reason = asyncio.run(drive_final(s, client, opener="final"))
     assert reason == "agent"

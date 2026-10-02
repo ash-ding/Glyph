@@ -27,37 +27,37 @@ from glyph.v2 import tools as _T
 # schema keys must match the handler keyword parameters exactly.
 _TOOL_SPECS = {
     "query": (_T.t_query, {"exprs": list, "why": str}),
-    "submit": (_T.t_submit, {"path": str}),
+    "submit_validation_answer": (_T.t_submit, {"path": str}),
     "check_answers": (_T.t_check_answers, {"path": str, "set": str}),
     "finish_practice": (_T.t_finish_practice, {"reason": str}),
     "build_dataset": (_T.t_build_dataset, {"path": str}),
-    "train": (_T.t_train, {"dataset_id": str, "epochs": int, "lr": float,
+    "train_model": (_T.t_train, {"dataset_id": str, "epochs": int, "lr": float,
                             "student_id": str}),
-    "student_infer": (_T.t_student_infer, {
+    "infer_model": (_T.t_student_infer, {
         "checkpoint": str, "input_path": str,
         "output_path": str, "prefix_path": str,
     }),
-    "final_answer": (_T.t_final_answer, {"path": str}),
+    "submit_final_answer": (_T.t_final_answer, {"path": str}),
 }
 
 _DESCRIPTIONS = {
     "query": "Spend a query to evaluate one or more expressions.",
-    "submit": "Submit validation answers (practice phase); returns an aggregate score.",
+    "submit_validation_answer": "Submit validation answers (practice phase); returns an aggregate score.",
     "check_answers": "Check an answer file for legality (set='validation' or 'test').",
     "finish_practice": "Signal that the practice phase is done.",
     "build_dataset": "Build a student training dataset from purchased queries (train arm).",
-    "train": ("Fine-tune a student model on a dataset (train arm). "
+    "train_model": ("Fine-tune a student model on a dataset (train arm). "
               "student_id is an id YOU choose: exactly 8 lowercase hex "
               "characters (e.g. 'a1b2c3d4'). A new id starts a fresh student "
               "from the base model; an existing id continues training that "
               "student from its latest checkpoint. Several students may "
               "coexist. Returns a checkpoint_id (format ck_xxxxxxxx) to pass "
               "back verbatim."),
-    "student_infer": ("Run inference with a trained student (train arm). "
+    "infer_model": ("Run inference with a trained student (train arm). "
                       "checkpoint accepts 'base', a ck_xxxxxxxx checkpoint_id "
                       "exactly as returned by train, or an 8-hex student_id "
                       "(meaning that student's latest checkpoint)."),
-    "final_answer": "Commit the final held-out-test answers and end the run.",
+    "submit_final_answer": "Commit the final held-out-test answers and end the run.",
 }
 
 

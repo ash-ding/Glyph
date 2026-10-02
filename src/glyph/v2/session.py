@@ -15,29 +15,29 @@ if TYPE_CHECKING:
 
 TOOL_MATRIX = {
     'query',
-    'submit',
+    'submit_validation_answer',
     'check_answers',
     'finish_practice',
     'build_dataset',
-    'train',
-    'student_infer',
-    'final_answer',
+    'train_model',
+    'infer_model',
+    'submit_final_answer',
 }
 
 # The availability matrix (spec Sec 6.1), encoded as tool -> set of allowed
 # (arm, phase) tuples.
 _MATRIX = {
     'query': {('train', 'practice'), ('no_train', 'practice')},
-    'submit': {('train', 'practice'), ('no_train', 'practice')},
+    'submit_validation_answer': {('train', 'practice'), ('no_train', 'practice')},
     'check_answers': {
         ('train', 'practice'), ('no_train', 'practice'),
         ('train', 'final'), ('no_train', 'final'),
     },
     'finish_practice': {('train', 'practice'), ('no_train', 'practice')},
     'build_dataset': {('train', 'practice')},
-    'train': {('train', 'practice')},
-    'student_infer': {('train', 'practice'), ('train', 'final')},
-    'final_answer': {('train', 'final'), ('no_train', 'final')},
+    'train_model': {('train', 'practice')},
+    'infer_model': {('train', 'practice'), ('train', 'final')},
+    'submit_final_answer': {('train', 'final'), ('no_train', 'final')},
 }
 
 

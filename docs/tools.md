@@ -10,7 +10,7 @@ Protocol v2 collapses v1's explore/prepare/test phases into two:
   queries (capped at `Q`), submit validation answers up to `submit_cap` times
   for an aggregate score, and (train arm only) build data and train a student.
 * **final** — the held-out test is revealed. Every practice tool is gone; the
-  agent commits its answers exactly once with `final_answer` and the run ends.
+  agent commits its answers exactly once with `submit_final_answer` and the run ends.
 
 Two arms differ in **one** thing: the `train` arm has a trainable Qwen3-1.7B
 student (and its three tools); the `no_train` arm has only the frontier model.
@@ -73,7 +73,7 @@ past the cap returns `q_exhausted`. `why` is recorded, not acted on. Answered
 queries are logged to `task/queries.jsonl`.
 
 ```
-submit(path: str) -> {submission, overall, by_depth, <remaining>}
+submit_validation_answer(path: str) -> {submission, overall, by_depth, <remaining>}
 ```
 Score an answer file against the **visible validation set**. Feedback is
 **aggregate only** — `overall` and a `by_depth` breakdown, never per-item and
@@ -86,8 +86,8 @@ check_answers(path: str, set: "validation"|"test") -> {ok, violations, examples,
 ```
 A free dry-run legality check — no scoring, no counter touched. `set="validation"`
 works in either phase; `set="test"` only in the final phase. This is how the
-agent confirms an answer file is well-formed before spending a `submit` or its
-one `final_answer`.
+agent confirms an answer file is well-formed before spending a `submit_validation_answer` or its
+one `submit_final_answer`.
 
 ```
 finish_practice(reason: str) -> {ok, <remaining>}
@@ -98,19 +98,19 @@ Voluntarily end practice before the caps are hit; flags the switch to final.
 
 ```
 build_dataset(path: str)                              -> {dataset_id, ..., <remaining>}
-train(dataset_id: str, epochs: int, lr: float, student_id: str) -> {checkpoint_id, student_id, continued_from, ..., <remaining>}
+train_model(dataset_id: str, epochs: int, lr: float, student_id: str) -> {checkpoint_id, student_id, continued_from, ..., <remaining>}
 ```
 `build_dataset` assembles a student training set from **purchased queries** — the
-agent cannot manufacture labels it has not bought. `train` fine-tunes a
+agent cannot manufacture labels it has not bought. `train_model` fine-tunes a
 Qwen3-1.7B student; GPU time is metered into the ledger like any other spend, so
 training competes with querying under one budget line. `student_id` selects the
 lineage and is minted by the AGENT in a fixed format — exactly 8 lowercase hex
 characters (`^[0-9a-f]{8}$`, e.g. `a1b2c3d4`); anything else is rejected with
 a structured error. A new id starts a fresh student from the base model, an
 existing id continues training that student from its latest checkpoint, and
-students coexist. Each `train` call returns a `checkpoint_id` in the fixed
+students coexist. Each `train_model` call returns a `checkpoint_id` in the fixed
 format `ck_xxxxxxxx` (8 hex, hashed from the lineage position), which must be
-echoed back verbatim. `student_infer`'s `checkpoint` accepts `"base"`, a
+echoed back verbatim. `infer_model`'s `checkpoint` accepts `"base"`, a
 `ck_xxxxxxxx` checkpoint_id, or an 8-hex student_id (that student's latest
 checkpoint) — the three forms are disjoint by construction, so resolution is
 unambiguous; malformed or unknown references return a structured error.
@@ -118,7 +118,7 @@ unambiguous; malformed or unknown references return a structured error.
 ### Both phases — the student (train arm only)
 
 ```
-student_infer(checkpoint: str, input_path: str, output_path: str, prefix_path: str|None)
+infer_model(checkpoint: str, input_path: str, output_path: str, prefix_path: str|None)
     -> {..., <remaining>}
 ```
 Run a trained student checkpoint over an input file. Available in **practice**
@@ -128,7 +128,7 @@ held-out-test answers the agent then commits).
 ### Final — termination (both arms)
 
 ```
-final_answer(path: str) -> {committed: true, digest, <remaining>}
+submit_final_answer(path: str) -> {committed: true, digest, <remaining>}
 ```
 Commit the held-out-test answers and end the run. An *illegal* file is **not
 committed** and may be corrected and re-submitted; a legal one is committed once
@@ -150,13 +150,13 @@ Declared in `session.py._MATRIX`, not inside the tool definitions.
 | | no_train · practice | no_train · final | train · practice | train · final |
 |---|---|---|---|---|
 | `query`          | ✓ | — | ✓ | — |
-| `submit`         | ✓ | — | ✓ | — |
+| `submit_validation_answer` | ✓ | — | ✓ | — |
 | `check_answers`  | ✓ | ✓ | ✓ | ✓ |
 | `finish_practice`| ✓ | — | ✓ | — |
 | `build_dataset`  | — | — | ✓ | — |
-| `train`          | — | — | ✓ | — |
-| `student_infer`  | — | — | ✓ | ✓ |
-| `final_answer`   | — | ✓ | — | ✓ |
+| `train_model`     | — | — | ✓ | — |
+| `infer_model`     | — | — | ✓ | ✓ |
+| `submit_final_answer` | — | ✓ | — | ✓ |
 
 A call outside its cell returns a gate error naming the phase, and is not
 charged.

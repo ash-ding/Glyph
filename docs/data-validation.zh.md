@@ -174,11 +174,11 @@ skeleton 组合。（真正的 frontier 调用是后续的 `[API]` 步骤；模�
 **唯一**的区别是三个额外工具，只在 `train` 下可用（`session.py:16-41`）：
 
 - `build_dataset` —— 把买到的/demo/验证查询对变成一个训练 JSONL。
-- `train` —— 在数据集上全量微调本地 `student_model`（GPU 门控，受累计 GPU 秒预算约束；默认
+- `train_model` —— 在数据集上全量微调本地 `student_model`（GPU 门控，受累计 GPU 秒预算约束；默认
   每次 1800 秒、总计 7200 秒）。
-- `student_infer` —— 用得到的 checkpoint 去回答查表。
+- `infer_model` —— 用得到的 checkpoint 去回答查表。
 
-两个 arm 都能 `query` oracle、对验证 `submit`/`check_answers`、`final_answer`。`no_train` 完全
+两个 arm 都能 `query` oracle、对验证 `submit_validation_answer`/`check_answers`、`final_answer`。`no_train` 完全
 没有 student。`harness.run()` 只在 `arm == "train"` 时才建 `StudentPool`（`harness.py:330-331`、
 `student.py`）。
 
@@ -213,7 +213,7 @@ student 是训在完整的 表达式→答案 对上的**，用的是 agent 自�
 
 **Per-op 探针。**每次 run 还带一个探针集（`glyph.data.probe.probe_set`，默认每个原子
 算子 100 条裸原子题，来自独立 RNG 流——不进 frozen-instance 的 fingerprint）。探针随
-final test 一起下发，是 `final/test.jsonl` 里的 `probe_*` 行；合法的 `final_answer`
+final test 一起下发，是 `final/test.jsonl` 里的 `probe_*` 行；合法的 `submit_final_answer`
 文件必须覆盖它们，但它们**不计入** `overall`，单独报在 `report["probe"]["by_op"]`
 块里。每个算子的准确率按本次 run 的 `LookupLog` 拆成 `seen`/`unseen` 两栏
 （unseen = 该 cell 从未被购买——每算子泛化能力的干净读数）。查询 oracle 特意**不**
@@ -233,7 +233,7 @@ k），值只是过路货；与密封 test/val 撞车的题会重抽。它们的
 - **practice**（`drive_practice`，`harness.py:111-144`）—— agent 探索：可以 `query`、对验证
   `submit`、`check_answers`，以及（train arm）建/训/推理 student。结束于：第 `submit_cap` 次提交、
   agent 调用 `finish_practice`、`tp` 轮数上限、`usd_line`、或 3 轮空转。
-- **final**（`drive_final`，`harness.py:146-191`）—— agent 通过 `final_answer` 提交答案。若结束
+- **final**（`drive_final`，`harness.py:146-191`）—— agent 通过 `submit_final_answer` 提交答案。若结束
   时没提交但有一个通过的 `check_answers(set="test")` 路径，就自动提交那个路径
   （`final_commit="auto_checked_path"`）；否则分数保持为 0。
 

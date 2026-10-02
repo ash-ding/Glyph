@@ -112,8 +112,8 @@ def t_query(session, exprs: list, why: str) -> dict:
 # ---------------------------------------------------------------------
 
 def t_submit(session, path) -> dict:
-    if not session.tool_available("submit"):
-        return _gate_error(session, "submit")
+    if not session.tool_available("submit_validation_answer"):
+        return _gate_error(session, "submit_validation_answer")
 
     id_of = _val_id_of(session)
     v = check_file(path, session.inst.val, session.inst.cfg, session.run_dir, id_of)
@@ -198,8 +198,8 @@ def t_build_dataset(session, path) -> dict:
 
 
 def t_train(session, dataset_id, epochs, lr, student_id) -> dict:
-    if not session.tool_available("train"):
-        return _gate_error(session, "train")
+    if not session.tool_available("train_model"):
+        return _gate_error(session, "train_model")
     if not STUDENT_ID_RE.match(student_id or ""):
         return {"error": "student_id must be exactly 8 lowercase hex "
                          "characters (e.g. 'a1b2c3d4')",
@@ -214,8 +214,8 @@ def t_train(session, dataset_id, epochs, lr, student_id) -> dict:
 
 def t_student_infer(session, checkpoint, input_path, output_path,
                     prefix_path=None) -> dict:
-    if not session.tool_available("student_infer"):
-        return _gate_error(session, "student_infer")
+    if not session.tool_available("infer_model"):
+        return _gate_error(session, "infer_model")
 
     if not (checkpoint == "base"
             or CHECKPOINT_ID_RE.match(checkpoint or "")
@@ -240,8 +240,8 @@ def t_student_infer(session, checkpoint, input_path, output_path,
 # ---------------------------------------------------------------------
 
 def t_final_answer(session, path) -> dict:
-    if not session.tool_available("final_answer"):
-        return _gate_error(session, "final_answer")
+    if not session.tool_available("submit_final_answer"):
+        return _gate_error(session, "submit_final_answer")
 
     id_of = _test_id_of(session)
     items = list(session.inst.test)
@@ -259,6 +259,18 @@ def t_final_answer(session, path) -> dict:
 
     session.final_commit_path = str(path)
     session.final_commit = "agent"
-    session.note(kind="final_answer", committed=True)
+    session.note(kind="submit_final_answer", committed=True)
     digest = hashlib.sha256(Path(path).read_bytes()).hexdigest()[:16]
     return {"committed": True, "digest": digest, **_remaining(session)}
+
+
+# ---------------------------------------------------------------------
+# Registry-name aliases.  The MCP registry and the harness-logic fake client
+# both resolve a handler as "t_" + tool name; the public tool names were
+# normalized (submit_validation_answer / train_model / infer_model /
+# submit_final_answer) while the handlers keep their historical names.
+# ---------------------------------------------------------------------
+t_submit_validation_answer = t_submit
+t_train_model = t_train
+t_infer_model = t_student_infer
+t_submit_final_answer = t_final_answer

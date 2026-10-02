@@ -198,11 +198,11 @@ A run is configured by `RunConfig` (`harness.py:197-216`):
 The **only** difference is three extra tools, available in `train` only (`session.py:16-41`):
 
 - `build_dataset` — turn purchased/demo/validation query pairs into a training JSONL.
-- `train` — full-fine-tune the local `student_model` on a dataset (GPU-gated, under a
+- `train_model` — full-fine-tune the local `student_model` on a dataset (GPU-gated, under a
   cumulative GPU-seconds budget; default caps 1800 s/call, 7200 s total).
-- `student_infer` — run the resulting checkpoint to answer table lookups.
+- `infer_model` — run the resulting checkpoint to answer table lookups.
 
-Both arms can `query` the oracle, `submit`/`check_answers` against validation, and `final_answer`.
+Both arms can `query` the oracle, `submit_validation_answer`/`check_answers` against validation, and `submit_final_answer`.
 `no_train` has no student at all. `harness.run()` builds a `StudentPool` only when
 `arm == "train"` (`harness.py:330-331`, `student.py`).
 
@@ -241,7 +241,7 @@ If nothing legal is committed, the score is all-zero (`_zero_score`).
 **Per-op probes.** Every run also carries a probe set (`glyph.data.probe.probe_set`,
 default 100 bare-atomic items per atomic op, from a dedicated RNG stream — exempt
 from the frozen-instance fingerprint). The probes are delivered with the final
-test as `probe_*` rows in `final/test.jsonl`; a legal `final_answer` file must
+test as `probe_*` rows in `final/test.jsonl`; a legal `submit_final_answer` file must
 cover them, but they are scored **outside** `overall`, in a separate
 `report["probe"]["by_op"]` block. Each op's accuracy is split `seen`/`unseen`
 by the run's `LookupLog` (unseen = the cell was never bought — the clean per-op
@@ -267,7 +267,7 @@ skeleton ceiling is trivially 1.0).
   `submit` against validation, `check_answers`, and (train arm) build/train/infer a student. It
   ends on the `submit_cap`-th submit, an agent-called `finish_practice`, the `tp` turn cap, the
   `usd_line`, or 3 idle turns.
-- **final** (`drive_final`, `harness.py:146-191`) — the agent commits answers via `final_answer`.
+- **final** (`drive_final`, `harness.py:146-191`) — the agent commits answers via `submit_final_answer`.
   If it ends without one but has a passing `check_answers(set="test")` path, that path is
   auto-committed (`final_commit="auto_checked_path"`); otherwise the score stays zero.
 

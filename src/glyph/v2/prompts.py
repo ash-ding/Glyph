@@ -43,10 +43,10 @@ You must not exceed your turn budgets: T_p turns for practice, T_f turns for fin
 This run provides these tools:
 - File and Bash tools for reading and writing files
 - query: spend a query to evaluate an expression
-- submit: submit validation answers during practice
+- submit_validation_answer: submit validation answers during practice
 - check_answers: check if your answers are correct (reveals any errors found, returns aggregate score)
 - finish_practice: signal that you are done with practice
-- final_answer: submit your final test answers and complete the run"""
+- submit_final_answer: submit your final test answers and complete the run"""
 
 
 # Student paragraph: only for the train arm.
@@ -58,12 +58,12 @@ _STUDENT_PARAGRAPH = """
 
 During practice, you may also build student models:
 - build_dataset: collect training data from queries you make
-- train: fine-tune a student on a dataset. You choose a student_id of exactly
+- train_model: fine-tune a student on a dataset. You choose a student_id of exactly
   8 lowercase hex characters (e.g. a1b2c3d4): a new student_id starts a fresh
   student from the base model; an existing id continues training that student
-  from its latest checkpoint. Students may coexist. Each train call returns
-  a checkpoint_id (format ck_xxxxxxxx) usable in later student_infer calls.
-- student_infer: generate answers with a checkpoint_id as returned by train,
+  from its latest checkpoint. Students may coexist. Each train_model call returns
+  a checkpoint_id (format ck_xxxxxxxx) usable in later infer_model calls.
+- infer_model: generate answers with a checkpoint_id as returned by train_model,
   or with a student_id (meaning that student's latest checkpoint)
 
 These tools let you put what you discover into a small model's weights.
@@ -155,7 +155,7 @@ Your run is organized in two phases:
 **Final Phase** (up to {tf} turns):
 - No oracle and no validation submissions
 - A held-out test set with no answers provided
-- Submit your final answers once with final_answer()
+- Submit your final answers once with submit_final_answer()
 
 ## File Formats
 
@@ -191,6 +191,6 @@ See demos.jsonl for worked examples of expressions and their answers.
 3. Submit validation answers and check your progress
 4. Call finish_practice when ready
 5. Solve the final test set
-6. Call final_answer() with your answers
+6. Call submit_final_answer() with your answers
 """
 
