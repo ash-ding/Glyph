@@ -57,7 +57,7 @@ never per item or per split).
 
 **Final.** The oracle is gone. The hidden held-out test — 10,000 expressions,
 split `iid` / `comp` / `depth` — is revealed with no answers, and the agent
-commits its answers exactly once with `final_answer`. That commit is scored; the
+commits its answers exactly once with `submit_final_answer`. That commit is scored; the
 agent never sees a per-item or per-split test score.
 
 **Two arms**, differing in exactly one thing:
@@ -159,7 +159,7 @@ src/glyph/
 │   └── measure.py     π via two crippled oracles
 ├── v2/            protocol v2 — the two-phase, two-arm harness
 │   ├── session.py     run state + the (arm, phase) tool-availability matrix
-│   ├── tools.py       the eight tool handlers (query / submit / … / final_answer)
+│   ├── tools.py       the eight tool handlers (query / submit_validation_answer / … / submit_final_answer)
 │   ├── mcp.py         wraps the handlers as in-process SDK MCP tools
 │   ├── harness.py     the orchestrator: phases, caps, the agent loop
 │   ├── gateway.py     the metering model gateway (pin, meter, /v1 fix, retry)

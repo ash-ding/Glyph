@@ -146,9 +146,9 @@ async def drive_practice(session, client: ClientProto, *, opener: str) -> str:
 async def drive_final(session, client: ClientProto, *, opener: str) -> str:
     """Drive the final phase. Returns the end reason.
 
-    Ends when a legal final_answer commits (session.final_commit_path set by
+    Ends when a legal submit_final_answer commits (session.final_commit_path set by
     the handler -> reason "agent"), or on the final turn cap / USD line /
-    _IDLE_LIMIT idle turns. On any NON-final_answer end, apply the AUTO-COMMIT
+    _IDLE_LIMIT idle turns. On any NON-submit_final_answer end, apply the AUTO-COMMIT
     rule: if a passing check_answers(set="test") recorded last_checked_test_path,
     commit that path (final_commit="auto_checked_path"); else final_commit="none".
     """
@@ -180,7 +180,7 @@ async def drive_final(session, client: ClientProto, *, opener: str) -> str:
             reason = "usd_line"
             break
 
-    # non-final_answer end -> auto-commit rule
+    # non-submit_final_answer end -> auto-commit rule
     session.turns_final = session.turns
     last_checked = getattr(session, "last_checked_test_path", None)
     if last_checked is not None:

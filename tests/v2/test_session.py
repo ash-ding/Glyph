@@ -2,10 +2,10 @@ import pytest
 from glyph.v2.session import TOOL_MATRIX, tool_available_for
 
 EXPECTED = {
-  ('train','practice'):   {'query','submit','check_answers','finish_practice','build_dataset','train','student_infer'},
-  ('no_train','practice'):{'query','submit','check_answers','finish_practice'},
-  ('train','final'):      {'check_answers','student_infer','final_answer'},
-  ('no_train','final'):   {'check_answers','final_answer'},
+  ('train','practice'):   {'query','submit_validation_answer','check_answers','finish_practice','build_dataset','train_model','infer_model'},
+  ('no_train','practice'):{'query','submit_validation_answer','check_answers','finish_practice'},
+  ('train','final'):      {'check_answers','infer_model','submit_final_answer'},
+  ('no_train','final'):   {'check_answers','submit_final_answer'},
 }
 
 @pytest.mark.parametrize('key,expected', list(EXPECTED.items()))
@@ -15,8 +15,8 @@ def test_tool_matrix(key, expected):
     assert got == expected
 
 def test_all_matrix_names_known():
-    assert TOOL_MATRIX == {'query','submit','check_answers','finish_practice',
-                           'build_dataset','train','student_infer','final_answer'}
+    assert TOOL_MATRIX == {'query','submit_validation_answer','check_answers','finish_practice',
+                           'build_dataset','train_model','infer_model','submit_final_answer'}
 
 def _session(**kw):
     from glyph.v2.session import Session
@@ -42,9 +42,9 @@ def test_switch_to_final_resets_turns_and_uses_tf():
 
 def test_tool_available_uses_arm_and_phase():
     s = _session(arm='no_train')
-    assert s.tool_available('query') and not s.tool_available('train')
+    assert s.tool_available('query') and not s.tool_available('train_model')
     s.switch_to_final()
-    assert s.tool_available('final_answer') and not s.tool_available('query')
+    assert s.tool_available('submit_final_answer') and not s.tool_available('query')
 
 def test_note_appends_event():
     s = _session(); s.note(kind='x', v=1)

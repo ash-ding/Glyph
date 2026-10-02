@@ -3997,3 +3997,22 @@ ids:
 `pytest tests/v2 -q` → 129 passed, 1 skipped (one fixture updated to the new
 checkpoint format); targeted id-format tests cover rejection, format,
 uniqueness, and resolution.
+
+## 2026-10-02 — agent-facing tool names normalized
+
+Four tools renamed for a uniform surface (registry, availability matrix,
+gating, prompts, docs; python handlers keep historical names with
+registry-name aliases):
+
+| old | new |
+|---|---|
+| `submit` | `submit_validation_answer` |
+| `final_answer` | `submit_final_answer` |
+| `train` | `train_model` |
+| `student_infer` | `infer_model` |
+
+`query` / `check_answers` / `finish_practice` / `build_dataset` unchanged.
+Every `arm="train"` occurrence audited and left untouched. Old runs'
+transcripts keep the old names (the viewer is name-agnostic).
+`pytest tests/v2` → 138 passed, 1 skipped (two fake-client fixtures resolve
+handlers as `t_<tool name>`, covered by the aliases).
