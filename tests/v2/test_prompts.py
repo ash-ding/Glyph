@@ -39,3 +39,17 @@ def test_task_readme_has_concrete_caps(tmp_path):
     assert "1000" in r and "20" in r and "100" in r and "30" in r
     assert "test" in r.lower() and "no" in r.lower()  # mentions no-oracle final phase
     assert "final_answer" in r or "final answer" in r.lower()
+
+
+def test_task_readme_renders_uncapped_q(inst_path_fixture=None):
+    from glyph.data import PRESETS, generate
+    from glyph.v2.ledger import Ledger
+    from glyph.v2.prompts import task_readme
+    from glyph.v2.session import Session
+    import pathlib
+    inst = generate(1001, PRESETS["smoke"])
+    s = Session(inst=inst, ledger=Ledger(), run_dir=pathlib.Path("/tmp"),
+                arm="no_train", q_cap=None)
+    r = task_readme(s)
+    assert "None" not in r                   # no literal None leaking
+    assert "no query cap" in r.lower() or "unlimited" in r.lower()

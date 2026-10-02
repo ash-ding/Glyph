@@ -123,7 +123,7 @@ def final_opener(paths: Paths) -> str:
 
 The held-out test set is at {paths.final_dir}/test.jsonl. The oracle and validation are now closed. No further queries or submissions are possible.
 
-Produce your answers and call final_answer() with the path to your submission file."""
+Produce your answers and call submit_final_answer() with the path to your submission file."""
 
 
 def task_readme(session: Session) -> str:
@@ -135,7 +135,9 @@ def task_readme(session: Session) -> str:
     Returns:
         Factual README documenting the task rules and concrete parameters.
     """
-    q_cap = session.q_cap
+    q_line = ("- There is no query cap: query as much as you need"
+              if session.q_cap is None
+              else f"- You have a query budget of {session.q_cap} queries total")
     submit_cap = session.submit_cap
     tp = session.tp
     tf = session.tf
@@ -147,7 +149,7 @@ def task_readme(session: Session) -> str:
 Your run is organized in two phases:
 
 **Practice Phase** (up to {tp} turns):
-- You have a query budget of {q_cap} queries total
+{q_line}
 - You may submit answers to the validation set up to {submit_cap} times
 - Each submission gives you an aggregate score
 - Call finish_practice when done

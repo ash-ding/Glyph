@@ -202,7 +202,7 @@ class RunConfig:
     instance_id: str | None = None
     model: str = "claude-opus-4-8"
     student_model: str = "Qwen/Qwen3-1.7B"
-    q_cap: int = 1000
+    q_cap: int | None = 1000      # None = no query cap
     submit_cap: int = 20
     tp: int = 100
     tf: int = 30

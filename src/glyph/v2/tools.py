@@ -87,7 +87,8 @@ def t_query(session, exprs: list, why: str) -> dict:
         if reason:
             results.append({"expr": expr, "refused": reason})
             continue
-        if session.q_remaining() <= 0:
+        rem = session.q_remaining()
+        if rem is not None and rem <= 0:
             results.append({"expr": expr, "error": "q_exhausted"})
             continue
         # Charge first -- malformed expressions are charged too.

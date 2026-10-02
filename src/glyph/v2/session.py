@@ -55,7 +55,7 @@ class Session:
     run_dir: Path
     arm: str              # 'train' | 'no_train'
     policy: str = 'strict'       # query_ood_policy
-    q_cap: int = 1000
+    q_cap: int | None = 1000      # None = no query cap
     submit_cap: int = 20
     tp: int = 100                # practice turn cap
     tf: int = 30                 # final turn cap
@@ -68,7 +68,9 @@ class Session:
     should_switch: bool = False  # set by the submit/finish handlers; harness reads it
     events: list = field(default_factory=list)  # in-memory event log (trace wiring is Task 12)
 
-    def q_remaining(self) -> int:
+    def q_remaining(self) -> int | None:
+        if self.q_cap is None:
+            return None                 # None = unlimited
         return max(0, self.q_cap - self.q_used)
 
     def submissions_remaining(self) -> int:
