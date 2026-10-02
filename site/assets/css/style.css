@@ -445,3 +445,10 @@ sup.fn a:hover { text-decoration: underline; }
 #cite-1 { scroll-margin-top: 6rem; }
 .syntax-parts { margin: .2rem 0 1rem; padding-left: 1.2rem; }
 .syntax-parts li { margin: .25rem 0; }
+
+/* step 8: two groups of evaluation sets */
+.setgroup { margin: 1rem 0 0; }
+.setgroup__label { font-family: var(--font-sans); font-size: .76rem; color: var(--fg-faint); margin: 0 0 .45rem; }
+.setgroup--test { border-radius: 14px; padding: .8rem; background: var(--data-soft); }
+.setgroup--test .setgroup__label { color: var(--data-ink); }
+.setgroup--test .split { background: var(--bg); }

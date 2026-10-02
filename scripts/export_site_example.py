@@ -317,6 +317,11 @@ for name in ("iid", "comp", "depth"):
         min((t for t in items if depth(parse(t.expr_src, cfg)) == max(hist)), key=lambda t: len(t.expr_src))
     splits[name] = {"n": len(items), "depth_hist": dict(sorted(hist.items())), "example": item_view(pick)}
 val_hist = collections.Counter(depth(parse(t.expr_src, cfg)) for t in inst.val)
+from glyph.data.probe import probe_set
+probes = probe_set(inst)
+probe_by_op = collections.Counter(t.split for t in probes)
+probe_hist = collections.Counter(depth(parse(t.expr_src, cfg)) for t in probes)
+assert set(probe_hist) == {0}
 demo_hist = collections.Counter(depth(parse(e, cfg)) for e, _ in inst.demos)
 
 
@@ -365,6 +370,11 @@ data = {
              "held": sorted(map(list, inst.held_pairs)),
              "classes": [{"outer": a, "inner": b, "n": n, "held": held_kind.get((a, b), 0)}
                          for (a, b), n in sorted(by_kind.items())]},
+    "probes": {"n": len(probes), "by_op": dict(sorted(probe_by_op.items())),
+               "depth_hist": dict(sorted(probe_hist.items())),
+               "examples": [{"expr": next(t for t in probes if t.split == op).expr_src,
+                             "answer": next(t for t in probes if t.split == op).answer_src}
+                            for op in ("u0", "b0")]},
     "splits": splits, "n_val": len(inst.val), "val_depth_hist": dict(sorted(val_hist.items())),
     "demos": [{"expr": e, "answer": a} for e, a in inst.demos[:8]], "n_demos": len(inst.demos),
     "demo_depth_hist": dict(sorted(demo_hist.items())),

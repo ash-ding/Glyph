@@ -517,41 +517,49 @@
 
   /* =================================================== STEP 8: splits */
   (function () {
-    var host = document.getElementById("splits");
-    if (!host) return;
-    var S = D.splits;
-    var cards = [
-      { name: "demos", n: D.n_demos, hist: D.demo_depth_hist, rule: "depth ≤ 2 · held pairs forbidden · free to the agent", ex: { expr: ex.expr, answer: ex.answer } },
-      { name: "validation", n: D.n_val, hist: D.val_depth_hist, rule: "depth ≤ 2 · held pairs forbidden · scored in aggregate" },
-      { name: "iid", n: S.iid.n, hist: S.iid.depth_hist, rule: "depth ≤ 2 · held pairs forbidden", ex: S.iid.example },
-      { name: "comp", n: S.comp.n, hist: S.comp.depth_hist, rule: "depth ≤ 2 · must contain a held pair", ex: S.comp.example },
-      { name: "depth", n: S.depth.n, hist: S.depth.depth_hist, rule: "depth 3 … 4 · deeper than any demo", ex: S.depth.example }
+    var practice = document.getElementById("splits-practice");
+    var test = document.getElementById("splits-test");
+    if (!practice || !test) return;
+    var S = D.splits, PR = D.probes;
+    var groups = [
+      [practice, [
+        { name: "demos", n: D.n_demos, hist: D.demo_depth_hist, rule: "depth 1–2 · held pairs forbidden · with answers", ex: { expr: ex.expr } },
+        { name: "validation", n: D.n_val, hist: D.val_depth_hist, rule: "depth 1–2 · held pairs forbidden · scored in aggregate" }
+      ]],
+      [test, [
+        { name: "iid", n: S.iid.n, hist: S.iid.depth_hist, rule: "depth 1–2 · held pairs forbidden", ex: S.iid.example },
+        { name: "comp", n: S.comp.n, hist: S.comp.depth_hist, rule: "depth 1–2 · must contain a held pair", ex: S.comp.example },
+        { name: "depth", n: S.depth.n, hist: S.depth.depth_hist, rule: "depth 3–4 · deeper than any demo", ex: S.depth.example },
+        { name: "probe", n: PR.n, hist: PR.depth_hist, rule: "depth 0 · 100 per atomic op · seen / unseen set after the run", ex: { expr: PR.examples[0].expr + "  ·  " + PR.examples[1].expr } }
+      ]]
     ];
     var fills = [];
-    cards.forEach(function (c) {
-      var bars = el("div", { class: "bars" });
-      var tot = 0; Object.keys(c.hist).forEach(function (k) { tot += c.hist[k]; });
-      [1, 2, 3, 4].forEach(function (d) {
-        var n = c.hist[d] || 0;
-        var f = el("div", { class: "bar__fill" }); f.style.width = "0%";
-        fills.push([f, (100 * n / tot).toFixed(1) + "%"]);
-        bars.appendChild(el("div", { class: "bar" }, [txt("depth " + d, "faint"),
-          el("div", { class: "bar__track" }, [f]), txt(String(n))]));
+    groups.forEach(function (g) {
+      g[1].forEach(function (c) {
+        var bars = el("div", { class: "bars" });
+        var tot = 0; Object.keys(c.hist).forEach(function (k) { tot += c.hist[k]; });
+        [0, 1, 2, 3, 4].forEach(function (d) {
+          var n = c.hist[d] || 0;
+          var f = el("div", { class: "bar__fill" }); f.style.width = "0%";
+          fills.push([f, (100 * n / tot).toFixed(1) + "%"]);
+          bars.appendChild(el("div", { class: "bar" }, [txt("depth " + d, "faint"),
+            el("div", { class: "bar__track" }, [f]), txt(String(n))]));
+        });
+        var kids = [el("h4", { text: c.name + "  ·  " + c.n.toLocaleString("en-US") }),
+                    el("p", { class: "split__rule", text: c.rule }), bars];
+        if (c.ex) {
+          var held = c.ex.held && c.ex.held.length ? "  ← held pair (" + c.ex.held[0].join(", ") + ")" : "";
+          kids.push(el("div", {}, [el("code", { text: c.ex.expr }), txt(held, "small skel")]));
+        }
+        g[0].appendChild(el("div", { class: "split" }, kids));
       });
-      var kids = [el("h4", { text: c.name + "  ·  " + c.n.toLocaleString("en-US") }),
-                  el("p", { class: "split__rule", text: c.rule }), bars];
-      if (c.ex) {
-        var held = c.ex.held && c.ex.held.length ? "  ← held pair (" + c.ex.held[0].join(", ") + ")" : "";
-        kids.push(el("div", {}, [el("code", { text: c.ex.expr }), txt(held, "small skel")]));
-      }
-      host.appendChild(el("div", { class: "split" }, kids));
     });
     function grow() { fills.forEach(function (p) { p[0].style.width = p[1]; }); }
     if ("IntersectionObserver" in window) {
       var o = new IntersectionObserver(function (es) {
         es.forEach(function (e) { if (e.isIntersecting) { grow(); o.disconnect(); } });
-      }, { threshold: .25 });
-      o.observe(host);
+      }, { threshold: .15 });
+      o.observe(practice);
     } else grow();
   })();
 
