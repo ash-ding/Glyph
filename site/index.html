@@ -22,7 +22,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
-<link rel="stylesheet" href="assets/css/style.css?v=eb66834bb4">
+<link rel="stylesheet" href="assets/css/style.css?v=4d7db70c44">
 </head>
 
 <body>
@@ -631,16 +631,17 @@ fold-like (LB) operators add:   then fold the list with b, left or right (50/50)
   <h2>Data validation</h2>
 
   <p class="section__lede">
-    Once an instance exists, it is measured before any agent touches it: one
-    number that says where its difficulty sits, and a battery of reference
-    oracles that say how far each kind of knowledge can get. Every score an
-    agent later earns is read against these.
+    An instance is measured before any agent touches it: a π that says where
+    its difficulty sits, and a battery of reference oracles that say how far
+    each kind of knowledge gets. Every score — an agent's or an oracle's — is
+    reported with the same metrics, so the two can be read against each other.
   </p>
 
   <!-- ---------------------------------------------------------------- pi -->
-  <h3 id="pi">π — which half is the difficulty in?</h3>
+  <h3 id="pi">Every instance has a π</h3>
   <p>
-    The interpreter is <span class="mono">P = skeleton ∘ tables</span>, exactly
+    π says which half of <span class="mono">P</span> an instance's difficulty
+    sits in. The interpreter is <span class="mono">P = skeleton ∘ tables</span>, exactly
     two rule sets. Each crippled oracle is the real interpreter with one half
     swapped for a fixed baseline, which is what makes π measurable at all.
   </p>
@@ -711,28 +712,86 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
   </p>
 
   <!-- ----------------------------------------------------------- metrics -->
-  <h3>How a score is reported</h3>
-  <p>Every oracle and every arm reports the same four things, by exact match:</p>
+  <h3 id="metrics">The metrics</h3>
+  <p>
+    A score is a small set of numbers in three groups. All are exact match; the
+    lenient grader belongs to π alone.
+  </p>
+
+  <div class="metric-groups">
+    <div class="metric-group">
+      <span class="metric-group__k">on the held-out test</span>
+      <dl>
+        <dt>overall</dt>
+        <dd>Accuracy over the held-out test — <span class="mono">iid</span>,
+            <span class="mono">comp</span> and <span class="mono">depth</span>
+            together.</dd>
+        <dt>by_split</dt>
+        <dd>The same accuracy within each split; an agent's report also breaks
+            it down by expression depth.</dd>
+      </dl>
+    </div>
+    <div class="metric-group">
+      <span class="metric-group__k">derived from the same items</span>
+      <dl>
+        <dt>tail</dt>
+        <dd>Accuracy on the test items that need at least one table entry the
+            run never queried, decided after the run from its query log. It
+            separates looking an entry up from extrapolating to it. An oracle
+            queries nothing, so its tail is every item that needs a table
+            entry at all.</dd>
+        <dt>headroom</dt>
+        <dd><span class="mono">(score − skeleton ceiling) / (1 − skeleton ceiling)</span>,
+            with the ceiling measured on the same items: 0 is what knowing every
+            structural rule and no table entry earns, 1 is perfect, and a
+            negative value is kept, not clipped.</dd>
+      </dl>
+    </div>
+    <div class="metric-group metric-group--probe">
+      <span class="metric-group__k">on the probe set</span>
+      <dl>
+        <dt>per operator</dt>
+        <dd>Accuracy on each operator's probes, one operator at a time. Never
+            folded into the test's <span class="mono">overall</span>.</dd>
+        <dt>seen / unseen</dt>
+        <dd>For an atomic operator, its probes split by whether the agent
+            queried that table cell during the run. Structural probes have no
+            such split: they test a rule, not cells.</dd>
+      </dl>
+    </div>
+  </div>
+
   <div class="table-scroll">
     <table>
-      <thead><tr><th>metric</th><th>what it is</th></tr></thead>
+      <thead><tr><th>metric</th><th>in an agent's report</th><th>in a reference oracle's report</th></tr></thead>
       <tbody>
-        <tr><td class="mono">overall</td><td>accuracy over the scored items</td></tr>
-        <tr><td class="mono">by_split</td><td>the same per test split — <span class="mono">iid</span>, <span class="mono">comp</span>, <span class="mono">depth</span></td></tr>
-        <tr><td class="mono">tail</td><td>accuracy on items needing a table entry that was never seen or bought</td></tr>
-        <tr><td class="mono">headroom</td><td><span class="mono">(score − skeleton ceiling) / (1 − skeleton ceiling)</span>: 0 means no better than knowing every structural rule and no table entry, 1 is perfect, and negative is kept, not clipped</td></tr>
+        <tr><td class="mono">overall</td><td>the full 10,000-item held-out test</td><td>the paired 500-item subset</td></tr>
+        <tr><td class="mono">by_split</td><td><span class="mono">iid</span>, <span class="mono">comp</span>, <span class="mono">depth</span>, and by expression depth</td><td><span class="mono">iid</span>, <span class="mono">comp</span>, <span class="mono">depth</span></td></tr>
+        <tr><td class="mono">tail</td><td>items needing an entry the agent never queried</td><td>items needing any table entry</td></tr>
+        <tr><td class="mono">headroom</td><td>overall, per split and on the tail, each against the ceiling on its own items</td><td>overall</td></tr>
+        <tr><td class="mono">probe</td><td>per operator; atomic ones also seen / unseen</td><td>—</td></tr>
       </tbody>
     </table>
   </div>
+
   <p>
-    Oracles are scored on a <b>paired subset</b>: 500 test items per instance,
-    stratified by split and seed-fixed, so every oracle on an instance answers
-    exactly the same items. Arms are scored on the full 10,000 — the size that
-    gives a standard error near 0.5%, enough to separate arms by 1–2 points.
+    The oracles share a <b>paired subset</b> — 500 test items per instance,
+    stratified by split (325 / 115 / 60) and seed-fixed — so every oracle on an
+    instance answers exactly the same items. An agent gets the full 10,000,
+    enough for a standard error near 0.5%. Raw <span class="mono">overall</span>
+    is not comparable across instances — the skeleton ceiling alone ranges from
+    about 0.02 to 0.77 over the frozen fifteen — which is what
+    <span class="mono">headroom</span> is for.
   </p>
 
   <!-- ------------------------------------------------------------ oracles -->
-  <h3>The reference oracles</h3>
+  <h3 id="oracles">Each instance's reference oracles</h3>
+  <p>
+    Five fixed answerers bracket what an agent can do on an instance. Each
+    knows a different part of <span class="mono">P</span>; the first two are the
+    crippled interpreters π is built from, scored here by exact match on the
+    paired subset.
+  </p>
   <div class="table-scroll">
     <table>
       <thead><tr><th>oracle</th><th>what it knows</th><th>measures</th><th>cost</th><th>status</th></tr></thead>
@@ -746,7 +805,7 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
     </table>
   </div>
 
-  <h3>The 15 frozen instances</h3>
+  <h3>The oracles on the 15 frozen instances</h3>
   <p>
     The benchmark is fifteen instances, five per band, spread evenly across a
     narrow π window at the centre of each band. Their cheap ceilings, from
@@ -868,10 +927,10 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
       <p class="phase__given"><b>Given free:</b> the syntax spec, 30 worked demos, and a visible validation set of 5,000 expressions without answers.</p>
       <ul>
         <li><code>query</code> — evaluate expressions against <span class="mono">P</span>. Metered, cap Q = 1000. Malformed queries are charged; queries that would read a validation or test item are refused and not charged.</li>
-        <li><code>submit</code> — score an answer file on the validation set. Up to 20 times; returns only <span class="mono">overall</span> and a by-depth breakdown, never per item or per split.</li>
+        <li><code>submit_validation_answer</code> — score an answer file on the validation set. Up to 20 times; returns only <span class="mono">overall</span> and a by-depth breakdown, never per item or per split.</li>
         <li><code>check_answers</code> — a free legality check of an answer file.</li>
         <li><code>finish_practice</code> — stop early.</li>
-        <li class="muted">train arm only: <code>build_dataset</code>, <code>train</code>, <code>student_infer</code>.</li>
+        <li class="muted">train arm only: <code>build_dataset</code>, <code>train_model</code>, <code>infer_model</code>.</li>
       </ul>
       <p class="phase__end">Ends at the 20th submit, on <code>finish_practice</code>, after 100 turns, at the $300 safety line, or after 3 idle turns.</p>
     </div>
@@ -882,8 +941,8 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
       <p class="phase__given"><b>Revealed:</b> the hidden 10,000-item test (<span class="mono">iid</span>, <span class="mono">comp</span>, <span class="mono">depth</span>) and the separate probe set, with no answers. The oracle is gone.</p>
       <ul>
         <li><code>check_answers</code> — legality check against the test file.</li>
-        <li><code>final_answer</code> — commit once. An illegal file is not committed and may be fixed; a legal one ends the run and is what gets scored.</li>
-        <li class="muted">train arm only: <code>student_infer</code>, to answer the test with a trained student.</li>
+        <li><code>submit_final_answer</code> — commit once. An illegal file is not committed and may be fixed; a legal one ends the run and is what gets scored.</li>
+        <li class="muted">train arm only: <code>infer_model</code>, to answer the test with a trained student.</li>
       </ul>
       <p class="phase__end">At most 30 turns. The agent never sees a test score.</p>
     </div>
@@ -902,20 +961,20 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
       </thead>
       <tbody>
         <tr><td class="mono">query</td><td>✓</td><td>—</td><td>✓</td><td>—</td></tr>
-        <tr><td class="mono">submit</td><td>✓</td><td>—</td><td>✓</td><td>—</td></tr>
+        <tr><td class="mono">submit_validation_answer</td><td>✓</td><td>—</td><td>✓</td><td>—</td></tr>
         <tr><td class="mono">check_answers</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td></tr>
         <tr><td class="mono">finish_practice</td><td>✓</td><td>—</td><td>✓</td><td>—</td></tr>
         <tr><td class="mono">build_dataset</td><td>—</td><td>—</td><td class="train">✓</td><td>—</td></tr>
-        <tr><td class="mono">train</td><td>—</td><td>—</td><td class="train">✓</td><td>—</td></tr>
-        <tr><td class="mono">student_infer</td><td>—</td><td>—</td><td class="train">✓</td><td class="train">✓</td></tr>
-        <tr><td class="mono">final_answer</td><td>—</td><td>✓</td><td>—</td><td>✓</td></tr>
+        <tr><td class="mono">train_model</td><td>—</td><td>—</td><td class="train">✓</td><td>—</td></tr>
+        <tr><td class="mono">infer_model</td><td>—</td><td>—</td><td class="train">✓</td><td class="train">✓</td></tr>
+        <tr><td class="mono">submit_final_answer</td><td>—</td><td>✓</td><td>—</td><td>✓</td></tr>
       </tbody>
     </table>
   </div>
   <p class="small muted">
     The train arm's student is a Qwen3-1.7B model by default (the base model is
     a parameter). <code>build_dataset</code> uses only what the agent has bought;
-    <code>train</code> fine-tunes under a GPU-seconds budget (1800 s per call,
+    <code>train_model</code> fine-tunes under a GPU-seconds budget (1800 s per call,
     7200 s in total) that is metered like any other spend; students can be
     continued or kept side by side.
   </p>
