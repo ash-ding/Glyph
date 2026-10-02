@@ -530,7 +530,8 @@
         { name: "iid", n: S.iid.n, hist: S.iid.depth_hist, rule: "depth 1–2 · held pairs forbidden", ex: S.iid.example },
         { name: "comp", n: S.comp.n, hist: S.comp.depth_hist, rule: "depth 1–2 · must contain a held pair", ex: S.comp.example },
         { name: "depth", n: S.depth.n, hist: S.depth.depth_hist, rule: "depth 3–4 · deeper than any demo", ex: S.depth.example },
-        { name: "probe", n: PR.n, hist: PR.depth_hist, rule: "depth 0 · 100 per atomic op · seen / unseen set after the run", ex: { expr: PR.examples[0].expr + "  ·  " + PR.examples[1].expr } }
+        { name: "probe", n: PR.n, hist: PR.depth_hist, rule: "one operator at a time · atomic at depth 0, pure-structure at depth 1",
+          ex: { expr: PR.examples.filter(function (x) { return x.op === "u0" || x.op === "s3"; }).map(function (x) { return x.expr; }).join("  ·  ") } }
       ]]
     ];
     var fills = [];

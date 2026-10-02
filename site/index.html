@@ -150,7 +150,7 @@
   <p>
     <code>generate(seed, cfg)</code> builds the task in a fixed order from one
     seeded random stream: steps 1–4 below draw <span class="mono">P</span>,
-    steps 5–8 draw the data from it, and step 9 measures the result.
+    and steps 5–8 draw the data from it.
   </p>
   <div class="stream" role="img" aria-label="Draw order from the random stream: skeleton, tables (together the interpreter P), then held pairs, demos, test and validation (the evaluation data drawn from P)">
     <div class="stream__order"><span>draw order</span><i></i></div>
@@ -202,8 +202,7 @@
         <a class="gen-map__step gen-map__step--data" href="#g5"><b>5</b>held-out pairs</a><span class="gen-map__arrow">→</span>
         <a class="gen-map__step gen-map__step--data" href="#g6"><b>6</b>sample an expression</a><span class="gen-map__arrow">→</span>
         <a class="gen-map__step" href="#g7"><b>7</b>evaluate it</a><span class="gen-map__arrow">→</span>
-        <a class="gen-map__step gen-map__step--data" href="#g8"><b>8</b>demos + held-out test</a><span class="gen-map__arrow">→</span>
-        <a class="gen-map__step" href="#g9"><b>9</b>measure π</a>
+        <a class="gen-map__step gen-map__step--data" href="#g8"><b>8</b>demos + held-out test</a>
       </div>
     </div>
   </div>
@@ -485,12 +484,21 @@ fold-like (LB) operators add:   then fold the list with b, left or right (50/50)
       <span class="mono">iid</span> stays within the demos' depth and avoids
       every held pair; <span class="mono">comp</span> must contain a held pair;
       <span class="mono">depth</span> is strictly deeper than any demo. The
-      fourth, <span class="mono">probe</span>, is different in kind: bare atomic
-      expressions at depth 0, 100 per atomic operator, drawn from a separate
-      random stream. Probes are scored per operator and kept out of
-      <span class="mono">overall</span>. Which of them count as
-      <em>seen</em> or <em>unseen</em> is not fixed in advance; it is decided
-      after the run, from the table cells the agent actually queried.
+      fourth, <span class="mono">probe</span>, is different in kind: it tests
+      single operators in isolation. Each atomic operator gets 100 bare atomic
+      expressions at depth 0. Each pure-structure operator (shapes
+      <span class="mono">L</span> and <span class="mono">KL</span>) gets single
+      applications to a literal list at depth 1 — 16 for an
+      <span class="mono">L</span> operator, 48 for a <span class="mono">KL</span>
+      one — chosen to cover what its meaning can branch on: list length, a
+      repeated element or matching ends, and <span class="mono">k</span>.
+      Map- and fold-like operators cannot be isolated, because they always call
+      a table. Probes come from a separate random stream, are scored per
+      operator and are kept out of <span class="mono">overall</span>. For an
+      atomic operator, which probes count as <em>seen</em> or <em>unseen</em>
+      is not fixed in advance; it is decided after the run, from the table
+      cells the agent actually queried. Structural probes have no such split:
+      what they test is a rule, not a set of cells.
     </p>
     <div class="example">
       <span class="example__label">in the example</span>
@@ -516,24 +524,7 @@ fold-like (LB) operators add:   then fold the list with b, left or right (50/50)
       <span class="knob knob--data">demo_max_depth = <b>2</b></span>
       <span class="knob knob--data">max_expr_depth = <b>4</b></span>
     </div>
-    <p class="small muted">The probe count, 100 per atomic operator, is a parameter of <code>probe_set</code>, not a config field.</p>
-  </div>
-
-  <!-- ---------------------------------------------------------------- 9 -->
-  <div class="gstep" id="g9">
-    <div class="gstep__head">
-      <span class="gstep__n">STEP 9</span><h3 class="gstep__title">Measuring π for the instance</h3>
-      <span class="gstep__layer">recorded with every run</span>
-      <span class="gstep__src">data/measure.py</span>
-    </div>
-    <p>
-      π asks which half of <span class="mono">P</span> the difficulty sits in.
-      Answer the test items twice with one half crippled: the true skeleton with
-      an identity table, and a textbook skeleton with the true tables. The loss
-      each one takes is the difficulty of the half it is missing.
-      (<a href="#pi">More on π</a>.)
-    </p>
-    <div class="fig"><div class="fig__body" id="pi-body"></div></div>
+    <p class="small muted">The probe counts — 100 per atomic operator, two per behaviour case for a pure-structure one — are parameters of <code>probe_set</code>, not config fields.</p>
   </div>
 
   <!-- ------------------------------------------------------------ presets -->
@@ -609,7 +600,7 @@ fold-like (LB) operators add:   then fold the list with b, left or right (50/50)
         <tr><td>demo_max_depth</td><td class="vals"><span class="faint">all</span> 2</td><td>expressions</td><td class="layer"><span class="lay lay--dist">distribution</span></td><td>seen/unseen depth boundary; also the strict query depth cap</td><td class="num">6, 8</td></tr>
         <tr class="grp"><td colspan="6">dataset sizes</td></tr>
         <tr><td>n_demos</td><td class="vals"><span class="faint">all</span> 30</td><td>data</td><td class="layer"><span class="lay lay--dist">distribution</span></td><td>worked examples given for free</td><td class="num">8</td></tr>
-        <tr><td>n_iid · n_comp · n_depth</td><td class="vals"><span class="faint">all</span> 6500 · 2300 · 1200</td><td>data</td><td class="layer"><span class="lay lay--dist">distribution</span></td><td>the 10,000 generated test items; probes add 100 per atomic operator</td><td class="num">8</td></tr>
+        <tr><td>n_iid · n_comp · n_depth</td><td class="vals"><span class="faint">all</span> 6500 · 2300 · 1200</td><td>data</td><td class="layer"><span class="lay lay--dist">distribution</span></td><td>the 10,000 generated test items; probes add 100 per atomic operator and 16 or 48 per pure-structure operator</td><td class="num">8</td></tr>
         <tr><td>n_val</td><td class="vals"><span class="faint">all</span> 5000</td><td>data</td><td class="layer"><span class="lay lay--dist">distribution</span></td><td>visible validation set, scored in aggregate</td><td class="num">8</td></tr>
       </tbody>
     </table>
@@ -659,6 +650,18 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
       lenient, per-digit grader is used; it keeps both losses from saturating
       near 1. Every score below is exact match.
     </p>
+  </div>
+
+  <p>
+    On <span class="mono">mid_3</span>, the task the data-generation
+    walkthrough follows, the running example is answered three ways: by the
+    true <span class="mono">P</span>, and by each crippled interpreter. The
+    loss each crippled one takes over the test is the difficulty of the half
+    it is missing.
+  </p>
+  <div class="fig"><div class="fig__body" id="pi-body"></div></div>
+
+  <div class="prose">
     <p>
       <b>A preset is a sampler, not a condition.</b> Five of twenty
       <span class="mono">pi_mid</span> seeds fall inside
@@ -922,7 +925,7 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
         <tr><td class="mono">iid</td><td class="num">6500</td><td>in-distribution, held-out pairs forbidden</td></tr>
         <tr><td class="mono">comp</td><td class="num">2300</td><td>compositional generalisation: requires a held-out operator pair</td></tr>
         <tr><td class="mono">depth</td><td class="num">1200</td><td>deeper than anything in the demos</td></tr>
-        <tr><td class="mono">probe</td><td class="num">500</td><td>one bare atomic expression per item, 100 per atomic operator; scored per operator, outside <span class="mono">overall</span>, and split seen / unseen after the run by what the agent queried</td></tr>
+        <tr><td class="mono">probe</td><td class="num">628 in mid_3</td><td>single operators in isolation: 100 bare atomic expressions per atomic operator (depth 0), and single applications of each pure-structure operator (depth 1); scored per operator, outside <span class="mono">overall</span>; atomic probes are split seen / unseen after the run by what the agent queried</td></tr>
         <tr><td class="mono">tail</td><td>derived</td><td>items whose table entries <em>this run</em> never bought — derived per run, because "never seen" is only knowable afterwards</td></tr>
       </tbody>
     </table>
@@ -1001,8 +1004,8 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
   </div>
 </footer>
 
-<script src="assets/js/example-data.js?v=d75a2bbe07"></script>
+<script src="assets/js/example-data.js?v=515f6e5629"></script>
 <script src="assets/js/main.js?v=ea7fc422a4"></script>
-<script src="assets/js/pipeline.js?v=967caa8952"></script>
+<script src="assets/js/pipeline.js?v=9a87e1423e"></script>
 </body>
 </html>

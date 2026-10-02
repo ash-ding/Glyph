@@ -321,7 +321,11 @@ from glyph.data.probe import probe_set
 probes = probe_set(inst)
 probe_by_op = collections.Counter(t.split for t in probes)
 probe_hist = collections.Counter(depth(parse(t.expr_src, cfg)) for t in probes)
-assert set(probe_hist) == {0}
+probe_kind = {op: ("atomic" if any(t.needs_u or t.needs_b for t in probes if t.split == op) else "structural")
+              for op in probe_by_op}
+for t in probes:
+    assert depth(parse(t.expr_src, cfg)) == (0 if probe_kind[t.split] == "atomic" else 1)
+assert {op for op, k in probe_kind.items() if k == "structural"} ==     {op for op, sh in enabled_ops(cfg) if sh in ("L", "KL")}
 demo_hist = collections.Counter(depth(parse(e, cfg)) for e, _ in inst.demos)
 
 
@@ -370,11 +374,14 @@ data = {
              "held": sorted(map(list, inst.held_pairs)),
              "classes": [{"outer": a, "inner": b, "n": n, "held": held_kind.get((a, b), 0)}
                          for (a, b), n in sorted(by_kind.items())]},
-    "probes": {"n": len(probes), "by_op": dict(sorted(probe_by_op.items())),
-               "depth_hist": dict(sorted(probe_hist.items())),
-               "examples": [{"expr": next(t for t in probes if t.split == op).expr_src,
-                             "answer": next(t for t in probes if t.split == op).answer_src}
-                            for op in ("u0", "b0")]},
+    "probes": {
+        "n": len(probes), "depth_hist": dict(sorted(probe_hist.items())),
+        "by_op": [{"op": op, "kind": probe_kind[op], "n": n} for op, n in sorted(probe_by_op.items())],
+        "examples": [{"op": op, "kind": probe_kind[op],
+                      "expr": next(t for t in probes if t.split == op).expr_src,
+                      "answer": next(t for t in probes if t.split == op).answer_src}
+                     for op in ("u0", "b0", "s2", "s3")],
+    },
     "splits": splits, "n_val": len(inst.val), "val_depth_hist": dict(sorted(val_hist.items())),
     "demos": [{"expr": e, "answer": a} for e, a in inst.demos[:8]], "n_demos": len(inst.demos),
     "demo_depth_hist": dict(sorted(demo_hist.items())),
