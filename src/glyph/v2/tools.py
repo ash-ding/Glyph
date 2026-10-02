@@ -64,6 +64,24 @@ def _test_id_of(session) -> Callable[[Any], str]:
     return id_of
 
 
+def _final_items(session) -> tuple[list, Callable[[Any], str]]:
+    """The rows of final/test.jsonl: the held-out test, then the probe set
+    when one is attached, with the id map that covers both."""
+    id_of = _test_id_of(session)
+    items = list(session.inst.test)
+    probes = getattr(session, "probes", None)
+    if probes:
+        p_id_of, t_id_of = session.probe_id_of, id_of
+        probe_ids = {id(t) for t in probes}
+        items += list(probes)
+        id_of = lambda t: p_id_of(t) if id(t) in probe_ids else t_id_of(t)
+    return items, id_of
+
+
+def _work_root(session) -> Path:
+    return Path(getattr(session, "work_root", None) or session.run_dir)
+
+
 def _examples(v) -> dict:
     return {k: getattr(v, k) for k in v.counts if v.counts[k]}
 
@@ -99,9 +117,10 @@ def t_query(session, exprs: list, why: str) -> dict:
             results.append({"expr": expr, "error": "malformed"})
             continue
         results.append({"expr": expr, "out": out})
-        task_dir = Path(session.run_dir) / "task"
-        task_dir.mkdir(parents=True, exist_ok=True)
-        with open(task_dir / "queries.jsonl", "a", encoding="utf-8") as f:
+        qpath = Path(getattr(session, "queries_path", None)
+                     or Path(session.run_dir) / "task" / "queries.jsonl")
+        qpath.parent.mkdir(parents=True, exist_ok=True)
+        with open(qpath, "a", encoding="utf-8") as f:
             f.write(json.dumps({"expr": expr, "out": out}) + "\n")
 
     session.note(kind="query", why=why[:200], n=len(exprs))
@@ -117,7 +136,7 @@ def t_submit(session, path) -> dict:
         return _gate_error(session, "submit_validation_answer")
 
     id_of = _val_id_of(session)
-    v = check_file(path, session.inst.val, session.inst.cfg, session.run_dir, id_of)
+    v = check_file(path, session.inst.val, session.inst.cfg, _work_root(session), id_of)
     if not v.ok:
         return {"error": "illegal submission (not counted)",
                 "violations": v.counts, "examples": _examples(v),
@@ -150,9 +169,9 @@ def t_check_answers(session, path, set) -> dict:
     if set == "validation":
         items, id_of = session.inst.val, _val_id_of(session)
     else:
-        items, id_of = session.inst.test, _test_id_of(session)
+        items, id_of = _final_items(session)
 
-    v = check_file(path, items, session.inst.cfg, session.run_dir, id_of)
+    v = check_file(path, items, session.inst.cfg, _work_root(session), id_of)
     out = {"ok": v.ok, "violations": v.counts, "examples": _examples(v),
            **_remaining(session)}
 
@@ -244,15 +263,8 @@ def t_final_answer(session, path) -> dict:
     if not session.tool_available("submit_final_answer"):
         return _gate_error(session, "submit_final_answer")
 
-    id_of = _test_id_of(session)
-    items = list(session.inst.test)
-    probes = getattr(session, "probes", None)
-    if probes:
-        p_id_of, t_id_of = session.probe_id_of, id_of
-        probe_ids = {id(t) for t in probes}
-        items += list(probes)
-        id_of = lambda t: p_id_of(t) if id(t) in probe_ids else t_id_of(t)
-    v = check_file(path, items, session.inst.cfg, session.run_dir, id_of)
+    items, id_of = _final_items(session)
+    v = check_file(path, items, session.inst.cfg, _work_root(session), id_of)
     if not v.ok:
         return {"error": "illegal final answer (not committed)",
                 "violations": v.counts, "examples": _examples(v),
