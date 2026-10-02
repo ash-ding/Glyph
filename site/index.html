@@ -22,7 +22,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
-<link rel="stylesheet" href="assets/css/style.css?v=a38e77b9a9">
+<link rel="stylesheet" href="assets/css/style.css?v=01cea712bd">
 </head>
 
 <body>
@@ -928,44 +928,203 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
   <h2>Evaluation protocol</h2>
 
   <p class="section__lede">
-    A run has two phases and compares two arms at equal stop conditions. The
-    agent decides how to spend its budget, when to stop practising and whether
-    to train; the harness only enforces the caps and meters the spend.
+    A run puts one frontier agent on one instance, with no person in the loop.
+    It has two phases: practice, with an oracle to query, then a final test
+    with none. It also has two arms, which differ only in whether the agent can
+    train a small student model. The agent decides how to spend; the harness
+    enforces the caps, meters the spend and scores the result.
   </p>
 
-  <div class="phases">
-    <div class="phase">
-      <span class="phase__k">phase 1</span>
-      <h3>Practice</h3>
-      <p class="phase__given"><b>Given free:</b> the syntax spec, 30 worked demos, and a visible validation set of 5,000 expressions without answers.</p>
-      <ul>
-        <li><code>query</code> — evaluate expressions against <span class="mono">P</span>. Metered, cap Q = 1000. Malformed queries are charged; queries that would read a validation or test item are refused and not charged.</li>
-        <li><code>submit_validation_answer</code> — score an answer file on the validation set. Up to 20 times; returns only <span class="mono">overall</span> and a by-depth breakdown, never per item or per split.</li>
-        <li><code>check_answers</code> — a free legality check of an answer file.</li>
-        <li><code>finish_practice</code> — stop early.</li>
-        <li class="muted">train arm only: <code>build_dataset</code>, <code>train_model</code>, <code>infer_model</code>.</li>
-      </ul>
-      <p class="phase__end">Ends at the 20th submit, on <code>finish_practice</code>, after 100 turns, at the $300 safety line, or after 3 idle turns.</p>
-    </div>
-    <div class="phase__arrow" aria-hidden="true">→</div>
-    <div class="phase">
-      <span class="phase__k">phase 2</span>
-      <h3>Final</h3>
-      <p class="phase__given"><b>Revealed:</b> the hidden 10,000-item test (<span class="mono">iid</span>, <span class="mono">comp</span>, <span class="mono">depth</span>) and the separate probe set, with no answers. The oracle is gone.</p>
-      <ul>
-        <li><code>check_answers</code> — legality check against the test file.</li>
-        <li><code>submit_final_answer</code> — commit once. An illegal file is not committed and may be fixed; a legal one ends the run and is what gets scored.</li>
-        <li class="muted">train arm only: <code>infer_model</code>, to answer the test with a trained student.</li>
-      </ul>
-      <p class="phase__end">At most 30 turns. The agent never sees a test score.</p>
-    </div>
-  </div>
-
-  <h3>The two arms</h3>
+  <!-- ------------------------------------------------------- environment -->
+  <h3 id="run-env">Where the agent works</h3>
   <p>
-    The arms differ in exactly one thing: whether a small trainable student is
-    present. It is enforced by which tools exist in each phase, not by asking the
-    model to abstain.
+    The agent is a Claude model (<span class="mono">claude-opus-4-8</span> by
+    default, effort pinned to high) driven through the Claude Agent SDK. It
+    works in a sandboxed directory: it can read and write files there and run
+    shell commands, but cannot see the source, the GPUs or any credential, and
+    web access and subagents are switched off. Every model request passes
+    through a gateway on the host that pins the model and bills the request to
+    the run. The instance itself is reachable only through the eight Glyph
+    tools below.
+  </p>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>file</th><th>contents</th><th>present</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">task/README.md</td><td>the rules, with this run's caps</td><td>from the start</td></tr>
+        <tr><td class="mono">task/syntax.md</td><td>the public grammar</td><td>from the start</td></tr>
+        <tr><td class="mono">task/demos.jsonl</td><td>30 worked examples, <span class="mono">{"expr", "answer"}</span></td><td>from the start</td></tr>
+        <tr><td class="mono">task/validation.jsonl</td><td>5,000 items, <span class="mono">{"id", "expr"}</span>, no answers</td><td>from the start</td></tr>
+        <tr><td class="mono">task/queries.jsonl</td><td>every answered query, appended by <code>query</code></td><td>from the start, growing</td></tr>
+        <tr><td class="mono">task/final/test.jsonl</td><td>10,000 test rows and the probe rows, <span class="mono">{"id", "expr"}</span>, ids shuffled, no split labels</td><td>from the switch to final</td></tr>
+        <tr><td>the agent's own files</td><td>answer files, training sets, notes</td><td>anywhere outside <span class="mono">task/</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="small muted">
+    An answer file is JSONL with one <span class="mono">{"id", "answer"}</span>
+    row per id, every id exactly once. An answer is a string: a value such as
+    <span class="mono">"v_l_m_e"</span> or a non-empty list such as
+    <span class="mono">"[v_l_m_e, v_k_m_d]"</span>, of the type the expression
+    returns.
+  </p>
+
+  <!-- ---------------------------------------------------------- practice -->
+  <h3 id="practice">Phase 1 · Practice</h3>
+  <p>
+    Practice is where the agent learns. It queries the oracle, writes answer
+    files for the validation set, and scores them at most 20 times, seeing only
+    an aggregate. In the train arm it can also turn what it has learned into a
+    training set and fine-tune students on it. The figure replays a short
+    practice on <span class="mono">mid_3</span> through the real tool handlers:
+    every call result is what the harness returns.
+  </p>
+  <div class="fig" id="fig-practice"></div>
+  <p class="figcap"><b>Figure 8:</b> a practice phase on mid_3, call by call. The answer files are the skeleton-only interpreter's, so each score is real; in the train arm the student is not run, and the fields that would need a GPU are shown as …</p>
+  <p>
+    <b>Practice ends</b> at the 20th legal validation submission, on
+    <code>finish_practice</code>, after 100 turns, after three turns in a row
+    with no tool call, or once model spend passes $300. A turn is one assistant
+    message.
+  </p>
+
+  <!-- ------------------------------------------------------------- final -->
+  <h3 id="final">Phase 2 · Final</h3>
+  <p>
+    At the switch the harness writes <span class="mono">task/final/test.jsonl</span>
+    and closes the oracle: <code>query</code>,
+    <code>submit_validation_answer</code> and the training tools stop working.
+    The agent writes one answer file for every row, test and probe alike,
+    checks it and commits it once.
+  </p>
+  <div class="fig" id="fig-final"></div>
+  <p class="figcap"><b>Figure 9:</b> the final phase on the same run. The last step is the report the harness writes after the run; the agent never sees a test score.</p>
+  <p>
+    <b>The final phase ends</b> when a legal file is committed, after 30
+    turns, after three idle turns, or once model spend passes $300. A run that
+    ends without committing has its last file that passed
+    <code>check_answers</code> on the test committed for it; with neither, it
+    scores zero.
+  </p>
+
+  <!-- ------------------------------------------------------------- tools -->
+  <h3 id="tools">The tools</h3>
+  <p>
+    The eight Glyph tools are in-process MCP tools; the model sees them as
+    <span class="mono">mcp__glyph__&lt;name&gt;</span>, beside the SDK's own
+    <span class="mono">Read</span>, <span class="mono">Write</span>,
+    <span class="mono">Edit</span>, <span class="mono">Glob</span>,
+    <span class="mono">Grep</span> and <span class="mono">Bash</span>. Each takes
+    one JSON object, in which every field is required, and returns one JSON
+    object as text. Three rules hold for all eight:
+  </p>
+  <ul class="rules">
+    <li>Every result carries <span class="mono">q_remaining</span> (null when the query cap is lifted), <span class="mono">submissions_remaining</span> and <span class="mono">turns_remaining</span>, so the agent can pace itself without a status call.</li>
+    <li>A call outside its phase or arm returns an error naming both, and costs nothing.</li>
+    <li>No argument is accepted and ignored: every handler reads every argument it declares.</li>
+  </ul>
+
+  <div class="tools">
+    <p class="tools__group">Practice · both arms</p>
+
+    <article class="tool" id="tool-query">
+      <header class="tool__head"><code class="tool__name">query</code><span class="chip">practice</span></header>
+      <dl class="tool__dl">
+        <dt>description</dt><dd class="tool__desc">Spend a query to evaluate one or more expressions.</dd>
+        <dt>arguments</dt><dd class="tool__args"><div><span class="mono">exprs</span> <span class="ty">array</span> expressions in the public syntax</div><div><span class="mono">why</span> <span class="ty">string</span> a note for the trace, not acted on</div></dd>
+        <dt>returns</dt><dd><span class="mono">results</span>: per expression, <span class="mono">{expr, out}</span>, <span class="mono">{expr, refused}</span> or <span class="mono">{expr, error}</span>; <span class="mono">q_used</span></dd>
+        <dt>rules</dt><dd>The only way to learn semantics. An answered expression costs one query and is appended to <span class="mono">queries.jsonl</span>. A malformed one is charged too, so the grammar cannot be probed for free. A refused one is not: validation and test items, and, under the default strict policy, expressions with a held-out pair or deeper than the demos. Past the cap, <span class="mono">q_exhausted</span>, uncharged.</dd>
+      </dl>
+    </article>
+
+    <article class="tool" id="tool-submit-validation-answer">
+      <header class="tool__head"><code class="tool__name">submit_validation_answer</code><span class="chip">practice</span></header>
+      <dl class="tool__dl">
+        <dt>description</dt><dd class="tool__desc">Submit validation answers (practice phase); returns an aggregate score.</dd>
+        <dt>arguments</dt><dd class="tool__args"><div><span class="mono">path</span> <span class="ty">string</span> an answer file covering the 5,000 validation ids</div></dd>
+        <dt>returns</dt><dd><span class="mono">submission</span> (its number), <span class="mono">overall</span>, <span class="mono">by_depth</span></dd>
+        <dt>rules</dt><dd>Aggregate feedback only: never per item, never per split. An illegal file is rejected and does not use up a submission. The 20th legal submission ends practice.</dd>
+      </dl>
+    </article>
+
+    <article class="tool" id="tool-check-answers">
+      <header class="tool__head"><code class="tool__name">check_answers</code><span class="chip">practice</span><span class="chip">final</span></header>
+      <dl class="tool__dl">
+        <dt>description</dt><dd class="tool__desc">Check an answer file for legality (set='validation' or 'test').</dd>
+        <dt>arguments</dt><dd class="tool__args"><div><span class="mono">path</span> <span class="ty">string</span> an answer file</div><div><span class="mono">set</span> <span class="ty">string</span> <span class="mono">"validation"</span>, or <span class="mono">"test"</span> in the final phase</div></dd>
+        <dt>returns</dt><dd><span class="mono">ok</span>, <span class="mono">violations</span> (counts by kind: malformed JSON, wrong row shape, unknown, missing or duplicate ids, bad answers, wrong answer type, a path inside <span class="mono">task/</span>), up to five <span class="mono">examples</span> of each</dd>
+        <dt>rules</dt><dd>Free: no score, no counter touched. On the test it checks every row of <span class="mono">final/test.jsonl</span>, probes included, and remembers the last file that passed for the commit-on-timeout rule.</dd>
+      </dl>
+    </article>
+
+    <article class="tool" id="tool-finish-practice">
+      <header class="tool__head"><code class="tool__name">finish_practice</code><span class="chip">practice</span></header>
+      <dl class="tool__dl">
+        <dt>description</dt><dd class="tool__desc">Signal that the practice phase is done.</dd>
+        <dt>arguments</dt><dd class="tool__args"><div><span class="mono">reason</span> <span class="ty">string</span> recorded in the trace</div></dd>
+        <dt>returns</dt><dd><span class="mono">ok</span></dd>
+        <dt>rules</dt><dd>Ends practice before any cap is reached; the switch to final follows.</dd>
+      </dl>
+    </article>
+
+    <p class="tools__group">The student · train arm only</p>
+
+    <article class="tool tool--train" id="tool-build-dataset">
+      <header class="tool__head"><code class="tool__name">build_dataset</code><span class="chip chip--train">practice · train</span></header>
+      <dl class="tool__dl">
+        <dt>description</dt><dd class="tool__desc">Build a student training dataset from purchased queries (train arm).</dd>
+        <dt>arguments</dt><dd class="tool__args"><div><span class="mono">path</span> <span class="ty">string</span> a JSONL file of <span class="mono">{"expr", "answer"}</span> rows the agent wrote</div></dd>
+        <dt>returns</dt><dd><span class="mono">dataset_id</span> (<span class="mono">ds1</span>, <span class="mono">ds2</span>, …), <span class="mono">size</span>, <span class="mono">dropped</span>, <span class="mono">provenance</span></dd>
+        <dt>rules</dt><dd>Rows that do not parse are dropped. Every kept row is labelled by where its expression comes from: <span class="mono">purchased</span> (in <span class="mono">queries.jsonl</span>), <span class="mono">demo</span>, <span class="mono">validation</span> or <span class="mono">other</span>. The label is recorded, not enforced.</dd>
+      </dl>
+    </article>
+
+    <article class="tool tool--train" id="tool-train-model">
+      <header class="tool__head"><code class="tool__name">train_model</code><span class="chip chip--train">practice · train</span></header>
+      <dl class="tool__dl">
+        <dt>description</dt><dd class="tool__desc">Fine-tune a student model on a dataset (train arm). student_id is an id YOU choose: exactly 8 lowercase hex characters (e.g. 'a1b2c3d4'). A new id starts a fresh student from the base model; an existing id continues training that student from its latest checkpoint. Several students may coexist. Returns a checkpoint_id (format ck_xxxxxxxx) to pass back verbatim.</dd>
+        <dt>arguments</dt><dd class="tool__args"><div><span class="mono">dataset_id</span> <span class="ty">string</span></div><div><span class="mono">epochs</span> <span class="ty">integer</span></div><div><span class="mono">lr</span> <span class="ty">number</span></div><div><span class="mono">student_id</span> <span class="ty">string</span> 8 lowercase hex characters</div></dd>
+        <dt>returns</dt><dd><span class="mono">checkpoint_id</span>, <span class="mono">student_id</span>, <span class="mono">continued_from</span>, <span class="mono">final_loss</span>, <span class="mono">gpu_seconds</span>, <span class="mono">gpu_seconds_remaining</span>, <span class="mono">stopped_at_cap</span></dd>
+        <dt>rules</dt><dd>A full fine-tune of Qwen3-0.6B. GPU time is metered against a run budget of 7,200 s; once it is spent, further calls are refused before any GPU work. A malformed <span class="mono">student_id</span> is rejected the same way.</dd>
+      </dl>
+    </article>
+
+    <article class="tool tool--train" id="tool-infer-model">
+      <header class="tool__head"><code class="tool__name">infer_model</code><span class="chip chip--train">practice · train</span><span class="chip chip--train">final · train</span></header>
+      <dl class="tool__dl">
+        <dt>description</dt><dd class="tool__desc">Run inference with a trained student (train arm). checkpoint accepts 'base', a ck_xxxxxxxx checkpoint_id exactly as returned by train, or an 8-hex student_id (meaning that student's latest checkpoint).</dd>
+        <dt>arguments</dt><dd class="tool__args"><div><span class="mono">checkpoint</span> <span class="ty">string</span></div><div><span class="mono">input_path</span> <span class="ty">string</span> a file of <span class="mono">{"id", "expr"}</span> rows</div><div><span class="mono">output_path</span> <span class="ty">string</span> where the answer file is written</div><div><span class="mono">prefix_path</span> <span class="ty">string</span> a text file prepended to every prompt (an empty file for none)</div></dd>
+        <dt>returns</dt><dd><span class="mono">rows</span>, <span class="mono">truncated</span>, <span class="mono">gpu_seconds</span></dd>
+        <dt>rules</dt><dd>Writes an answer file the agent can check, edit and submit like any other. In the final phase it is how a trained student answers the test.</dd>
+      </dl>
+    </article>
+
+    <p class="tools__group">Final · both arms</p>
+
+    <article class="tool" id="tool-submit-final-answer">
+      <header class="tool__head"><code class="tool__name">submit_final_answer</code><span class="chip">final</span></header>
+      <dl class="tool__dl">
+        <dt>description</dt><dd class="tool__desc">Commit the final held-out-test answers and end the run.</dd>
+        <dt>arguments</dt><dd class="tool__args"><div><span class="mono">path</span> <span class="ty">string</span> an answer file covering every row of <span class="mono">final/test.jsonl</span></div></dd>
+        <dt>returns</dt><dd><span class="mono">committed</span>, <span class="mono">digest</span> (the file's SHA-256, first 16 hex)</dd>
+        <dt>rules</dt><dd>An illegal file is not committed and may be fixed and resubmitted; a file missing probe answers is illegal. A legal one is committed once, ends the run, and is what gets scored.</dd>
+      </dl>
+    </article>
+  </div>
+  <p class="small muted">
+    The descriptions are the text the model receives, verbatim. Declared in
+    <code>src/glyph/v2/mcp.py</code>, allocated in <code>session.py</code>,
+    implemented in <code>tools.py</code>; <code>docs/tools.md</code> has the
+    full reference.
+  </p>
+
+  <!-- ---------------------------------------------------------- matrix -->
+  <h3 id="availability">Which tools each phase exposes</h3>
+  <p>
+    Which tool may be called is a table of its own, apart from what the tools
+    are. The SDK cannot remove a tool from the model's list mid-session, so
+    the first line of every handler checks this table, and that check is what
+    enforces it.
   </p>
   <div class="table-scroll">
     <table class="matrix-tools">
@@ -984,37 +1143,53 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
       </tbody>
     </table>
   </div>
-  <p class="small muted">
-    The train arm's student is a Qwen3-1.7B model by default (the base model is
-    a parameter). <code>build_dataset</code> uses only what the agent has bought;
-    <code>train_model</code> fine-tunes under a GPU-seconds budget (1800 s per call,
-    7200 s in total) that is metered like any other spend; students can be
-    continued or kept side by side.
+
+  <h3 id="arms">The two arms</h3>
+  <p>
+    The arms differ in exactly one thing: whether the three student tools
+    exist. The system prompt is the same text in both, plus one paragraph in
+    the train arm that describes those tools' mechanics and nothing about when
+    to use them. Everything else — phases, caps, feedback — is identical, so
+    the arms are compared at equal stop conditions. The student is
+    Qwen3-0.6B by default (the base model is a run parameter). Training and
+    inference use turns and GPU time, never queries, and GPU time is recorded
+    in the run's ledger apart from model spend.
   </p>
 
-  <h3>Scoring a run</h3>
-  <div class="prose">
-    <p>
-      The committed answers are scored by exact match against all 10,000 test
-      items, with the same four metrics as the oracles, plus a by-depth
-      breakdown and <span class="mono">headroom</span> on every split. A run
-      that ends without committing has its last legality-checked test file
-      committed for it; with neither, it scores zero. Per-op probes are scored apart from
-      <span class="mono">overall</span>, each op split into cells the run did
-      and did not buy. The report also carries the validation-versus-test gap —
-      never shown to the agent mid-run — and the run's spend: queries,
-      submissions, turns, model tokens and GPU seconds, all through one ledger.
-    </p>
-  </div>
+  <h3 id="caps">Caps</h3>
   <div class="table-scroll">
     <table>
-      <thead><tr><th>split or set</th><th class="num">n</th><th>what it tests</th></tr></thead>
+      <thead><tr><th>cap</th><th class="num">default</th><th>when it is reached</th></tr></thead>
       <tbody>
-        <tr><td class="mono">iid</td><td class="num">6500</td><td>in-distribution, held-out pairs forbidden</td></tr>
-        <tr><td class="mono">comp</td><td class="num">2300</td><td>compositional generalisation: requires a held-out operator pair</td></tr>
-        <tr><td class="mono">depth</td><td class="num">1200</td><td>deeper than anything in the demos</td></tr>
-        <tr><td class="mono">probe set</td><td class="num">628 in mid_3</td><td>single operators in isolation: 100 bare atomic expressions per atomic operator (depth 0), and single applications of each pure-structure operator (depth 1); scored per operator, outside <span class="mono">overall</span>; atomic probes are split seen / unseen after the run by what the agent queried</td></tr>
-        <tr><td class="mono">tail</td><td>derived</td><td>items whose table entries <em>this run</em> never bought — derived per run, because "never seen" is only knowable afterwards</td></tr>
+        <tr><td>queries, <span class="mono">Q</span></td><td class="num">1,000</td><td>further queries return <span class="mono">q_exhausted</span>, uncharged; a run may lift the cap</td></tr>
+        <tr><td>validation submissions</td><td class="num">20</td><td>the 20th legal one ends practice</td></tr>
+        <tr><td>practice turns, <span class="mono">T_p</span></td><td class="num">100</td><td>practice ends</td></tr>
+        <tr><td>final turns, <span class="mono">T_f</span></td><td class="num">30</td><td>the run ends, with the commit rule above</td></tr>
+        <tr><td>idle turns in a row</td><td class="num">3</td><td>the phase ends</td></tr>
+        <tr><td>model spend</td><td class="num">$300</td><td>the phase ends; a safety line, counting model tokens only</td></tr>
+        <tr><td>student GPU time</td><td class="num">7,200 s</td><td>further <code>train_model</code> calls are refused</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ----------------------------------------------------------- scoring -->
+  <h3 id="scoring">Scoring a run</h3>
+  <p>
+    The committed file is scored by exact match against all 10,000 test items
+    and the probe set, with the <a href="#metrics">evaluation metrics</a>
+    defined under Data validation. The report adds what explains the score;
+    none of it reaches the agent during the run.
+  </p>
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>report field</th><th>contents</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">overall · by_split · by_depth</td><td>accuracy on the held-out test</td></tr>
+        <tr><td class="mono">tail · headroom</td><td>accuracy on items needing an entry the run never queried; headroom overall, per split and on the tail</td></tr>
+        <tr><td class="mono">probe</td><td>accuracy per operator, atomic ones split seen / unseen</td></tr>
+        <tr><td class="mono">validation</td><td>every submission's aggregate, the best and the last, and the gap between the last and the test's <span class="mono">iid</span> score</td></tr>
+        <tr><td class="mono">covariates</td><td>queries used, submissions, turns per phase, whether practice ended early, how the file was committed</td></tr>
+        <tr><td class="mono">ledger</td><td>model spend by token kind, GPU seconds for training and inference</td></tr>
       </tbody>
     </table>
   </div>
@@ -1092,8 +1267,8 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
   </div>
 </footer>
 
-<script src="assets/js/example-data.js?v=f020657a0f"></script>
+<script src="assets/js/example-data.js?v=03772966f0"></script>
 <script src="assets/js/main.js?v=ea7fc422a4"></script>
-<script src="assets/js/pipeline.js?v=ee9d447b60"></script>
+<script src="assets/js/pipeline.js?v=58f9d4980c"></script>
 </body>
 </html>
