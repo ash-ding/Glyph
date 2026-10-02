@@ -221,9 +221,10 @@ def t_student_infer(session, checkpoint, input_path, output_path,
     if not (checkpoint == "base"
             or CHECKPOINT_ID_RE.match(checkpoint or "")
             or STUDENT_ID_RE.match(checkpoint or "")):
-        return {"error": "checkpoint must be 'base', a ck_xxxxxxxx "
-                         "checkpoint_id as returned by train, or an 8-hex "
-                         "student_id (meaning its latest checkpoint)",
+        return {"error": "checkpoint must be 'base', a checkpoint_id "
+                         "exactly as returned by train_model (format "
+                         "<student_id>_ck_xxxxxxxx), or an 8-hex student_id "
+                         "(meaning its latest checkpoint)",
                 **_remaining(session)}
 
     student, err = _student_or_error(session)

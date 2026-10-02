@@ -61,8 +61,9 @@ During practice, you may also build student models:
 - train_model: fine-tune a student on a dataset. You choose a student_id of exactly
   8 lowercase hex characters (e.g. a1b2c3d4): a new student_id starts a fresh
   student from the base model; an existing id continues training that student
-  from its latest checkpoint. Students may coexist. Each train_model call returns
-  a checkpoint_id (format ck_xxxxxxxx) usable in later infer_model calls.
+  from its latest checkpoint. Students may coexist. Each train_model call
+  returns a checkpoint_id (format <student_id>_ck_xxxxxxxx — the owning
+  student is readable off the id) usable in later infer_model calls.
 - infer_model: generate answers with a checkpoint_id as returned by train_model,
   or with a student_id (meaning that student's latest checkpoint)
 

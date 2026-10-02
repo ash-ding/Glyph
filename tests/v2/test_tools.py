@@ -288,7 +288,7 @@ def test_train_with_fake_student(inst, tmp_path):
 def test_student_infer_with_fake_student(inst, tmp_path):
     s = make_session(inst, tmp_path)
     s.student = FakeStudent()
-    out = T.t_student_infer(s, checkpoint="ck_12ab34cd", input_path="i",
+    out = T.t_student_infer(s, checkpoint="eeee0005_ck_12ab34cd", input_path="i",
                             output_path="o", prefix_path=None)
     assert out["rows"] == 3
 

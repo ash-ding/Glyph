@@ -176,8 +176,30 @@ def test_checkpoint_id_format_and_uniqueness(tmp_path):
     r2 = pool.train(dsid, epochs=1, lr=1e-5, student_id="aaaa0001")
     r3 = pool.train(dsid, epochs=1, lr=1e-5, student_id="bbbb0002")
     cks = [r["checkpoint_id"] for r in (r1, r2, r3)]
-    assert all(re.fullmatch(r"ck_[0-9a-f]{8}", c) for c in cks)
+    # owner-prefixed: <student8hex>_ck_<8hex> -- the owning model is readable
+    # straight off the id
+    assert all(re.fullmatch(r"[0-9a-f]{8}_ck_[0-9a-f]{8}", c) for c in cks)
+    assert cks[0].startswith("aaaa0001_ck_") and cks[1].startswith("aaaa0001_ck_")
+    assert cks[2].startswith("bbbb0002_ck_")
     assert len(set(cks)) == 3
+
+
+def test_checkpoint_id_is_stable_per_lineage_position(tmp_path):
+    """The suffix hashes the LINEAGE position, so another student training in
+    between must not change what aaaa0001's checkpoints are called."""
+    inst = generate(1001, CFG)
+    (tmp_path / "a").mkdir(); (tmp_path / "b").mkdir()
+    pool1 = _pool(tmp_path / "a", inst)
+    d1 = _dsid(tmp_path / "a", inst, pool1)
+    plain = [pool1.train(d1, 1, 1e-5, student_id="aaaa0001")["checkpoint_id"]
+             for _ in range(2)]
+    pool2 = _pool(tmp_path / "b", inst)
+    d2 = _dsid(tmp_path / "b", inst, pool2)
+    inter = []
+    inter.append(pool2.train(d2, 1, 1e-5, student_id="aaaa0001")["checkpoint_id"])
+    pool2.train(d2, 1, 1e-5, student_id="bbbb0002")     # interleaved stranger
+    inter.append(pool2.train(d2, 1, 1e-5, student_id="aaaa0001")["checkpoint_id"])
+    assert plain == inter
 
 
 def test_infer_rejects_malformed_and_unknown_refs(tmp_path):
@@ -186,10 +208,10 @@ def test_infer_rejects_malformed_and_unknown_refs(tmp_path):
     inst = generate(1001, CFG); pool = _pool(tmp_path, inst)
     inp = tmp_path / "in.jsonl"; out = tmp_path / "out.jsonl"
     inp.write_text(json.dumps({"id": "t0", "expr": inst.test[0].expr_src}) + "\n")
-    for bad in ("latest", "ck1", "AAAA0001", "ck_zzzzzzzz"):
+    for bad in ("latest", "ck1", "AAAA0001", "ck_zzzzzzzz", "ck_12ab34cd"):
         with pytest.raises(ValueError):
             pool.infer(bad, inp, out, None)
     with pytest.raises(ValueError):
         pool.infer("dddd0004", inp, out, None)       # well-formed but unknown
     with pytest.raises(ValueError):
-        pool.infer("ck_12345678", inp, out, None)    # well-formed but unknown
+        pool.infer("dddd0004_ck_12345678", inp, out, None)   # well-formed but unknown

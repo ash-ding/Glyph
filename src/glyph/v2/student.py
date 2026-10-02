@@ -131,7 +131,10 @@ def _default_backend():
 # "base", ck_xxxxxxxx, and an 8-hex student_id -- are disjoint by
 # construction, so student_infer's resolution is unambiguous.
 STUDENT_ID_RE = re.compile(r"^[0-9a-f]{8}$")
-CHECKPOINT_ID_RE = re.compile(r"^ck_[0-9a-f]{8}$")
+# Owner-prefixed: the owning student is readable straight off the id, and the
+# suffix hashes the LINEAGE position (not a global counter), so a student's
+# checkpoint names do not depend on what other students trained in between.
+CHECKPOINT_ID_RE = re.compile(r"^[0-9a-f]{8}_ck_[0-9a-f]{8}$")
 
 
 class StudentPool:
@@ -259,9 +262,9 @@ class StudentPool:
         init_checkpoint = (str(self.checkpoints[continued_from])
                            if continued_from else None)
 
-        self._ck_n += 1
-        checkpoint_id = "ck_" + hashlib.sha256(
-            f"{student_id}:{self._ck_n}".encode()).hexdigest()[:8]
+        position = len(lineage) + 1
+        checkpoint_id = f"{student_id}_ck_" + hashlib.sha256(
+            f"{student_id}:{position}".encode()).hexdigest()[:8]
         out_dir = self.work_dir / checkpoint_id
 
         rec = self.backend.train_fn(examples, hp, base_model=self.base_model,
