@@ -260,7 +260,7 @@ class FakeStudent:
     def build_dataset(self, path, inst):
         return {"dataset_id": "ds1", "size": 10, "provenance": "fake"}
 
-    def train(self, dataset_id, epochs, lr, student_id="s1"):
+    def train(self, dataset_id, epochs, lr, student_id="eeee0005"):
         return {"checkpoint_id": "ck1", "student_id": student_id,
                 "continued_from": None, "final_loss": 0.1, "gpu_seconds": 5.0,
                 "gpu_seconds_remaining": 95.0, "stopped_at_cap": False}
@@ -280,7 +280,7 @@ def test_build_dataset_with_fake_student(inst, tmp_path):
 def test_train_with_fake_student(inst, tmp_path):
     s = make_session(inst, tmp_path)
     s.student = FakeStudent()
-    out = T.t_train(s, dataset_id="ds1", epochs=2, lr=0.01, student_id="s1")
+    out = T.t_train(s, dataset_id="ds1", epochs=2, lr=0.01, student_id="eeee0005")
     assert out["checkpoint_id"] == "ck1"
     assert out["gpu_seconds_remaining"] == 95.0
 
@@ -288,7 +288,8 @@ def test_train_with_fake_student(inst, tmp_path):
 def test_student_infer_with_fake_student(inst, tmp_path):
     s = make_session(inst, tmp_path)
     s.student = FakeStudent()
-    out = T.t_student_infer(s, checkpoint="ck1", input_path="i", output_path="o", prefix_path=None)
+    out = T.t_student_infer(s, checkpoint="ck_12ab34cd", input_path="i",
+                            output_path="o", prefix_path=None)
     assert out["rows"] == 3
 
 
@@ -297,7 +298,7 @@ def test_train_tools_no_student_error(inst, tmp_path):
     assert getattr(s, "student", None) is None
     out = T.t_build_dataset(s, path="foo.jsonl")
     assert "error" in out
-    out2 = T.t_train(s, dataset_id="ds1", epochs=1, lr=0.1, student_id="s1")
+    out2 = T.t_train(s, dataset_id="ds1", epochs=1, lr=0.1, student_id="eeee0005")
     assert "error" in out2
     out3 = T.t_student_infer(s, checkpoint="c", input_path="i", output_path="o")
     assert "error" in out3
@@ -316,5 +317,20 @@ def test_default_id_of(inst):
 def test_train_passes_student_id_through(inst, tmp_path):
     s = make_session(inst, tmp_path)
     s.student = FakeStudent()
-    out = T.t_train(s, dataset_id="ds1", epochs=1, lr=1e-4, student_id="alpha")
-    assert out["student_id"] == "alpha"
+    out = T.t_train(s, dataset_id="ds1", epochs=1, lr=1e-4, student_id="aaaa0001")
+    assert out["student_id"] == "aaaa0001"
+
+
+def test_train_tool_rejects_malformed_student_id(inst, tmp_path):
+    s = make_session(inst, tmp_path)
+    s.student = FakeStudent()
+    out = T.t_train(s, dataset_id="ds1", epochs=1, lr=1e-4, student_id="my-model")
+    assert "error" in out and "hex" in out["error"]
+
+
+def test_student_infer_tool_rejects_malformed_ref(inst, tmp_path):
+    s = make_session(inst, tmp_path)
+    s.student = FakeStudent()
+    out = T.t_student_infer(s, checkpoint="latest", input_path="a",
+                            output_path="b", prefix_path=None)
+    assert "error" in out

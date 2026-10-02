@@ -58,11 +58,13 @@ _STUDENT_PARAGRAPH = """
 
 During practice, you may also build student models:
 - build_dataset: collect training data from queries you make
-- train: fine-tune a student on a dataset. You choose a student_id: a new id
-  starts a fresh student from the base model; an existing id continues
-  training that student from its latest checkpoint. Students may coexist.
-- student_infer: generate answers with a trained checkpoint, or with a
-  student_id (meaning that student's latest checkpoint)
+- train: fine-tune a student on a dataset. You choose a student_id of exactly
+  8 lowercase hex characters (e.g. a1b2c3d4): a new student_id starts a fresh
+  student from the base model; an existing id continues training that student
+  from its latest checkpoint. Students may coexist. Each train call returns
+  a checkpoint_id (format ck_xxxxxxxx) usable in later student_infer calls.
+- student_infer: generate answers with a checkpoint_id as returned by train,
+  or with a student_id (meaning that student's latest checkpoint)
 
 These tools let you put what you discover into a small model's weights.
 Training and inference consume turns but not queries."""
