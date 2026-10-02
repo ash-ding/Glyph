@@ -127,3 +127,50 @@ def test_report_probe_block_absent_without_probes(tmp_path):
     f = tmp_path / "final.jsonl"
     f.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
     assert build_report(s, str(f), test_id_of)["probe"] is None
+
+
+def test_report_probe_block_structural_ops_have_no_seen_split(tmp_path):
+    import json
+    from glyph.data import PRESETS, generate
+    from glyph.data.grammar import enabled_ops
+    from glyph.data.probe import probe_set
+    from glyph.v2.ledger import Ledger
+    from glyph.v2.report import build_report
+    from glyph.v2.session import Session
+    from glyph.v2 import tools as T
+
+    inst = generate(1001, PRESETS["smoke"])
+    s = Session(inst=inst, ledger=Ledger(), run_dir=tmp_path, arm="no_train")
+    s.phase = "final"
+    test_id_of = T.default_id_of("test", inst.test)
+    s.test_id_of = test_id_of
+    s.probes = probe_set(inst, n_per_op=4, struct_reps=1)
+    s.probe_id_of = T.default_id_of("probe", s.probes)
+
+    struct_ops = {op for op, shape in enabled_ops(inst.cfg) if shape in ("L", "KL")}
+    assert struct_ops
+
+    # answer everything correctly except one structural probe
+    wrong_done = False
+    rows = [{"id": test_id_of(t), "answer": t.answer_src} for t in inst.test]
+    for t in s.probes:
+        ans = t.answer_src
+        if not wrong_done and t.split in struct_ops:
+            ans = inst.val[0].answer_src if ans != inst.val[0].answer_src else inst.val[1].answer_src
+            wrong_op, wrong_done = t.split, True
+        rows.append({"id": s.probe_id_of(t), "answer": ans})
+    f = tmp_path / "final.jsonl"
+    f.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+
+    rep = build_report(s, str(f), test_id_of)
+    by_op = rep["probe"]["by_op"]
+    for op in struct_ops:
+        v = by_op[op]
+        assert v["kind"] == "structural"
+        assert v["seen"] is None and v["unseen"] is None
+        assert v["n"] > 0
+    assert by_op[wrong_op]["overall"] < 1.0
+    for op in by_op:
+        if op not in struct_ops:
+            assert by_op[op]["kind"] == "atomic"
+            assert by_op[op]["seen"] is not None
