@@ -82,10 +82,17 @@ binary 算子。student 记住原子 cell；值嵌入里的数字结构让它能
 **可比性注记**：在 2026-09-29 之前的私有格式（`"u0 <值> ="`）下测出的数字（包括已发布的
 0.498）与新 run 不可比，必须重测。
 
-**Per-op 专家（`--only weights-per-op`）。**每个原子算子单独训一个 student（只喂该算子的
-cell，同一 `seen_frac` 哈希），在该算子的探针题（`probe_set`）上打分，seen/unseen 由训练哈希
-判定——正是 agent report 里 `probe.by_op` 块的 reference 侧对照，也是多专家 train arm 的标尺。
-合并进 `reference_ceilings.json` 的 `weights_per_op`。student 基座模型处处可参数化
+**Per-op 专家（`--only weights-per-op`），v2。**每个原子算子单独训一个 student，在该算子
+的探针题上打分——agent report 里 `probe.by_op` 的 reference 侧对照，多专家 train arm 的标尺。
+两个覆盖率旋钮并存、各答各的问题：`--seen-frac`（该算子**自己表**的比例，沿用冻结哈希——表的
+内禀可学性，与通才 oracle 的 coverage 轴一致）与 `--n-seen`（恰好 N 条 cell、**所有算子同一个
+N**——对齐 agent 预算的旋钮：Q=1000 封顶了 agent 能为单个算子买到的量；注意 binary 表有 ~2400
+万条，frac 口径下 binary 的训练资格远超任何 agent 的购买力）。训练（`train_specialist`）是预算
+感知的：物化 eligible 池、留 10%（夹在 [8,1024]）做早停集且永不训练、按 epoch 训练、holdout
+loss 的 patience 或 `max_epochs`/`max_steps` 封顶即停——取代旧的固定 6000 步（那会把 unary 专家
+过训几千个有效 epoch）。打分是**曝光精确**的：`score_probes` 接收实际 TRAIN 划分，"seen" 即
+真训过（早停 holdout 记为 unseen），消除了 binary 侧资格≠曝光的旧问题。结果以 `weights_per_op`
+并入 `reference_ceilings.json`，附 `train_meta`。student 基座模型处处可参数化
 （`--student-model`；v2 CLI 同）：更小的候选（Qwen3-0.6B）必须先通过 capacity 自检 #5
 （`scripts/capacity_check.py --model ...`）才有资格上岗。
 
@@ -210,7 +217,10 @@ final test 一起下发，是 `final/test.jsonl` 里的 `probe_*` 行；合法�
 文件必须覆盖它们，但它们**不计入** `overall`，单独报在 `report["probe"]["by_op"]`
 块里。每个算子的准确率按本次 run 的 `LookupLog` 拆成 `seen`/`unseen` 两栏
 （unseen = 该 cell 从未被购买——每算子泛化能力的干净读数）。查询 oracle 特意**不**
-拒绝探针 cell：拒绝会泄露哪些 cell 是探针。
+拒绝探针 cell：拒绝会泄露哪些 cell 是探针。关于 agent 侧拆分的两条诚实性注记：LOG 口径的
+`seen` 是知识的**上界**——组合查询会把求值沿途摸过的每个 cell 记为 seen，而 agent 只看到最终
+输出、通常无法反推中间值——因此 `unseen` 才是干净的下界泛化读数。另外 demos 不进
+`query_log`（它们在生成期算好），demo 摸过的 cell 记为 unseen。
 
 ### 4.5 practice 与 final 阶段
 

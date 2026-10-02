@@ -95,11 +95,21 @@ unseen cells. **Comparability note:** numbers measured under the pre-2026-09-29 
 (`"u0 <val> ="`), including the published 0.498, are not comparable with new runs and must be
 re-measured.
 
-**Per-op specialists (`--only weights-per-op`).** One student per atomic op, trained on that
-op's cells only (same `seen_frac` hash), scored on that op's probe items (`probe_set`) with a
-seen/unseen split decided by the training hash — the reference-side analogue of the agent
-report's `probe.by_op` block, and the yardstick for a multi-specialist train arm. Merged into
-`reference_ceilings.json` as `weights_per_op`. The student base model is a parameter everywhere
+**Per-op specialists (`--only weights-per-op`), v2.** One student per atomic op, scored on
+that op's probe items — the reference-side analogue of the agent report's `probe.by_op` and the
+yardstick for a multi-specialist train arm. Two coverage knobs coexist, answering different
+questions: `--seen-frac` (fraction of the op's OWN table via the frozen hash — the table's
+intrinsic learnability, consistent with the generalist oracle's coverage axis) and `--n-seen`
+(exactly N cells, the SAME N for every op — the agent-budget-relevant knob, since Q=1000 bounds
+what an agent could ever buy for one op; note a binary table has ~24M cells, so frac-mode binary
+budgets are far beyond any agent's reach). Training (`train_specialist`) is budget-aware: the
+eligible pool is materialized, 10% (clamped to [8, 1024]) is held out for early stopping and
+never trained, and epoch training stops on holdout-loss patience or the `max_epochs`/`max_steps`
+caps — replacing the old fixed 6000 steps, which over-trained unary specialists by thousands of
+effective epochs. Scoring is **exposure-exact**: `score_probes` takes the actual TRAIN split, so
+"seen" means trained-on (the early-stop holdout counts as unseen), eliminating the old
+eligibility≠exposure gap on binary. Merged into `reference_ceilings.json` as `weights_per_op`
+with `train_meta` per cell. The student base model is a parameter everywhere
 (`--student-model`; v2 CLI likewise): a smaller candidate (Qwen3-0.6B) is admissible only after
 capacity self-check #5 passes for it (`scripts/capacity_check.py --model ...`).
 
@@ -236,7 +246,12 @@ cover them, but they are scored **outside** `overall`, in a separate
 `report["probe"]["by_op"]` block. Each op's accuracy is split `seen`/`unseen`
 by the run's `LookupLog` (unseen = the cell was never bought — the clean per-op
 generalization read). Probe cells are deliberately *not* refused by the query
-oracle: refusing them would leak which cells are probes.
+oracle: refusing them would leak which cells are probes. Two honesty notes on the agent-side
+split: the LOG-based `seen` is an UPPER bound on knowledge — a composed query marks every cell
+its evaluation touched as seen, although the agent only observes the final output and usually
+cannot invert the intermediates — so `unseen` is the clean lower-bound generalization read. And
+demos never enter `query_log` (they are computed at generation time), so demo-touched cells count
+as unseen.
 
 ### 4.5 Practice vs final phases
 
