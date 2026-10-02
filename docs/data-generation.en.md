@@ -60,6 +60,15 @@ Bare atomic applications are legal expressions: `u*(value)` and `b*(value, value
 value-literal arguments only (no nesting, no lists). Generation never emits them — they exist so
 an agent can buy individual table cells at query time. One cell costs one query.
 
+Two invariants around them: **depth counts structural operators**, so a bare atomic application
+has depth 0 (the depth-0 stratum is {`Val`, `Lit`, `AtomApp`}; an `AtomApp` still costs one table
+lookup — depth counts structure, not computation). And they are **root-only**: the parser accepts
+only value literals as their arguments, while every structural slot is LIST-typed and `AtomApp`
+is VAL-typed, so a bare atomic can never appear inside another expression. The per-op probe set
+is exactly this language's depth-0 stratum, administered separately from the frozen test/val
+(folding depth-0 items into the test would mechanically deflate measured π, because the table
+oracle gets them right for free).
+
 **Table sizes** (`tables.py:6-8`) — a table is a function, not a stored array:
 
 | kind | signature | entries if you tabulated it | per instance |

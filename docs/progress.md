@@ -3842,3 +3842,40 @@ vLLM restart line for lumen2 (8 instances, one per GPU, ports 8100–8107):
 ~/models/Qwen3-8B --served-model-name qwen3-8b --port 810N
 --tensor-parallel-size 1 --max-model-len 32768 --gpu-memory-utilization 0.9
 --no-enable-log-requests`.
+
+## 2026-10-01 — depth-0 bare atomics + per-op oracle v2 (implementation; runs deferred)
+
+Per the 2026-10-01 spec. **No GPU run yet** — the implementation goes to
+review first; the superseded per-op numbers from earlier today (fixed-6000-step
+`ops=[op]` path) should not be compared with anything v2 produces.
+
+1. **`depth(AtomApp) = 0`** — depth counts structural operators, so the
+   depth-0 stratum is {`Val`, `Lit`, `AtomApp`}; the public syntax spec states
+   the convention. Two invariants documented: bare atomics are root-only (the
+   parser takes only value literals as their arguments; structural slots are
+   LIST-typed, AtomApp is VAL-typed), and the probe set is the language's
+   depth-0 stratum, administered separately (depth-0 items inside test/val
+   would mechanically deflate measured π — the table oracle gets them free).
+2. **Per-op oracle v2** (`train_specialist` replaces `train_student(ops=…)`):
+   - two coverage knobs — `--seen-frac` (fraction of the op's own table,
+     frozen hash, the intrinsic-learnability axis) AND `--n-seen` (exactly N
+     cells, same N per op, the agent-budget axis; Q=1000 bounds an agent at
+     ~10⁻⁵ of a binary table, three orders below frac=0.02);
+   - budget-aware schedule — materialized pool, 10% early-stop holdout
+     (clamped [8, 1024], never trained), epoch training, holdout-loss
+     patience 5, caps max_epochs=300 / max_steps=20000. Replaces fixed 6000
+     steps, which over-trained unary specialists ~1.5k–7.8k effective epochs;
+   - **exposure-exact scoring** — `score_probes` now takes the explicit TRAIN
+     cell set ("seen" = trained-on; the ES holdout counts unseen), closing
+     the eligibility≠exposure gap measured on binary earlier today.
+   - The GENERALIST weights oracle is untouched (6000-step protocol keeps
+     the 2026-09-29 re-measurement comparable).
+3. Docs: data-generation (depth-0 + root-only), data-validation (per-op v2 +
+   the agent-side seen-is-an-upper-bound / demos-never-logged notes).
+
+Ran on lumen1: `pytest -q -m "not slow"` → **305 passed, 6 deselected
+(0:09:49)**. New CPU tests: n-mode exactness/determinism/per-op divergence,
+frac-mode ≡ frozen hash cell-for-cell, holdout clamp rules, explicit-set
+probe scoring. Suggested first v2 sweep (user-gated):
+`tools/run_reference.py --instance mid_1 --only weights-per-op
+--seen-frac 0.02 0.05 0.10 --n-seen 100 300 1000 --student-model Qwen/Qwen3-0.6B`.

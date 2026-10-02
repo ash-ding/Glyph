@@ -92,7 +92,7 @@ def test_atomapp_roundtrip(cfg):
             assert back == e
             assert render(back, cfg) == src
             assert result_type(back) == "VAL"
-            assert depth(back) == 1
+            assert depth(back) == 0   # no structural nesting: the depth-0 stratum
 
 
 def test_atomapp_parse_from_source():
@@ -121,3 +121,8 @@ def test_atomapp_check():
     for src in (f"u0(u1({v0}))", f"u0([{v0}, {v1}])", f"u0(s2([{v0}, {v1}]))", "u0()"):
         with pytest.raises(SyntaxError):
             parse(src, cfg)
+
+
+def test_syntax_spec_states_depth_zero():
+    spec = syntax_spec(PRESETS["smoke"])
+    assert "nesting depth 0" in spec

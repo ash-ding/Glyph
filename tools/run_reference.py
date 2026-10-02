@@ -193,8 +193,13 @@ def main(argv=None) -> int:
     ap.add_argument("--only", default="skeleton,table,perfect",
                      help="comma-separated oracles to run: "
                           "skeleton,table,perfect,weights,weights-per-op,a0prime")
-    ap.add_argument("--seen-frac", type=float, nargs="+", default=[0.02, 0.05, 0.10],
-                     help="seen fractions of the table, used by weights/a0prime")
+    ap.add_argument("--seen-frac", type=float, nargs="*", default=[0.02, 0.05, 0.10],
+                     help="seen fractions of the table, used by weights/a0prime; "
+                          "weights-per-op sweeps these AND --n-seen (pass a bare "
+                          "--seen-frac to run n-mode only)")
+    ap.add_argument("--n-seen", type=int, nargs="*", default=[],
+                     help="absolute per-op cell budgets for weights-per-op "
+                          "(same N for every op; the agent-budget-relevant knob)")
     ap.add_argument("--student-model", default="Qwen/Qwen3-1.7B",
                      help="base model for the weights / weights-per-op students")
     ap.add_argument("--out", default="docs/benchmark/reference_ceilings.json",
@@ -235,22 +240,36 @@ def main(argv=None) -> int:
 
         if "weights-per-op" in oracles:
             # [GPU] one specialist per atomic op, scored on that op's probes.
+            # Two coverage knobs (see the 2026-10-01 spec): --seen-frac keeps
+            # the generalist's fraction-of-own-table semantics; --n-seen is
+            # the agent-budget-relevant absolute count, same N for every op.
             from glyph.data import probe_set
             from glyph.data.grammar import binary_names, unary_names
-            from glyph.reference.weights_ceiling import score_probes_model
+            from glyph.reference.weights_ceiling import (score_probes_model,
+                                                          train_specialist)
             probes = probe_set(inst)
-            by_frac = {}
-            for frac in args.seen_frac:
+            knobs = ([("seen_frac", f) for f in args.seen_frac]
+                     + [("n_seen", n) for n in args.n_seen])
+            payload = {}
+            for knob, val in knobs:
                 per_op = {}
                 for op in unary_names(inst.cfg) + binary_names(inst.cfg):
-                    model, tok = train_student(inst, frac, ops=[op],
-                                               model=args.student_model)
+                    net, tok, rec = train_specialist(
+                        inst, op, model=args.student_model, **{knob: val})
                     op_items = [t for t in probes if t.split == op]
-                    per_op[op] = score_probes_model(inst, model, tok, op_items, frac)
-                    del model
-                by_frac[str(frac)] = per_op
-            merge_reference(args.out, instance_id, "weights_per_op", by_frac)
-            print(f"{instance_id}: weights-per-op done for seen_frac={args.seen_frac}")
+                    score = score_probes_model(inst, net, tok, op_items,
+                                               rec["train_cells"])
+                    score["train_meta"] = {
+                        k: rec[k] for k in
+                        ("n_eligible", "n_train", "n_holdout", "epochs",
+                         "steps", "stopped_by", "best_holdout_loss")}
+                    per_op[op] = score
+                    del net
+                label = (f"frac={val:g}" if knob == "seen_frac" else f"n={val}")
+                payload[label] = per_op
+            merge_reference(args.out, instance_id, "weights_per_op", payload)
+            print(f"{instance_id}: weights-per-op done for "
+                  f"{[k + '=' + str(v) for k, v in knobs]}")
 
         if "a0prime" in oracles:
             # [API] only entered when explicitly requested via --only.
