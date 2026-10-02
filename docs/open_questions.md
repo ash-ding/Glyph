@@ -707,3 +707,16 @@ times.
 
 #2, #3 and #18 concern how results are written up rather than produced. They
 block nothing and can go last.
+
+### [#73](https://github.com/ash-ding/Glyph/issues/73) — per-op oracle: agent-path training mode · P1
+
+The oracle and the agent train through DIFFERENT pipelines (batch 128 vs 32,
+AdamW betas/wd, constant-lr vs OneCycle+warmup, plain vs weighted/packed
+loss) — fine for the ceiling reading, confounding for attribution ("bad agent
+decisions or weaker agent pipeline?"). Plan: `train_specialist(...,
+via_sft=True)` assembles cells into `Example`s and calls `glyph.train.sft
+.train()` verbatim; `run_reference.py --train-path {ceiling,agent}`; existing
+config stays as the ceiling flavor (keeps the 2026-09/10 measurements
+comparable). Do NOT align knob-by-knob — reuse the code path. Next up after
+the small-pool early-stop fix (min_steps floor + eval cadence) and its
+reruns.
