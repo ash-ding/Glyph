@@ -4016,3 +4016,40 @@ Every `arm="train"` occurrence audited and left untouched. Old runs'
 transcripts keep the old names (the viewer is name-agnostic).
 `pytest tests/v2` → 138 passed, 1 skipped (two fake-client fixtures resolve
 handlers as `t_<tool name>`, covered by the aliases).
+
+## 2026-10-02 — v2 harness: final check covers probes, query log in the workspace, 0.6B student
+
+Found while replaying a short run on `mid_3` through the real tool handlers
+(no SDK, no GPU) for the site's protocol figures.
+
+- **`check_answers(set="test")` now checks the rows `submit_final_answer`
+  requires.** It checked the 10,000 test items only, while
+  `final/test.jsonl` and `submit_final_answer` include the probe rows. A
+  complete file failed the check with `unknown_ids` = 628 on `mid_3`, and a
+  file that passed it was missing the probes, so it could never be committed.
+  The commit-on-timeout rule also recorded only probe-less files. Both tools
+  now share `_final_items`.
+- **`query` appends to the workspace's `task/queries.jsonl`.** It wrote
+  `<run>/task/queries.jsonl`, one level above the workspace
+  (`<run>/work/task/`). So the log the agent is told about stayed empty, and
+  `build_dataset`, which reads the workspace log, labelled every bought row
+  `other`, never `purchased`. The harness now sets `session.queries_path`.
+- **Answer files are checked against the workspace.** The "inside the working
+  directory, not under `task/`" check used `<run>` and `<run>/task`, so it
+  never covered the agent's actual `task/`. The harness now sets
+  `session.work_root`.
+- The final phase's "continue" nudge named `final_answer`, which #70 renamed
+  to `submit_final_answer`.
+- The train arm's student defaults to `Qwen/Qwen3-0.6B` (CLI and
+  `RunConfig`), following capacity check #5 and the weights re-measurement,
+  where 0.6B and 1.7B were indistinguishable. The weights oracle's own default
+  (`weights_ceiling.train_student`) is unchanged.
+- `docs/tools.md` now describes `build_dataset` as implemented: provenance is
+  recorded, not enforced.
+
+Runs made before this change had an empty agent-visible query log and
+`purchased` = 0 in every `build_dataset` provenance; since the probe set was
+added, none could pass `check_answers` on the test with a complete file.
+
+`pytest -q -m "not slow" tests/v2` → 136 passed, 2 deselected. The new tests
+cover all three fixes.

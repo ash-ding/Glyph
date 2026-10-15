@@ -12,7 +12,7 @@ Protocol v2 collapses v1's explore/prepare/test phases into two:
 * **final** — the held-out test is revealed. Every practice tool is gone; the
   agent commits its answers exactly once with `submit_final_answer` and the run ends.
 
-Two arms differ in **one** thing: the `train` arm has a trainable Qwen3-1.7B
+Two arms differ in **one** thing: the `train` arm has a trainable Qwen3-0.6B
 student (and its three tools); the `no_train` arm has only the frontier model.
 Everything else — the phases, the caps, the feedback discipline — is identical,
 so the arms are compared at equal stop conditions.
@@ -85,7 +85,9 @@ is rejected and **does not consume** a submission. A legal submit counts toward
 check_answers(path: str, set: "validation"|"test") -> {ok, violations, examples, <remaining>}
 ```
 A free dry-run legality check — no scoring, no counter touched. `set="validation"`
-works in either phase; `set="test"` only in the final phase. This is how the
+works in either phase; `set="test"` only in the final phase, and checks every
+row of `final/test.jsonl`, probes included — the same rows `submit_final_answer`
+requires. This is how the
 agent confirms an answer file is well-formed before spending a `submit_validation_answer` or its
 one `submit_final_answer`.
 
@@ -100,9 +102,12 @@ Voluntarily end practice before the caps are hit; flags the switch to final.
 build_dataset(path: str)                              -> {dataset_id, ..., <remaining>}
 train_model(dataset_id: str, epochs: int, lr: float, student_id: str) -> {checkpoint_id, student_id, continued_from, ..., <remaining>}
 ```
-`build_dataset` assembles a student training set from **purchased queries** — the
-agent cannot manufacture labels it has not bought. `train_model` fine-tunes a
-Qwen3-1.7B student; GPU time is metered into the ledger like any other spend, so
+`build_dataset` turns an agent-written JSONL of `{"expr", "answer"}` rows into a
+training set. Rows that do not parse are dropped; every kept row is labelled by
+provenance (`purchased`, `demo`, `validation` or `other`, checked against
+`task/queries.jsonl`, the demos and the validation set). Provenance is recorded,
+not enforced: an `other` row trains like any other. `train_model` fine-tunes a
+Qwen3-0.6B student (`--student-model`); GPU time is metered into the ledger like any other spend, so
 training competes with querying under one budget line. `student_id` selects the
 lineage and is minted by the AGENT in a fixed format — exactly 8 lowercase hex
 characters (`^[0-9a-f]{8}$`, e.g. `a1b2c3d4`); anything else is rejected with

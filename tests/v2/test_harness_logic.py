@@ -213,7 +213,7 @@ def test_resolve_cli_path_points_at_a_real_file():
 
 def test_train_arm_student_uses_qwen_not_frontier(tmp_path):
     """Regression: the train-arm student's base model must be rc.student_model
-    (Qwen3-1.7B, a locally trainable HF model), never rc.model (the frontier the
+    (Qwen3-0.6B, a locally trainable HF model), never rc.model (the frontier the
     gateway pins). Conflating them fed a frontier id to sft.train's
     from_pretrained and broke every train call -- see harness._make_student."""
     from types import SimpleNamespace
@@ -222,5 +222,5 @@ def test_train_arm_student_uses_qwen_not_frontier(tmp_path):
     rc = RunConfig(arm="train", model="claude-opus-4-8")
     paths = SimpleNamespace(root=tmp_path, queries=None)
     pool = _make_student(rc, Ledger(), paths)
-    assert pool.base_model == rc.student_model == "Qwen/Qwen3-1.7B"
+    assert pool.base_model == rc.student_model == "Qwen/Qwen3-0.6B"
     assert pool.base_model != rc.model

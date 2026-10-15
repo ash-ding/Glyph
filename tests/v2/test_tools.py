@@ -196,6 +196,64 @@ def test_check_answers_validation_practice(inst, tmp_path):
     assert out["ok"] is True
 
 
+def _attach_probes(s, inst, n=5):
+    from glyph.data.probe import probe_set
+    s.probes = probe_set(inst, n_per_op=n)
+    s.probe_id_of = T.default_id_of("probe", s.probes)
+    return s.probes
+
+
+def test_check_answers_test_set_covers_probes(inst, tmp_path):
+    s = make_session(inst, tmp_path, phase="final")
+    probes = _attach_probes(s, inst)
+    only_test = tmp_path / "only_test.jsonl"
+    write_test(only_test, inst, s.test_id_of, correct=True)
+    out = T.t_check_answers(s, path=str(only_test), set="test")
+    assert out["ok"] is False
+    assert out["violations"]["missing_ids"] >= len(probes)
+    assert getattr(s, "last_checked_test_path", None) is None
+
+    full = tmp_path / "full.jsonl"
+    rows = [{"id": s.test_id_of(t), "answer": t.answer_src} for t in inst.test]
+    rows += [{"id": s.probe_id_of(t), "answer": t.answer_src} for t in probes]
+    full.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+    out = T.t_check_answers(s, path=str(full), set="test")
+    assert out["ok"] is True
+    assert s.last_checked_test_path == str(full)
+    assert T.t_final_answer(s, path=str(full)).get("committed") is True
+
+
+def test_answer_files_are_checked_against_the_workspace(inst, tmp_path):
+    from glyph.v2 import workspace
+    paths, val_id_of, test_id_of = workspace.build_workspace(inst, tmp_path)
+    s = make_session(inst, tmp_path)
+    s.work_root = paths.root
+    inside_task = paths.task / "val.jsonl"
+    write_val(inside_task, inst, s.val_id_of, correct=True)
+    out = T.t_check_answers(s, path=str(inside_task), set="validation")
+    assert out["ok"] is False and out["violations"]["path_escape"] == 1
+    mine = paths.root / "val.jsonl"
+    write_val(mine, inst, s.val_id_of, correct=True)
+    assert T.t_check_answers(s, path=str(mine), set="validation")["ok"] is True
+
+
+def test_query_log_is_the_workspace_log_build_dataset_reads(inst, tmp_path):
+    from glyph.v2 import workspace
+    from glyph.v2.student import StudentPool
+    paths, val_id_of, test_id_of = workspace.build_workspace(inst, tmp_path)
+    s = make_session(inst, tmp_path)
+    s.queries_path = paths.queries
+    e = novel_expr(inst, CFG, seed=11)
+    out = T.t_query(s, exprs=[e], why="")["results"][0]["out"]
+    assert [json.loads(l) for l in paths.queries.read_text().splitlines()] == [{"expr": e, "out": out}]
+
+    rows = tmp_path / "work" / "train.jsonl"
+    rows.write_text(json.dumps({"expr": e, "answer": out}) + "\n")
+    pool = StudentPool("Qwen/Qwen3-0.6B", Ledger(), work_dir=tmp_path / "ck",
+                       queries_path=paths.queries, backend=object())
+    assert pool.build_dataset(str(rows), inst)["provenance"]["purchased"] == 1
+
+
 # ---------------------------------------------------------------------
 # t_final_answer
 # ---------------------------------------------------------------------
@@ -222,13 +280,6 @@ def test_final_answer_illegal_not_committed(inst, tmp_path):
     out = T.t_final_answer(s, path=str(f))
     assert "error" in out
     assert not hasattr(s, "final_commit_path") or s.final_commit_path is None
-
-
-def _attach_probes(s, inst, n=5):
-    from glyph.data.probe import probe_set
-    s.probes = probe_set(inst, n_per_op=n)
-    s.probe_id_of = T.default_id_of("probe", s.probes)
-    return s.probes
 
 
 def test_final_answer_requires_probe_answers(inst, tmp_path):

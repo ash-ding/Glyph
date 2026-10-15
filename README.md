@@ -65,7 +65,7 @@ agent never sees a per-item or per-split test score.
 | arm | what it has |
 |---|---|
 | **`no_train`** | the frontier model only |
-| **`train`** | the frontier model **plus** a trainable Qwen3-1.7B student — it can build a dataset from what it purchased, fine-tune, and run inference |
+| **`train`** | the frontier model **plus** a trainable Qwen3-0.6B student — it can build a dataset from what it purchased, fine-tune, and run inference |
 
 The question is whether putting purchased knowledge into a small model's
 *weights* beats keeping it in the frontier's *context*, measured at matched

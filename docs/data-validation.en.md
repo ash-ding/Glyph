@@ -183,7 +183,7 @@ A run is configured by `RunConfig` (`harness.py:197-216`):
 | `instance_seed` | `1001` | seed for `generate()` |
 | `instance_id` | `None` | if set, use a frozen manifest instance (fingerprint-verified) |
 | `model` | `"claude-opus-4-8"` | the frontier model (pinned at the gateway) |
-| `student_model` | `"Qwen/Qwen3-1.7B"` | train-arm local student (distinct from `model`) |
+| `student_model` | `"Qwen/Qwen3-0.6B"` | train-arm local student (distinct from `model`) |
 | `q_cap` | `1000` | total query budget |
 | `submit_cap` | `20` | validation submissions before forced switch to final |
 | `tp` | `100` | practice-phase turn cap |

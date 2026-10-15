@@ -38,7 +38,7 @@ class ClientProto(Protocol):
 
 
 _PRACTICE_CONTINUE = "Continue, or call finish_practice if you are done."
-_FINAL_CONTINUE = "Continue, or call final_answer with your submission if you are done."
+_FINAL_CONTINUE = "Continue, or call submit_final_answer with your submission if you are done."
 _IDLE_LIMIT = 3
 
 
@@ -201,7 +201,7 @@ class RunConfig:
     instance_seed: int = 1001
     instance_id: str | None = None
     model: str = "claude-opus-4-8"
-    student_model: str = "Qwen/Qwen3-1.7B"
+    student_model: str = "Qwen/Qwen3-0.6B"
     q_cap: int | None = 1000      # None = no query cap
     submit_cap: int = 20
     tp: int = 100
@@ -240,7 +240,7 @@ def _resolve_cli_path():
 def _make_student(rc, ledger, paths):
     """Build the train-arm student pool.
 
-    The student is a small, locally trainable model (Qwen3-1.7B by default,
+    The student is a small, locally trainable model (Qwen3-0.6B by default,
     ``rc.student_model``) -- deliberately NOT ``rc.model``, which is the
     frontier the agent talks to and the id the gateway pins on. Conflating
     the two would hand a frontier model id to ``sft.train``'s
@@ -326,6 +326,8 @@ def run(rc: RunConfig) -> dict:
     )
     session.val_id_of = val_id_of
     session.test_id_of = test_id_of
+    session.queries_path = paths.queries
+    session.work_root = paths.root
     session.preset = preset
     from glyph.data.probe import probe_set
     session.probes = probe_set(inst)

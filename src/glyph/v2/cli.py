@@ -97,7 +97,7 @@ def _add_run_args(s: argparse.ArgumentParser) -> None:
     s.add_argument("--arm", required=True, choices=["train", "no_train"])
     s.add_argument("--preset", default="pi_mid")
     s.add_argument("--model", default="claude-opus-4-8")
-    s.add_argument("--student-model", default="Qwen/Qwen3-1.7B",
+    s.add_argument("--student-model", default="Qwen/Qwen3-0.6B",
                    help="the trainable student's base model (train arm); "
                         "NOT the frontier model id")
     s.add_argument("--q", type=_q_type, default=1000,
@@ -128,7 +128,7 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--presets", nargs="+", default=["pi_mid"])
     g.add_argument("--seeds", nargs="+", type=int, default=[1001], dest="seeds")
     g.add_argument("--model", default="claude-opus-4-8")
-    g.add_argument("--student-model", default="Qwen/Qwen3-1.7B",
+    g.add_argument("--student-model", default="Qwen/Qwen3-0.6B",
                    help="the trainable student's base model (train arm); "
                         "NOT the frontier model id")
     g.add_argument("--q", type=_q_type, default=1000)
