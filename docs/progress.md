@@ -4077,3 +4077,108 @@ Spec: `docs/superpowers/specs/2026-10-15-free-protocol-design.md`.
 Two short real runs on `mid_3` (practice 5 min, final 3 min, about $1 each) exercised both arms, the deadline, the voluntary `finish_practice`, the final submission, the transcript copy-out and the cleanup.
 
 `pytest -q -m "not slow" tests/v2` → 156 passed.
+
+## 2026-10-15 — free protocol sweep: results
+
+Spec: `docs/superpowers/specs/2026-10-15-free-protocol-design.md`. 3 frozen instances (`low_3`, `mid_3`, `high_3`) × practice wall-clock `T_p` ∈ {1, 2, 4} h × 2 arms. The final phase was 30 min in every run. All 18 cells ran on lumen1, in three waves of six, and every cell has one valid run. Model: `claude-opus-4-8`, effort high. Per run: 24 CPU cores, 160 GB memory, a 35 GB overlay; the train arm had one H100 and the no_train arm none. Code: the PR-D branch (`free-docs`), plus the safety-line fix (723dfac) for the two reruns. Summary rows: `docs/benchmark/free_sweep_2026-10-15.json`. Run directories are on lumen1 at `/scratch/glyph_free/runs/` and backed up to `~/data/glyph_free_runs_2026-10-15/`.
+
+#### Accuracy on the held-out test
+
+| instance | T_p | train | no_train | train − no_train | train iid / comp / depth | no_train iid / comp / depth |
+|---|---|---|---|---|---|---|
+| low_3 | 1 h | 0.893 | 0.771 | +0.122 | 0.884 / 0.916 / 0.897 | 0.744 / 0.848 / 0.769 |
+| low_3 | 2 h | 0.899 | 0.836 | +0.063 | 0.889 / 0.926 / 0.901 | 0.818 / 0.890 / 0.833 |
+| low_3 | 4 h | 0.921 | 0.827 | +0.094 | 0.915 / 0.934 / 0.927 | 0.809 / 0.878 / 0.828 |
+| mid_3 | 1 h | 0.659 | 0.887 | -0.229 | 0.709 / 0.517 / 0.658 | 0.919 / 0.755 / 0.971 |
+| mid_3 | 2 h | 0.923 | 0.923 | 0.000 | 0.943 / 0.836 / 0.981 | 0.946 / 0.831 / 0.979 |
+| mid_3 | 4 h | 0.942 | 0.931 | +0.012 | 0.959 / 0.874 / 0.985 | 0.951 / 0.848 / 0.978 |
+| high_3 | 1 h | 0.797 | 0.924 | -0.127 | 0.801 / 0.806 / 0.763 | 0.917 / 0.910 / 0.989 |
+| high_3 | 2 h | 0.912 | 0.958 | -0.046 | 0.908 / 0.912 / 0.934 | 0.954 / 0.950 / 0.993 |
+| high_3 | 4 h | 0.954 | 0.954 | 0.000 | 0.947 / 0.952 / 0.994 | 0.946 / 0.953 / 0.995 |
+
+#### All metrics
+
+| T_p | instance | arm | overall | headroom | iid | comp | depth | tail | probe atomic | probe structural |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 h | low_3 | train | 0.893 | 0.889 | 0.884 | 0.916 | 0.897 | 0.667 | 0.902 | 1.000 |
+| 1 h | low_3 | no_train | 0.771 | 0.762 | 0.744 | 0.848 | 0.769 | 0.288 | 0.604 | 1.000 |
+| 1 h | mid_3 | train | 0.659 | 0.555 | 0.709 | 0.517 | 0.658 | 0.000 | 0.600 | 0.781 |
+| 1 h | mid_3 | no_train | 0.887 | 0.853 | 0.919 | 0.755 | 0.971 | 0.493 | 0.826 | 0.781 |
+| 1 h | high_3 | train | 0.797 | 0.255 | 0.801 | 0.806 | 0.763 | 0.274 | 0.472 | 0.984 |
+| 1 h | high_3 | no_train | 0.924 | 0.721 | 0.917 | 0.910 | 0.989 | 0.000 | 0.600 | 0.984 |
+| 2 h | low_3 | train | 0.899 | 0.895 | 0.889 | 0.926 | 0.901 | 0.684 | 0.914 | 1.000 |
+| 2 h | low_3 | no_train | 0.836 | 0.830 | 0.818 | 0.890 | 0.833 | 0.491 | 0.836 | 1.000 |
+| 2 h | mid_3 | train | 0.923 | 0.899 | 0.943 | 0.836 | 0.981 | 0.655 | 0.908 | 0.781 |
+| 2 h | mid_3 | no_train | 0.923 | 0.900 | 0.946 | 0.831 | 0.979 | 0.656 | 0.892 | 0.781 |
+| 2 h | high_3 | train | 0.912 | 0.676 | 0.908 | 0.912 | 0.934 | 0.404 | 0.718 | 0.984 |
+| 2 h | high_3 | no_train | 0.958 | 0.845 | 0.954 | 0.950 | 0.993 | 0.443 | 0.806 | 0.984 |
+| 4 h | low_3 | train | 0.921 | 0.918 | 0.915 | 0.934 | 0.927 | 0.747 | 0.912 | 1.000 |
+| 4 h | low_3 | no_train | 0.827 | 0.820 | 0.809 | 0.878 | 0.828 | 0.459 | 0.802 | 1.000 |
+| 4 h | mid_3 | train | 0.942 | 0.925 | 0.959 | 0.874 | 0.985 | 0.743 | 0.920 | 0.781 |
+| 4 h | mid_3 | no_train | 0.931 | 0.910 | 0.951 | 0.848 | 0.978 | 0.691 | 0.900 | 0.781 |
+| 4 h | high_3 | train | 0.954 | 0.829 | 0.947 | 0.952 | 0.994 | 0.387 | 0.826 | 0.984 |
+| 4 h | high_3 | no_train | 0.954 | 0.829 | 0.946 | 0.953 | 0.995 | 0.386 | 0.842 | 0.984 |
+
+#### train − no_train headroom
+
+| instance | T_p 1 h | T_p 2 h | T_p 4 h |
+|---|---|---|---|
+| low_3 | +0.127 | +0.065 | +0.098 |
+| mid_3 | -0.298 | -0.001 | +0.015 |
+| high_3 | -0.467 | -0.169 | 0.000 |
+
+#### Behaviour
+
+| T_p | instance | arm | practice used | ended by | query expressions | unary coverage | val. submissions | GPU busy | spend |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 h | low_3 | train | 53.4 min | finish_practice | 130,797 | 1.000 | 7 | 12.2 min | $166 |
+| 1 h | low_3 | no_train | 44.0 min | finish_practice | 12,038 | 1.000 | 2 | 0.0 min | $64 |
+| 1 h | mid_3 | train | 46.3 min | finish_practice | 17,676 | 1.000 | 2 | 0.0 min | $32 |
+| 1 h | mid_3 | no_train | 51.9 min | finish_practice | 28,080 | 1.000 | 5 | 0.0 min | $43 |
+| 1 h | high_3 | train | 42.4 min | finish_practice | 1,869 | 0.019 | 3 | 0.0 min | $12 |
+| 1 h | high_3 | no_train | 38.0 min | finish_practice | 18,538 | 1.000 | 2 | 0.0 min | $40 |
+| 2 h | low_3 | train | 99.6 min | finish_practice | 168,795 | 1.000 | 2 | 0.0 min | $203 |
+| 2 h | low_3 | no_train | 96.8 min | finish_practice | 62,438 | 1.000 | 3 | 0.0 min | $142 |
+| 2 h | mid_3 | train | 94.9 min | finish_practice | 74,744 | 1.000 | 6 | 0.0 min | $121 |
+| 2 h | mid_3 | no_train | 120.1 min | deadline | 300,587 | 1.000 | 5 | 0.0 min | $485 |
+| 2 h | high_3 | train | 118.3 min | finish_practice | 7,578 | 0.689 | 7 | 0.0 min | $33 |
+| 2 h | high_3 | no_train | 83.6 min | finish_practice | 23,717 | 1.000 | 8 | 0.0 min | $67 |
+| 4 h | low_3 | train | 122.2 min | usd_line | 202,876 | 1.000 | 10 | 7.3 min | $527 |
+| 4 h | low_3 | no_train | 134.7 min | finish_practice | 84,767 | 1.000 | 3 | 0.0 min | $136 |
+| 4 h | mid_3 | train | 189.4 min | finish_practice | 220,249 | 1.000 | 10 | 8.8 min | $350 |
+| 4 h | mid_3 | no_train | 183.6 min | finish_practice | 67,527 | 1.000 | 5 | 0.0 min | $120 |
+| 4 h | high_3 | train | 165.6 min | finish_practice | 28,640 | 1.000 | 16 | 0.0 min | $69 |
+| 4 h | high_3 | no_train | 192.8 min | finish_practice | 43,229 | 1.000 | 6 | 0.0 min | $113 |
+
+Total model spend: $2,722 over 18 runs.
+Audit (hosted-LLM hosts contacted, benchmark lookups): none flagged.
+
+
+### What the agents did
+
+- **Skeleton and unary tables.** Every run decoded the skeleton (`s0` map, `s1` fold, `s2` identity, `s3` take-n, `s4` reverse) and bought all three unary tables, 3 × 4,913 cells, within about 30 minutes. The exceptions are the `high_3` train runs at 1 h and 2 h, which bought 2% and 69% of them. The baseline this gives (skeleton plus unary exact, binary unknown) is the 0.635 validation score that every `low_3` run started from.
+- **Unlimited queries make the unary tables a purchase.** 16 of 18 runs reached 100% unary coverage. Scores are therefore high everywhere (0.66–0.96). What remains is the binary tables: 2 × 4,913² = 48.3 M cells, of which the `low_3` test needs 6,346. No run bought more than 9.4% of the test-needed binary cells, so binary answers on the test are extrapolation.
+- **The arms converge as `T_p` grows.** The train − no_train headroom difference narrows from (+0.127, −0.298, −0.467) at 1 h to (+0.098, +0.015, 0.000) at 4 h for `low_3`, `mid_3` and `high_3`. The large 1 h deficits come from the agents' purchasing choices, not from training: `high_3` train at 1 h bought 2% of the unary tables, and `mid_3` train at 1 h scored 0 on the tail.
+- **`low_3` is the cell where training pays, in all three `T_p`.** It is the instance most dependent on binary tables (3,214 of the 10,000 test items need one). Reading the transcripts:
+  - **The train arm framed binary as supervised learning.** It bought 110k–460k random binary cells through subagents used as query couriers and fitted an MLP: per-digit embeddings, 3 output heads of 17 classes, ensembles over seeds. It iterated against validation, for example 0.636 → 0.808 → 0.827 → 0.858 → 0.878 → 0.883 at 1 h. Binary probe accuracy was 0.74–0.80.
+  - **The no_train arm looked for an exact rule.** It worked through carry chains, affine tests and per-digit dependence. It then settled for per-digit count tables (1 h, wrong factorisation: binary probe 0.01), per-digit kNN (2 h: 0.57–0.61) or a per-digit majority table (4 h: 0.50). It bought fewer cells (≈3k–68k) and ended practice early each time, with 16, 23 and 105 minutes left. No no_train agent tried a learned model, although CPU training was available.
+  - **The GPU mattered less than the framing.** At 2 h the train agent could not get torch working on the image's Python 3.14. It wrote an MLP in numpy, trained it on CPU (GPU busy 0 min) and still beat no_train, 0.899 vs 0.836. The 1 h and 4 h train agents built their own conda environment with CUDA torch and trained on the GPU for 7–12 min.
+- **GPU use overall.** Only the `low_3` train runs at 1 h and 4 h and the `mid_3` train run at 4 h used the GPU. The `high_3` train agents never did.
+- **Validation was saturated by design of the query policy.** Validation items are refused by `query`, but the cells they need are not. `low_3` train at 2 h and `low_3` no_train at 4 h bought exactly the binary cells the validation set needs and scored 1.0 on validation. Only 1–2% of those cells overlap the test's need. The 4 h no_train agent said explicitly that the 1.0 was not an estimate of the test score. To keep validation informative, the policy should also refuse the cells that validation items need.
+- **Audit.** No run contacted a hosted-LLM API host, and no run looked up the benchmark. Both were checked in WebFetch URLs, WebSearch queries, Bash commands and sampled sockets.
+
+### Incidents
+
+- **Safety-line bug, fixed in 723dfac.** A practice phase that ended at the $500 safety line left the final phase already over the line. The final then stopped at the agent's first event, the run never answered, and it scored 0. This happened to `low_3` train and `mid_3` train at 4 h. Their practice phases are kept as `*.usdline-bug` and both cells were rerun with the fix, which gives the final phase a $100 allowance. In the `low_3` rerun, practice ended at the line, and the final phase submitted in 184 s and scored 0.921.
+- **Pilot directory renamed mid-run.** The sweep runner set aside the pilot's two running directories (`mid_3`, 1 h) for 78 s, because `--skip` was checked after the set-aside (fixed in 69121e0). Each pilot run saw one gateway 500 during that window, retried by the CLI. Spend is unaffected because the ledger is in memory; one gateway log line is missing per run. Both runs are kept.
+- **Gateway 403 on `count-tokens`.** The CLI's token-counting requests are refused by the pinned-model gateway; there are up to 1,000 per run. This is the same as v2 and is harmless.
+
+### Cost
+
+$2,722 for the 18 valid runs, plus $1,001 for the two runs zeroed by the bug: $3,723 in total, against the spec's estimate of $1,000–1,500. Spend is driven by parallel subagents and by context growth. Three runs reached about $500: `mid_3` no_train at 2 h ($485, ended at the deadline), `low_3` train at 4 h ($527, ended at the line) and the two bugged runs.
+
+### Caveats
+
+- One run per cell.
+- `high_3`'s probe and skeleton ceilings differ from `low_3`'s, so compare headroom, not overall, across instances.
+- The count of binary cells bought includes bare `bK(x,y)` queries only. `low_3` no_train at 1 h asked about 3k binary cells through two-element folds, so its count is understated.
