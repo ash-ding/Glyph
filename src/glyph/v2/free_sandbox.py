@@ -178,6 +178,10 @@ def write_free_wrapper(spec: ContainerSpec) -> Path:
     script = (
         "#!/bin/bash\n"
         "cd /tmp\n"
+        # systemd-run --user needs the user bus; a tmux server started without
+        # a login session does not pass these on.
+        'export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"\n'
+        'export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}"\n'
         f"systemctl --user reset-failed {shlex.quote(spec.scope)}.scope >/dev/null 2>&1\n"
         f"exec systemd-run --user --scope --quiet --unit={shlex.quote(spec.scope)} "
         f"-p CPUQuota={int(spec.cpus) * 100}% -p MemoryMax={int(spec.mem_gb)}G -p MemorySwapMax=0 "
