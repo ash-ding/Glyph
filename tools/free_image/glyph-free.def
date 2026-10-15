@@ -1,0 +1,17 @@
+Bootstrap: localimage
+From: /scratch/images/noble.sif
+
+%post
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -qq
+    apt-get install -y -qq --no-install-recommends ca-certificates curl wget git build-essential e2fsprogs procps less vim-tiny unzip xz-utils bzip2 file iproute2 dnsutils pciutils >/dev/null
+    rm -rf /var/lib/apt/lists/*
+    curl -sL -o /tmp/miniforge.sh https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh
+    bash /tmp/miniforge.sh -b -p /opt/conda >/dev/null
+    rm -f /tmp/miniforge.sh
+    /opt/conda/bin/conda clean -a -y >/dev/null
+    mkdir -p /opt/claude /opt/glyph
+
+%environment
+    export PATH=/opt/conda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    export LANG=C.UTF-8

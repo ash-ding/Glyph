@@ -233,6 +233,7 @@ class Gateway:
         token_provider: Optional[TokenProvider] = None,
         log_path: Optional[str] = None,
         thinking_log_path: Optional[str] = None,
+        path_token: Optional[str] = None,
     ) -> None:
         self.ledger = ledger
         self.pinned_model = pinned_model
@@ -243,6 +244,11 @@ class Gateway:
         self._token_provider = token_provider
         self._forward_fn = forward_fn or self._default_forward
         self._records: list = []
+        # When the gateway listens on a TCP port of a shared host (the free
+        # protocol's containers share the host network), every request must
+        # carry this run's token as the first path segment; anything else is
+        # another process on the host and is refused unbilled.
+        self.path_token = path_token
 
     @property
     def records(self) -> list:
@@ -292,6 +298,13 @@ class Gateway:
 
         Returns (status, resp_headers, resp_body_bytes).
         """
+        if self.path_token is not None:
+            prefix = "/" + self.path_token
+            if not (path == prefix or path.startswith(prefix + "/")):
+                self._record({"model": None, "path": "<untokened>", "allowed": False, "status": 401})
+                return 401, {}, json.dumps({"error": "missing or wrong run token"}).encode()
+            path = path[len(prefix):] or "/"
+
         m = MODEL_RE.search(path)
         model = m.group(1) if m else None
 
@@ -368,6 +381,20 @@ class Gateway:
         app = web.Application(client_max_size=1024**3)
         app.router.add_route("*", "/{tail:.*}", self._aiohttp_handler)
         return app
+
+    async def serve_tcp(self, host: str, port: int, ready: Optional[asyncio.Event] = None) -> None:
+        """Bind make_app() to host:port and serve forever. Used by the free
+        protocol, whose containers share the host network; pair it with
+        path_token so other processes on the host cannot use this run's gateway."""
+        app = self.make_app()
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, host, port)
+        await site.start()
+        if ready is not None:
+            ready.set()
+        while True:
+            await asyncio.sleep(3600)
 
     async def serve_unix(self, socket_path: str) -> None:
         """Production entrypoint: bind make_app() to a unix socket and serve forever."""
