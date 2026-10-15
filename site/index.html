@@ -1156,6 +1156,19 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
     in the run's ledger apart from model spend.
   </p>
 
+  <h3 id="free-protocol">A second condition: the free protocol</h3>
+  <p>
+    The tools above give the train arm a fixed way to build a student. A
+    second condition removes that path. The agent keeps only the five task
+    tools, and gets a root shell in an open Ubuntu container instead: conda,
+    network access, web search and subagents, with nothing preinstalled for
+    the task. The train arm's container has one GPU and the no_train arm's
+    none; nothing else differs. Each phase is bounded by wall-clock alone,
+    with no cap on queries, validation submissions or turns, and every
+    process still running in the container is stopped when a phase ends.
+    The text the agent reads states these facts and no more.
+  </p>
+
   <h3 id="caps">Caps</h3>
   <div class="table-scroll">
     <table>
