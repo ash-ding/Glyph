@@ -27,6 +27,15 @@ from typing import Callable
 from glyph.v2.harness import _is_assistant_event, iter_tool_calls
 
 GRACE_S = 60.0
+# Model spend the final phase may use even when practice ended at the safety
+# line; otherwise a run whose practice crossed the line could not answer.
+FINAL_USD_ALLOWANCE = 100.0
+
+
+def final_usd_line(usd_line: float, spent_at_switch: float) -> float:
+    """The final phase's safety line: the run's line, or what practice spent plus
+    the allowance, whichever is higher."""
+    return max(usd_line, spent_at_switch + FINAL_USD_ALLOWANCE)
 FREE_TOOLS = ("query", "submit_validation_answer", "check_answers",
               "finish_practice", "submit_final_answer")
 FREE_ALLOWED_TOOLS = ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "WebFetch",
@@ -323,10 +332,12 @@ def run_free(rc) -> dict:
             return "usd_line"
         return None
 
+    final_line = {"usd": rc.usd_line}
+
     def stop_final():
         if getattr(session, "final_commit_path", None) is not None:
             return "submitted"
-        if ledger.over_safety_line(rc.usd_line):
+        if ledger.over_safety_line(final_line["usd"]):
             return "usd_line"
         return None
 
@@ -380,6 +391,7 @@ def run_free(rc) -> dict:
                 workspace.write_test_file(paths, inst, test_id_of, probes=session.probes,
                                           probe_id_of=session.probe_id_of)
                 t1 = time.time()
+                final_line["usd"] = final_usd_line(rc.usd_line, ledger.spent_usd)
                 deadline = set_deadline(rc.t_f_s)
                 async def kill_f():
                     if "final" not in killed:
