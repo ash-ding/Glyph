@@ -43,6 +43,8 @@ def default_id_of(prefix: str, items: list) -> Callable[[Any], str]:
 
 
 def _remaining(session) -> dict:
+    if getattr(session, "protocol", "v2") == "free":
+        return {"seconds_remaining": session.seconds_remaining()}
     return {
         "q_remaining": session.q_remaining(),
         "submissions_remaining": session.submissions_remaining(),
@@ -147,7 +149,7 @@ def t_submit(session, path) -> dict:
     fb = {"submission": session.submissions, "overall": s["overall"],
           "by_depth": s["by_depth"]}
     session.note(kind="validation_submit", **fb)
-    if session.submissions >= session.submit_cap:
+    if session.submit_cap is not None and session.submissions >= session.submit_cap:
         session.should_switch = True
     return {**fb, **_remaining(session)}
 
