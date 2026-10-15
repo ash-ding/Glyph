@@ -149,6 +149,32 @@ def gpu_name_for(uuid: str | None) -> str | None:
     return "NVIDIA"
 
 
+def neutral_run_dir(out_root: Path, name: str) -> Path:
+    """Create a run's directory under an opaque id and link `out_root/name` to it.
+
+    The agent sees this directory's path in every message and tool call (its
+    working directory, the task paths, the CLI's project folder), so the path
+    must not say which arm, instance or practice length the run is: an agent
+    that reads "no_train" in its own path may take it as an instruction. The
+    readable name exists only as a host-side symlink. Returns the real directory.
+    """
+    out_root = Path(out_root)
+    out_root.mkdir(parents=True, exist_ok=True)
+    link = out_root / name
+    if link.exists() or link.is_symlink():
+        raise FileExistsError(f"{link} exists; move it aside before starting this run again")
+    while True:
+        run_dir = out_root / f"r{secrets.token_hex(4)}"
+        try:
+            run_dir.mkdir()
+            break
+        except FileExistsError:
+            continue
+    (run_dir / "run_name").write_text(name + "\n")
+    link.symlink_to(run_dir.name)
+    return run_dir
+
+
 def unary_coverage(inst) -> float:
     from glyph.data.grammar import unary_names
     n = len(unary_names(inst.cfg)) * inst.cfg.n_values
@@ -242,8 +268,8 @@ def run_free(rc) -> dict:
     inst, preset, seed, instance_id = resolve_run_instance(rc)
     out_root = Path(rc.out_root) if rc.out_root else Path.cwd() / "runs"
     tag = f"tp{rc.t_p_s / 3600:g}h"
-    run_dir = out_root / f"{instance_id or f'{preset}_{seed}'}_{rc.arm}_{tag}"
-    run_dir.mkdir(parents=True, exist_ok=True)
+    run_name = f"{instance_id or f'{preset}_{seed}'}_{rc.arm}_{tag}"
+    run_dir = neutral_run_dir(out_root, run_name)
     paths, val_id_of, test_id_of = workspace.build_workspace(inst, run_dir)
 
     ledger = Ledger()
@@ -282,7 +308,7 @@ def run_free(rc) -> dict:
     cli_path = Path(claude_agent_sdk.__file__).parent / "_bundled" / "claude"
     overlay = FS.make_overlay(Path(rc.scratch_root) / "overlays" / f"{run_dir.name}.img",
                               rc.disk_gb, rc.image)
-    scope = f"glyph-free-{run_dir.name.replace('_', '-')}-{secrets.token_hex(3)}"
+    scope = f"glyph-free-{run_dir.name}"   # readable in /proc/self/cgroup
     model = rc.model
     env = {
         "CLAUDE_CODE_USE_VERTEX": "1",
@@ -465,7 +491,7 @@ def run_free(rc) -> dict:
 
     try:
         rj = build_run_json(
-            run_id="%s_%s" % (run_dir.name, time.strftime("%Y%m%d-%H%M%S")),
+            run_id="%s_%s" % (run_name, time.strftime("%Y%m%d-%H%M%S")),
             created=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             config={"protocol": "free", "arm": rc.arm, "preset": preset, "seed": seed,
                     "instance_id": instance_id, "model": model, "t_p_s": rc.t_p_s,
