@@ -76,8 +76,9 @@
       Glyph is a benchmark built to answer these questions. Each instance is a
       small programming language whose <b>syntax is public</b> and whose
       <b>semantics are hidden</b> inside an interpreter <span class="mono">P</span>.
-      The only way to learn what an expression means is to ask
-      <span class="mono">P</span>, one metered query at a time.
+      <b>The only way a frontier agent can learn about the language is to
+      query <span class="mono">P</span>, and it can use the answers itself or
+      turn them into training data for a small model.</b>
     </p>
     <p>
       <span class="mono">P</span> has two halves that differ in kind. The
