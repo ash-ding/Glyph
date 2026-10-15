@@ -81,13 +81,13 @@ def main(argv=None) -> int:
                 if st == "done":
                     status["runs"].setdefault(name, {})["state"] = "done"
                     continue
+                if name in a.skip:
+                    status["runs"].setdefault(name, {})["state"] = "skipped"
+                    continue
                 if st == "error" or (out / name).exists():
                     aside = out / f"{name}.failed-{time.strftime('%H%M%S')}"
                     (out / name).rename(aside)
                     status.setdefault("set_aside", []).append(str(aside))
-                if name in a.skip:
-                    status["runs"].setdefault(name, {})["state"] = "skipped"
-                    continue
                 cmd = [a.python, "-m", "glyph.v2", "run", "--protocol", "free",
                        "--instance-id", inst, "--arm", arm, "--t-p", str(t_p), "--t-f", str(a.t_f),
                        "--usd-line", str(a.usd_line), "--cpus", str(a.cpus), "--mem-gb", str(a.mem_gb),
