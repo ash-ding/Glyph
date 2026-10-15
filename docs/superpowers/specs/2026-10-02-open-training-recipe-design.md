@@ -192,8 +192,8 @@ much or as little of it as it wants; nothing is truncated for it. If
   elapsed time and leaves no checkpoint, `gpu_busy` refusal is uncharged,
   the job is killed and billed at the phase switch, the log cap holds. One
   `slow` GPU test: a 20-line real script fine-tunes the 0.6B for a few steps
-  end to end, then `infer_model` consumes the checkpoint. e2e smoke: scripted agent ships a trivial
-  `train.py`.
+  end to end, then `infer_model` consumes the checkpoint. e2e smoke: scripted
+  agent ships a trivial `train.py`.
 - Rollout: PR-1 naming (§A), PR-2 executor + tools (§B–D, §G), PR-3 docs/
   open-questions disposition (#73) + progress. Each user-gated as usual.
 
