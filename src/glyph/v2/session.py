@@ -6,9 +6,10 @@ arm. tool_available_for is the single source of truth for which tool is
 available in which (arm, phase).
 '''
 
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:
     from glyph.v2.ledger import Ledger
@@ -41,8 +42,21 @@ _MATRIX = {
 }
 
 
-def tool_available_for(arm: str, phase: str, name: str) -> bool:
+# The free protocol (spec 2026-10-15-free-protocol-design.md, section 4): five
+# tools, the same in both arms; availability depends on the phase only.
+_FREE_MATRIX = {
+    'query': {'practice'},
+    'submit_validation_answer': {'practice'},
+    'check_answers': {'practice', 'final'},
+    'finish_practice': {'practice'},
+    'submit_final_answer': {'final'},
+}
+
+
+def tool_available_for(arm: str, phase: str, name: str, protocol: str = 'v2') -> bool:
     '''Pure function encoding the tool-availability matrix.'''
+    if protocol == 'free':
+        return phase in _FREE_MATRIX.get(name, set())
     return (arm, phase) in _MATRIX.get(name, set())
 
 
@@ -56,7 +70,7 @@ class Session:
     arm: str              # 'train' | 'no_train'
     policy: str = 'strict'       # query_ood_policy
     q_cap: int | None = 1000      # None = no query cap
-    submit_cap: int = 20
+    submit_cap: int | None = 20   # None = no submission cap
     tp: int = 100                # practice turn cap
     tf: int = 30                 # final turn cap
     usd_line: float = 300.0
@@ -67,21 +81,31 @@ class Session:
     phase: str = 'practice'      # 'practice' | 'final'
     should_switch: bool = False  # set by the submit/finish handlers; harness reads it
     events: list = field(default_factory=list)  # in-memory event log (trace wiring is Task 12)
+    protocol: str = 'v2'         # 'v2' | 'free'
+    deadline: float | None = None    # free protocol: end of the current phase, on `clock`
+    clock: Callable[[], float] = time.time
 
     def q_remaining(self) -> int | None:
         if self.q_cap is None:
             return None                 # None = unlimited
         return max(0, self.q_cap - self.q_used)
 
-    def submissions_remaining(self) -> int:
+    def submissions_remaining(self) -> int | None:
+        if self.submit_cap is None:
+            return None
         return max(0, self.submit_cap - self.submissions)
+
+    def seconds_remaining(self) -> int | None:
+        if self.deadline is None:
+            return None
+        return max(0, int(self.deadline - self.clock()))
 
     def turns_remaining(self) -> int:
         cap = self.tp if self.phase == 'practice' else self.tf
         return max(0, cap - self.turns)
 
     def tool_available(self, name: str) -> bool:
-        return tool_available_for(self.arm, self.phase, name)
+        return tool_available_for(self.arm, self.phase, name, self.protocol)
 
     def switch_to_final(self) -> None:
         self.phase = 'final'
@@ -89,4 +113,7 @@ class Session:
         self.should_switch = False
 
     def note(self, **kw) -> None:
-        self.events.append(dict(kw))
+        rec = dict(kw)
+        if self.protocol == 'free':
+            rec.setdefault('ts', self.clock())
+        self.events.append(rec)

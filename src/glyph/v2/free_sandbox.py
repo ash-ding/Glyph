@@ -127,6 +127,11 @@ class ContainerSpec:
     def meta_dir(self) -> Path:
         return Path(self.run_dir) / "sandbox_meta"
 
+    @property
+    def scratch_dir(self) -> Path:
+        """Host directory behind the container's /tmp and /var/tmp."""
+        return Path(self.run_dir) / "ctr_tmp"
+
 
 ENTRY_SH = r"""#!/bin/bash
 # Runs as uid 0 inside the container before the CLI. Leaves one GPU, or none.
@@ -156,6 +161,7 @@ def write_free_wrapper(spec: ContainerSpec) -> Path:
     work = Path(spec.work_dir).resolve()
     cli_path = Path(spec.cli_path).resolve()
     spec.meta_dir.mkdir(parents=True, exist_ok=True)
+    spec.scratch_dir.mkdir(parents=True, exist_ok=True)
     entry = spec.meta_dir / "entry.sh"
     entry.write_text(ENTRY_SH)
     entry.chmod(0o755)
@@ -178,7 +184,12 @@ def write_free_wrapper(spec: ContainerSpec) -> Path:
         # An out-of-memory process is killed on its own; the default policy
         # would stop the whole scope, CLI included, and end the run.
         f"-p OOMPolicy=continue "
-        f"apptainer exec --fakeroot --contain --cleanenv --pid {nv}"
+        # --no-home: /root comes from the image and the overlay, so what the
+        # agent keeps there persists and counts against the disk cap; without
+        # it, --contain puts an empty temporary directory over $HOME.
+        # --workdir: /tmp and /var/tmp in a per-run host directory.
+        f"apptainer exec --fakeroot --contain --no-home --cleanenv --pid {nv}"
+        f"--workdir {shlex.quote(str(spec.scratch_dir.resolve()))} "
         f"--overlay {shlex.quote(str(spec.overlay))} "
         f"--bind {shlex.quote(str(work))}:{shlex.quote(str(work))} "
         f"--bind {shlex.quote(str(spec.task_dir.resolve()))}:{shlex.quote(str(spec.task_dir.resolve()))}:ro "
@@ -516,16 +527,17 @@ def collect_artifacts(spec: ContainerSpec, timeout_s: int = 600) -> dict:
     work = str(Path(spec.work_dir).resolve())
     try:
         r = subprocess.run(
-            ["apptainer", "exec", "--fakeroot", "--contain", "--cleanenv",
+            ["apptainer", "exec", "--fakeroot", "--contain", "--no-home", "--cleanenv",
              "--overlay", f"{spec.overlay}:ro", "--bind", f"{work}:{work}:ro",
              "--env", f"GLYPH_WORKDIR={work}", spec.image, "bash", "-c", ARTIFACTS_SH],
             capture_output=True, text=True, timeout=timeout_s, env=apptainer_env(), cwd="/tmp")
         data = json.loads(r.stdout)
     except Exception as exc:  # the inventory must never fail the run
         data = {"error": repr(exc)[:300]}
-    try:
-        data["workspace_bytes"] = int(subprocess.run(
-            ["du", "-sb", work], capture_output=True, text=True, timeout=300).stdout.split()[0])
-    except Exception:
-        data["workspace_bytes"] = None
+    for key, path in (("workspace_bytes", work), ("tmp_bytes", str(spec.scratch_dir))):
+        try:
+            data[key] = int(subprocess.run(
+                ["du", "-sb", path], capture_output=True, text=True, timeout=300).stdout.split()[0])
+        except Exception:
+            data[key] = None
     return data

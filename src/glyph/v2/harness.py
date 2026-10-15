@@ -214,6 +214,18 @@ class RunConfig:
     max_turns: int = 200
     effort: str = "high"  # pinned for comparability (plan Global Constraints)
     out_root: str | None = None
+    # The free protocol (spec 2026-10-15-free-protocol-design.md). Ignored by v2.
+    protocol: str = "v2"           # "v2" | "free"
+    t_p_s: float = 4 * 3600        # practice wall-clock
+    t_f_s: float = 30 * 60         # final wall-clock
+    gpu_minor: int | None = None   # /dev/nvidiaN for the train arm
+    gpu_uuid: str | None = None    # its UUID, if already probed
+    cpus: int = 24
+    mem_gb: int = 160
+    disk_gb: int = 35
+    image: str = "/scratch/images/glyph-free.sif"
+    scratch_root: str = "/scratch/glyph_free"
+    delete_overlay: bool = True
 
 
 # ---------------------------------------------------------------------
@@ -291,6 +303,10 @@ def run(rc: RunConfig) -> dict:
     register_glyph_server), keeping the state machine above importable
     SDK-free.
     """
+    if rc.protocol == "free":
+        from glyph.v2.free_harness import run_free
+        return run_free(rc)
+
     import asyncio
     import json
 

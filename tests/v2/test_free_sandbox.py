@@ -69,7 +69,8 @@ def test_wrapper_train_arm(tmp_path):
     assert "--unit=glyph-free-x" in w
     assert "-p CPUQuota=2400% -p MemoryMax=160G -p MemorySwapMax=0" in w
     assert "-p OOMPolicy=continue" in w
-    assert "apptainer exec --fakeroot --contain --cleanenv --pid --nv" in w
+    assert "apptainer exec --fakeroot --contain --no-home --cleanenv --pid --nv" in w
+    assert f"--workdir {(tmp_path / 'ctr_tmp').resolve()} " in w
     work = str((tmp_path / "work").resolve())
     assert f"--bind {work}:{work} " in w
     assert f"--bind {work}/task:{work}/task:ro" in w
