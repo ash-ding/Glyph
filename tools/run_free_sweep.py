@@ -25,6 +25,18 @@ def run_name(inst: str, arm: str, t_p: float) -> str:
     return f"{inst}_{arm}_tp{t_p:g}h"
 
 
+def report_state(run_dir: Path) -> str | None:
+    """'done' for a usable report, 'error' for a report of a run that failed, None if none."""
+    p = run_dir / "report.json"
+    if not p.exists():
+        return None
+    try:
+        r = json.loads(p.read_text())
+    except (OSError, json.JSONDecodeError):
+        return "error"
+    return "error" if r.get("covariates", {}).get("run_status") == "error" else "done"
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--instances", nargs="+", default=["low_3", "mid_3", "high_3"])
@@ -65,9 +77,14 @@ def main(argv=None) -> int:
         for inst in a.instances:
             for arm in a.arms:
                 name = run_name(inst, arm, t_p)
-                if (out / name / "report.json").exists():
+                st = report_state(out / name)
+                if st == "done":
                     status["runs"].setdefault(name, {})["state"] = "done"
                     continue
+                if st == "error" or (out / name).exists():
+                    aside = out / f"{name}.failed-{time.strftime('%H%M%S')}"
+                    (out / name).rename(aside)
+                    status.setdefault("set_aside", []).append(str(aside))
                 if name in a.skip:
                     status["runs"].setdefault(name, {})["state"] = "skipped"
                     continue
@@ -83,6 +100,8 @@ def main(argv=None) -> int:
                     cmd += ["--gpu-minor", str(minor)]
                 log = open(out / "logs" / f"{name}.log", "a")
                 env = dict(os.environ, PYTHONPATH=str(REPO / "src"), PYTHONUNBUFFERED="1")
+                env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+                env.setdefault("DBUS_SESSION_BUS_ADDRESS", f"unix:path={env['XDG_RUNTIME_DIR']}/bus")
                 p = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, cwd=str(REPO), env=env)
                 procs.append((name, p, log))
                 status["runs"][name] = {"state": "running", "pid": p.pid, "gpu_minor": minor,
@@ -97,7 +116,7 @@ def main(argv=None) -> int:
             r = status["runs"][name]
             r["rc"] = p.returncode
             r["ended"] = time.time()
-            r["state"] = "done" if (out / name / "report.json").exists() else "failed"
+            r["state"] = "done" if report_state(out / name) == "done" else "failed"
         save()
     status["finished"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     save()
