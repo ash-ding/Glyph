@@ -702,7 +702,9 @@
     var r3 = function (x) { return x == null ? "—" : Number(x).toFixed(3); };
 
     function jv(x) {
-      if (typeof x === "number" && !Number.isInteger(x)) return String(Math.round(x * 1e4) / 1e4);
+      if (x === "…") return x;
+      if (typeof x === "number" && !Number.isInteger(x))
+        return Math.abs(x) < 1e-3 ? x.toExponential() : String(Math.round(x * 1e4) / 1e4);
       return JSON.stringify(x);
     }
     function kv(obj, skip) {

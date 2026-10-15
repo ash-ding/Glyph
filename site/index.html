@@ -22,7 +22,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
-<link rel="stylesheet" href="assets/css/style.css?v=01cea712bd">
+<link rel="stylesheet" href="assets/css/style.css?v=49a3c7ff17">
 </head>
 
 <body>
@@ -1082,7 +1082,7 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
     <article class="tool tool--train" id="tool-train-model">
       <header class="tool__head"><code class="tool__name">train_model</code><span class="chip chip--train">practice · train</span></header>
       <dl class="tool__dl">
-        <dt>description</dt><dd class="tool__desc">Fine-tune a student model on a dataset (train arm). student_id is an id YOU choose: exactly 8 lowercase hex characters (e.g. 'a1b2c3d4'). A new id starts a fresh student from the base model; an existing id continues training that student from its latest checkpoint. Several students may coexist. Returns a checkpoint_id (format ck_xxxxxxxx) to pass back verbatim.</dd>
+        <dt>description</dt><dd class="tool__desc">Fine-tune a student model on a dataset (train arm). student_id is an id YOU choose: exactly 8 lowercase hex characters (e.g. 'a1b2c3d4'). A new id starts a fresh student from the base model; an existing id continues training that student from its latest checkpoint. Several students may coexist. Returns a checkpoint_id in the format &lt;student_id&gt;_ck_xxxxxxxx, to pass back verbatim.</dd>
         <dt>arguments</dt><dd class="tool__args"><div><span class="mono">dataset_id</span> <span class="ty">string</span></div><div><span class="mono">epochs</span> <span class="ty">integer</span></div><div><span class="mono">lr</span> <span class="ty">number</span></div><div><span class="mono">student_id</span> <span class="ty">string</span> 8 lowercase hex characters</div></dd>
         <dt>returns</dt><dd><span class="mono">checkpoint_id</span>, <span class="mono">student_id</span>, <span class="mono">continued_from</span>, <span class="mono">final_loss</span>, <span class="mono">gpu_seconds</span>, <span class="mono">gpu_seconds_remaining</span>, <span class="mono">stopped_at_cap</span></dd>
         <dt>rules</dt><dd>A full fine-tune of Qwen3-0.6B. GPU time is metered against a run budget of 7,200 s; once it is spent, further calls are refused before any GPU work. A malformed <span class="mono">student_id</span> is rejected the same way.</dd>
@@ -1092,7 +1092,7 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
     <article class="tool tool--train" id="tool-infer-model">
       <header class="tool__head"><code class="tool__name">infer_model</code><span class="chip chip--train">practice · train</span><span class="chip chip--train">final · train</span></header>
       <dl class="tool__dl">
-        <dt>description</dt><dd class="tool__desc">Run inference with a trained student (train arm). checkpoint accepts 'base', a ck_xxxxxxxx checkpoint_id exactly as returned by train, or an 8-hex student_id (meaning that student's latest checkpoint).</dd>
+        <dt>description</dt><dd class="tool__desc">Run inference with a trained student (train arm). checkpoint accepts 'base', a checkpoint_id exactly as returned by train_model (&lt;student_id&gt;_ck_xxxxxxxx), or an 8-hex student_id (meaning that student's latest checkpoint).</dd>
         <dt>arguments</dt><dd class="tool__args"><div><span class="mono">checkpoint</span> <span class="ty">string</span></div><div><span class="mono">input_path</span> <span class="ty">string</span> a file of <span class="mono">{"id", "expr"}</span> rows</div><div><span class="mono">output_path</span> <span class="ty">string</span> where the answer file is written</div><div><span class="mono">prefix_path</span> <span class="ty">string</span> a text file prepended to every prompt (an empty file for none)</div></dd>
         <dt>returns</dt><dd><span class="mono">rows</span>, <span class="mono">truncated</span>, <span class="mono">gpu_seconds</span></dd>
         <dt>rules</dt><dd>Writes an answer file the agent can check, edit and submit like any other. In the final phase it is how a trained student answers the test.</dd>
@@ -1267,8 +1267,8 @@ a_tab  = accuracy(trivial skeleton + true table)     # only the skeleton is miss
   </div>
 </footer>
 
-<script src="assets/js/example-data.js?v=03772966f0"></script>
+<script src="assets/js/example-data.js?v=c20595ce26"></script>
 <script src="assets/js/main.js?v=ea7fc422a4"></script>
-<script src="assets/js/pipeline.js?v=58f9d4980c"></script>
+<script src="assets/js/pipeline.js?v=b8af7ba812"></script>
 </body>
 </html>

@@ -489,8 +489,8 @@ sup.fn a:hover { text-decoration: underline; }
 .call__sum { color: var(--fg-faint); font-size: .76rem; }
 .call__dir { margin: .5rem 0 .15rem; font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-faint); }
 .call__kv { display: grid; gap: .12rem; }
-.call__row { display: grid; grid-template-columns: 8.2rem minmax(0, 1fr); gap: .6rem; align-items: baseline; }
-.call__k { font-family: var(--font-mono); font-size: .72rem; color: var(--fg-faint); }
+.call__row { display: grid; grid-template-columns: 10.6rem minmax(0, 1fr); gap: .6rem; align-items: baseline; }
+.call__k { font-family: var(--font-mono); font-size: .72rem; color: var(--fg-faint); overflow-wrap: anywhere; }
 .call__v, .call__list { font-family: var(--font-mono); font-size: .74rem; overflow-wrap: anywhere; }
 .call__list { display: grid; gap: .1rem; }
 .call--file .call__list { margin-top: .35rem; }
