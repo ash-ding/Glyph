@@ -1,6 +1,6 @@
 # The `free` protocol — a shell, a clock, and the five task tools
 
-Date: 2026-10-15. Status: spec for review. No implementation yet.
+Date: 2026-10-15. Status: reviewed, open items decided (see the end). No implementation yet.
 
 A second protocol condition beside v2, not a replacement. v2 keeps its tool
 version of the train arm (`build_dataset` / `train_model` / `infer_model`, and
@@ -265,12 +265,14 @@ isolation, the audit log.
   gain the second condition.
 - Then the pilot pair, then the sweep. Each step user-gated.
 
-## Open for review
+## Decided on review (2026-10-15)
 
-1. The README wording above, sentence by sentence.
-2. The instance choice (`low_3`, `mid_3`, `high_3`).
-3. GPU isolation by unmounting device nodes versus installing
-   `nvidia-container-toolkit` (available from the `cuda-rhel10` repo) and
-   using `--nvccli`. The unmount works today and needs no host change.
-4. Whether to retain the full outbound-connection log after the run, or only
-   the audit summary.
+1. The README wording in §6 stands as written.
+2. The instances are `low_3`, `mid_3` and `high_3`, the middle of each band.
+3. GPU isolation is the device-node unmount in the entrypoint, with the GPU
+   sampler as the second line: a process found on another run's GPU is
+   killed and logged. `nvidia-container-toolkit` (`cuda-rhel10`, 1.20.1)
+   stays an option if the unmount ever proves insufficient.
+4. The outbound-connection log is kept in full for every run, next to the
+   audit summary; it is the only record of what external resources the
+   agent used, and the viewer can show it.
