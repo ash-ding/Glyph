@@ -3,7 +3,7 @@
 
 One wave per practice length; every (instance, arm) pair of a wave runs at
 once, each train run on its own GPU. A wave starts when the previous one has
-finished. Progress goes to <out-root>/sweep_status.json; each run's output to
+finished. Progress goes to <out-root>/<tag>_status.json; each run's output to
 <out-root>/logs/<run>.log. Re-running skips runs that already have a report.
 
     python tools/run_free_sweep.py --out-root /scratch/glyph_free/runs
@@ -39,6 +39,7 @@ def main(argv=None) -> int:
     ap.add_argument("--gpu-minors", nargs="+", type=int, default=None,
                     help="device minors to use for train runs (default: every GPU found)")
     ap.add_argument("--python", default=sys.executable)
+    ap.add_argument("--tag", default="sweep", help="names the status file: <out-root>/<tag>_status.json")
     ap.add_argument("--skip", nargs="*", default=[],
                     help="run names to leave alone (e.g. ones already running elsewhere)")
     a = ap.parse_args(argv)
@@ -46,7 +47,7 @@ def main(argv=None) -> int:
     from glyph.v2.free_sandbox import probe_gpu_minors
     out = Path(a.out_root)
     (out / "logs").mkdir(parents=True, exist_ok=True)
-    status_path = out / "sweep_status.json"
+    status_path = out / f"{a.tag}_status.json"
     status = json.loads(status_path.read_text()) if status_path.exists() else {"runs": {}}
     minors = a.gpu_minors if a.gpu_minors is not None else sorted(probe_gpu_minors())
     status["gpu_minors"] = minors
