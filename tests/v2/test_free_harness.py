@@ -204,3 +204,16 @@ def test_final_phase_keeps_an_allowance_after_the_safety_line():
     assert final_usd_line(500, 120) == 500
     assert final_usd_line(500, 450) == 550
     assert final_usd_line(500, 503.5) == 603.5
+
+
+def test_run_directory_does_not_name_the_arm(tmp_path):
+    from glyph.v2.free_harness import neutral_run_dir
+    run_dir = neutral_run_dir(tmp_path, "low_3_no_train_tp1h")
+    assert re.fullmatch(r"r[0-9a-f]{8}", run_dir.name)
+    for word in ("train", "low", "tp1h"):
+        assert word not in str(run_dir.relative_to(tmp_path))
+    link = tmp_path / "low_3_no_train_tp1h"
+    assert link.is_symlink() and link.resolve() == run_dir.resolve()
+    assert (run_dir / "run_name").read_text().strip() == "low_3_no_train_tp1h"
+    with pytest.raises(FileExistsError):
+        neutral_run_dir(tmp_path, "low_3_no_train_tp1h")
