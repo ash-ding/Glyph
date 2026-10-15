@@ -11,7 +11,8 @@ import pytest
 from glyph.data import PRESETS, generate
 from glyph.v2 import free_prompts as FP
 from glyph.v2 import tools as T
-from glyph.v2.free_harness import drive_free_phase, transcript_audit, transcript_usage, unary_coverage
+from glyph.v2.free_harness import (drive_free_phase, final_usd_line, transcript_audit,
+                                     transcript_usage, unary_coverage)
 from glyph.v2.ledger import Ledger
 from glyph.v2.session import Session, tool_available_for
 
@@ -197,3 +198,9 @@ def test_transcript_audit_flags_llm_hosts_and_benchmark_lookups(tmp_path):
     assert a["benchmark_lookups"] == ["https://ash-ding.github.io/Glyph/"]
     assert a["websearch_queries"] == ["pytorch lora tutorial"]
     assert "files.pythonhosted.org" in a["hosts"]
+
+
+def test_final_phase_keeps_an_allowance_after_the_safety_line():
+    assert final_usd_line(500, 120) == 500
+    assert final_usd_line(500, 450) == 550
+    assert final_usd_line(500, 503.5) == 603.5
