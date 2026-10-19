@@ -4053,3 +4053,27 @@ added, none could pass `check_answers` on the test with a complete file.
 
 `pytest -q -m "not slow" tests/v2` → 136 passed, 2 deselected. The new tests
 cover all three fixes.
+
+## 2026-10-15 — free protocol implemented (PR-B #81, PR-C #82, PR-D)
+
+Spec: `docs/superpowers/specs/2026-10-15-free-protocol-design.md`.
+
+**Container (PR-B).** Apptainer on lumen1, `--fakeroot --contain --no-home --cleanenv --pid`, from an image built from the Ubuntu 24.04 cloud rootfs (`tools/free_image/`; the host's registry mirror cannot serve images).
+
+- **Limits.** CPU and memory are capped by a `systemd-run --user --scope` around the container, with `OOMPolicy=continue` so that an out-of-memory process dies alone. Disk is capped by a sparse ext3 overlay per run.
+- **One GPU.** `--nv`, then every `/dev/nvidiaN` but the assigned one is unmounted. On lumen1 the device minors run in the reverse of nvidia-smi's order, so minors are probed.
+- **Gateway.** Each run's gateway is a local TCP port with a path token, because the container shares the host network.
+
+**Harness (PR-C).** `--protocol free`. Only the five task tools are registered. Phases are bounded by wall-clock only. At a deadline the harness interrupts, kills everything in the container but the CLI, and drains for up to 60 s. The text the agent reads is checked for neutral wording. The report carries a `free` block (usage, GPU, network, artifacts, audit).
+
+**Found by end-to-end runs and fixed before the sweep:**
+
+- The default systemd scope OOM policy stopped the whole container, CLI included, on one out-of-memory process.
+- A failed scope blocked a scope of the same name.
+- `--contain` put an empty temporary `$HOME` over `/root`. The CLI's session files, any HF cache and `pip --user` installs lived outside the overlay: uncapped, memory-backed and lost at exit. Fixed with `--no-home`; `/tmp` goes to a per-run host directory via `--workdir`.
+- A turn cut short by the deadline lost its tool-call tally.
+- The socket sampler misses connections shorter than its period. The rule audit therefore also reads WebFetch URLs, WebSearch queries and Bash command URLs from the transcript.
+
+Two short real runs on `mid_3` (practice 5 min, final 3 min, about $1 each) exercised both arms, the deadline, the voluntary `finish_practice`, the final submission, the transcript copy-out and the cleanup.
+
+`pytest -q -m "not slow" tests/v2` → 156 passed.

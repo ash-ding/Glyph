@@ -182,6 +182,41 @@ that explains it, but that comparison is never handed to the agent mid-run.
 
 ---
 
+## The free protocol
+
+A second protocol condition (`--protocol free`; spec
+`docs/superpowers/specs/2026-10-15-free-protocol-design.md`). The three
+student tools are not registered at all, so the model never sees them; the
+agent instead has a root shell in an open Ubuntu container
+(`src/glyph/v2/free_sandbox.py`) with conda, network, web search and
+subagents. The `train` arm's container has one GPU, the `no_train` arm's none.
+
+| | practice | final |
+|---|---|---|
+| `query` | ✓ | — |
+| `submit_validation_answer` | ✓ | — |
+| `check_answers` | ✓ | ✓ |
+| `finish_practice` | ✓ | — |
+| `submit_final_answer` | — | ✓ |
+
+The same in both arms (`session.py._FREE_MATRIX`). What changes from v2:
+
+- No cap on queries, validation submissions or turns, and no idle rule. Each
+  phase is bounded by wall-clock only (`T_p`, `T_f`); every result's
+  remaining block is `{seconds_remaining}`, and `task/timer.sh` prints the
+  same.
+- At the end of each phase the harness interrupts the agent, kills every
+  process in the container except the CLI, and lets the turn drain for 60 s.
+- The gateway listens on a per-run TCP port and refuses any request without
+  the run's path token (the containers share the host network).
+- The text the agent sees (`src/glyph/v2/free_prompts.py`) states facts only;
+  outside its two rules it contains none of the words train, model,
+  download, student, suggest or consider, which a test enforces.
+
+`tools/run_free_sweep.py` runs the sweep in waves, one per `T_p`.
+
+---
+
 ## Deferred
 
 **`query_ood_policy` = open (D1).** Whether a practice `query` may probe `comp`
