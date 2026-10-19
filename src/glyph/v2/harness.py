@@ -228,6 +228,7 @@ class RunConfig:
     image: str = FREE_DEFAULT_IMAGE
     scratch_root: str = "/scratch/glyph_free"
     delete_overlay: bool = True
+    pin_cpus: bool = True           # free protocol: lease a block of `cpus` CPUs as the affinity
 
 
 # ---------------------------------------------------------------------

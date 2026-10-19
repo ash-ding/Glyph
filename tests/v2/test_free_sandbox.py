@@ -174,3 +174,45 @@ def test_container_isolation_on_host(tmp_path_factory):
         p.wait(timeout=60)
     finally:
         shutil.rmtree(base, ignore_errors=True)
+
+
+def _fake_nodes(root, *cpulists):
+    for k, s in enumerate(cpulists):
+        d = root / f"node{k}"
+        d.mkdir(parents=True)
+        (d / "cpulist").write_text(s + "\n")
+    return str(root)
+
+
+def test_cpulist_round_trip():
+    assert F.parse_cpulist("0-3,8,10-11") == [0, 1, 2, 3, 8, 10, 11]
+    assert F.format_cpulist([11, 10, 8, 3, 2, 1, 0]) == "0-3,8,10-11"
+    assert F.format_cpulist(list(range(24, 48))) == "24-47"
+
+
+def test_cpu_blocks_stay_inside_a_numa_node(tmp_path):
+    nodes = _fake_nodes(tmp_path / "node", "0-79", "80-159")
+    blocks = F.cpu_blocks(24, nodes)
+    assert [F.format_cpulist(b) for b in blocks] == ["0-23", "24-47", "48-71", "80-103", "104-127", "128-151"]
+
+
+def test_cpu_leases_are_disjoint_and_released(tmp_path):
+    nodes = _fake_nodes(tmp_path / "node", "0-47")
+    a = F.CpuLease(tmp_path / "locks", 24, nodes)
+    b = F.CpuLease(tmp_path / "locks", 24, nodes)
+    assert {a.cpulist, b.cpulist} == {"0-23", "24-47"}
+    with pytest.raises(RuntimeError, match="no free block"):
+        F.CpuLease(tmp_path / "locks", 24, nodes)
+    a.release()
+    c = F.CpuLease(tmp_path / "locks", 24, nodes)
+    assert c.cpulist == a.cpulist
+    b.release(); c.release()
+
+
+def test_wrapper_pins_the_container_to_its_cpu_block(tmp_path):
+    spec = _spec(tmp_path, gpu=5)
+    spec.cpu_list = "24-47"
+    w = F.write_free_wrapper(spec).read_text()
+    assert "taskset -c 24-47 apptainer exec --fakeroot" in w
+    (tmp_path / "b").mkdir()
+    assert "taskset" not in F.write_free_wrapper(_spec(tmp_path / "b", gpu=None)).read_text()

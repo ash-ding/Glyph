@@ -215,6 +215,13 @@ The same in every arm (`session.py._FREE_MATRIX`). What changes from v2:
   nothing about the test. Test entries are not reserved: refusing them would
   reveal which entries the hidden test needs. Unary entries are not reserved,
   so the unary tables can still be bought whole.
+- Each container runs pinned to its own block of `--cpus` CPUs inside one
+  NUMA node (`free_sandbox.CpuLease`, a flock under
+  `<scratch-root>/cpusets/`; `taskset`, because the user manager has no cpuset
+  controller). `nproc`, `os.sched_getaffinity`, OpenBLAS and joblib then report
+  the quota instead of the host's 160 CPUs. `/proc/cpuinfo`, Python's
+  `os.cpu_count()` and `free` still report the host. `--no-cpu-pin` turns
+  pinning off.
 - No cap on queries, validation submissions or turns, and no idle rule. Each
   phase is bounded by wall-clock only (`T_p`, `T_f`); every result's
   remaining block is `{seconds_remaining}`, and `task/timer.sh` prints the

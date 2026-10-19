@@ -118,6 +118,7 @@ class ContainerSpec:
     cpus: int = 24
     mem_gb: int = 160
     env: dict = field(default_factory=dict)
+    cpu_list: str | None = None     # taskset CPU list, e.g. "24-47"; None: no pinning
 
     @property
     def task_dir(self) -> Path:
@@ -175,6 +176,7 @@ def write_free_wrapper(spec: ContainerSpec) -> Path:
     env_flags = " ".join(f"--env {shlex.quote(f'{k}={v}')}" for k, v in env.items())
     gpu = "none" if spec.gpu_minor is None else str(int(spec.gpu_minor))
     nv = "--nv " if spec.gpu_minor is not None else ""
+    pin = f"taskset -c {shlex.quote(spec.cpu_list)} " if spec.cpu_list else ""
     script = (
         "#!/bin/bash\n"
         "cd /tmp\n"
@@ -192,7 +194,7 @@ def write_free_wrapper(spec: ContainerSpec) -> Path:
         # agent keeps there persists and counts against the disk cap; without
         # it, --contain puts an empty temporary directory over $HOME.
         # --workdir: /tmp and /var/tmp in a per-run host directory.
-        f"apptainer exec --fakeroot --contain --no-home --cleanenv --pid {nv}"
+        f"{pin}apptainer exec --fakeroot --contain --no-home --cleanenv --pid {nv}"
         f"--workdir {shlex.quote(str(spec.scratch_dir.resolve()))} "
         f"--overlay {shlex.quote(str(spec.overlay))} "
         f"--bind {shlex.quote(str(work))}:{shlex.quote(str(work))} "
@@ -207,6 +209,98 @@ def write_free_wrapper(spec: ContainerSpec) -> Path:
     wrapper.write_text(script)
     wrapper.chmod(0o755)
     return wrapper
+
+
+# ---------------------------------------------------------------------------
+# CPU blocks
+# ---------------------------------------------------------------------------
+#
+# CPUQuota caps CPU time but leaves every host CPU schedulable, so inside the
+# container nproc, os.sched_getaffinity, OpenBLAS and joblib all report the
+# host's 160 CPUs while 24 cores' worth of time is allowed; a library that sizes
+# its thread pool from that count oversubscribes the quota and is throttled.
+# Each run therefore gets its own block of CPUs as its affinity (taskset; the
+# user manager on the run hosts has no cpuset controller, so AllowedCPUs would
+# be ignored). Blocks stay inside one NUMA node; the run hosts number a core's
+# two hyperthreads with adjacent ids, so an even-sized aligned block holds whole
+# cores. /proc/cpuinfo and Python's os.cpu_count() still report the host.
+
+def parse_cpulist(s: str) -> list[int]:
+    """'0-3,8,10-11' -> [0, 1, 2, 3, 8, 10, 11]."""
+    out: list[int] = []
+    for part in s.strip().split(","):
+        if not part:
+            continue
+        if "-" in part:
+            a, b = part.split("-")
+            out.extend(range(int(a), int(b) + 1))
+        else:
+            out.append(int(part))
+    return out
+
+
+def format_cpulist(cpus: list[int]) -> str:
+    """[0, 1, 2, 3, 8, 10, 11] -> '0-3,8,10-11'."""
+    cpus = sorted(set(cpus))
+    runs, start = [], None
+    for i, c in enumerate(cpus):
+        if start is None:
+            start = c
+        if i + 1 == len(cpus) or cpus[i + 1] != c + 1:
+            runs.append(f"{start}-{c}" if c != start else f"{c}")
+            start = None
+    return ",".join(runs)
+
+
+def cpu_blocks(size: int, node_root: str = "/sys/devices/system/node") -> list[list[int]]:
+    """Disjoint blocks of `size` CPUs, each inside one NUMA node, in CPU-id order."""
+    nodes = sorted(Path(node_root).glob("node[0-9]*"), key=lambda p: int(p.name[4:]))
+    groups = [parse_cpulist((n / "cpulist").read_text()) for n in nodes] or [list(range(os.cpu_count() or 1))]
+    blocks = []
+    for cpus in groups:
+        for k in range(len(cpus) // size):
+            blocks.append(cpus[k * size:(k + 1) * size])
+    return blocks
+
+
+class CpuLease:
+    """An exclusive claim on one CPU block, held as a flock for as long as it is open.
+
+    The lock files live under a directory shared by every run on the host, so
+    concurrent sweeps with different output roots still get disjoint blocks. A
+    run that dies releases its block with its file descriptors.
+    """
+
+    def __init__(self, lock_dir: Path, size: int, node_root: str = "/sys/devices/system/node"):
+        import fcntl
+        lock_dir = Path(lock_dir)
+        lock_dir.mkdir(parents=True, exist_ok=True)
+        self.cpus: list[int] = []
+        self.block: int | None = None
+        self._f = None
+        blocks = cpu_blocks(size, node_root)
+        for k, cpus in enumerate(blocks):
+            f = open(lock_dir / f"block{size}_{k}.lock", "w")
+            try:
+                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError:
+                f.close()
+                continue
+            f.write(f"{os.getpid()} {format_cpulist(cpus)}\n")
+            f.flush()
+            self.cpus, self.block, self._f = cpus, k, f
+            return
+        raise RuntimeError(f"no free block of {size} CPUs ({len(blocks)} blocks, all leased); "
+                           f"wait for a run to finish or lower --cpus")
+
+    @property
+    def cpulist(self) -> str:
+        return format_cpulist(self.cpus)
+
+    def release(self) -> None:
+        if self._f is not None:
+            self._f.close()
+            self._f = None
 
 
 # ---------------------------------------------------------------------------
