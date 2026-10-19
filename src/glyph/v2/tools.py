@@ -104,6 +104,9 @@ def t_query(session, exprs: list, why: str) -> dict:
     results = []
     for expr in exprs:
         reason = session.inst.query_violation(expr, session.policy)
+        if not reason and session.reserve_val_binary and session.inst.touches_reserved(expr):
+            reason = "needs_validation_entry"
+            session.refused_reserved += 1
         if reason:
             results.append({"expr": expr, "refused": reason})
             continue

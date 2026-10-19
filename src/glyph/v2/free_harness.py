@@ -273,7 +273,7 @@ def run_free(rc) -> dict:
     paths, val_id_of, test_id_of = workspace.build_workspace(inst, run_dir)
 
     ledger = Ledger()
-    session = Session(inst, ledger, run_dir, arm=rc.arm, protocol="free",
+    session = Session(inst, ledger, run_dir, arm=rc.arm, protocol="free", reserve_val_binary=True,
                       q_cap=None, submit_cap=None, tp=10**9, tf=10**9, usd_line=rc.usd_line)
     session.val_id_of, session.test_id_of = val_id_of, test_id_of
     session.queries_path, session.work_root = paths.queries, paths.root
@@ -471,6 +471,8 @@ def run_free(rc) -> dict:
             "query_calls": sum(1 for e in session.events if e.get("kind") == "query"),
             "query_expressions": sum(e.get("n", 0) for e in session.events if e.get("kind") == "query"),
             "q_used": session.q_used,
+            "reserved_binary_entries": len(inst.reserved_binary()),
+            "refused_reserved": session.refused_reserved,
             "validation_submissions": session.submissions,
             "unary_coverage": round(unary_coverage(inst), 4),
             "transcript_tokens": usage,

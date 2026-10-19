@@ -106,8 +106,9 @@ Phases:
 
 Tools:
   - query: evaluates expressions. Validation and test items are refused, as
-    are expressions containing a held-out operator pair and expressions
-    deeper than the demos. Refused expressions are not counted.
+    are expressions containing a held-out operator pair, expressions deeper
+    than the demos, and expressions whose evaluation needs a binary-operator
+    entry that a validation item needs. Refused expressions are not counted.
   - submit_validation_answer: scores an answer file against validation.jsonl
     and returns the overall accuracy and a breakdown by expression depth.
   - check_answers: checks an answer file for legality (set="validation" or

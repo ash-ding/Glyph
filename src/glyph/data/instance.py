@@ -234,6 +234,7 @@ class GlyphInstance:
         self._ceil_cache: dict[tuple, str] = {}
         self._pi: dict[str, float] | None = None
         self._val_srcs = None
+        self._reserved_b: frozenset | None = None
         self._test_srcs = None
 
     # -- agent-visible, free ------------------------------------------
@@ -291,6 +292,34 @@ class GlyphInstance:
         if depth(e) > self.cfg.demo_max_depth:
             return "deeper_than_demos"
         return None
+
+    def reserved_binary(self) -> frozenset:
+        """The binary-table entries some validation item needs, as (op, i, j).
+
+        A query policy may refuse these so that validation answers, like test
+        answers, rest on entries the agent never saw. Validation expressions are
+        public, so refusing their entries tells the agent nothing it could not
+        compute; test entries are not reserved, because refusing them would
+        reveal which entries the hidden test set needs.
+        """
+        if self._reserved_b is None:
+            self._reserved_b = frozenset().union(*(t.needs_b for t in self.val))
+        return self._reserved_b
+
+    def touches_reserved(self, expr_src: str) -> bool:
+        """Would evaluating `expr_src` look up a reserved binary entry?
+
+        Evaluates without charging or logging. A fold reaches its binary
+        operator only at run time, so the expression text alone cannot answer
+        this. A malformed expression returns False; the tool layer charges it.
+        """
+        try:
+            e = parse(expr_src, self.cfg)
+            check(e, self.cfg)
+            _, log = self.P.eval_logged(e)
+        except Exception:
+            return False
+        return bool(log.binary & self.reserved_binary())
 
     def derive_tail(self, log: LookupLog | None = None) -> list[int]:
         """Indices of test items whose required table entries were never

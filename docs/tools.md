@@ -206,6 +206,15 @@ and when a shell command first showed it a GPU.
 
 The same in every arm (`session.py._FREE_MATRIX`). What changes from v2:
 
+- `query` also refuses any expression whose evaluation looks up a
+  binary-operator entry that a validation item needs
+  (`GlyphInstance.reserved_binary`; refusal reason `needs_validation_entry`,
+  not counted). The check evaluates the expression, so a fold that reaches a
+  reserved entry is refused as well. Without it an agent can buy the few
+  thousand entries validation needs and score 1.0 on validation while learning
+  nothing about the test. Test entries are not reserved: refusing them would
+  reveal which entries the hidden test needs. Unary entries are not reserved,
+  so the unary tables can still be bought whole.
 - No cap on queries, validation submissions or turns, and no idle rule. Each
   phase is bounded by wall-clock only (`T_p`, `T_f`); every result's
   remaining block is `{seconds_remaining}`, and `task/timer.sh` prints the
