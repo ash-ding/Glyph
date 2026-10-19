@@ -40,7 +40,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-DEFAULT_IMAGE = "/scratch/images/glyph-free.sif"
+DEFAULT_IMAGE = "/scratch/images/glyph-free-py312.sif"
 CLI_MOUNT = "/opt/claude"
 GLYPH_MOUNT = "/opt/glyph"
 
