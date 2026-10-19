@@ -308,6 +308,8 @@ def run(rc: RunConfig) -> dict:
     if rc.protocol == "free":
         from glyph.v2.free_harness import run_free
         return run_free(rc)
+    if rc.arm == "silent":
+        raise ValueError("the silent arm exists only under --protocol free")
 
     import asyncio
     import json

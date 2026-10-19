@@ -4254,3 +4254,18 @@ Six train runs (sweep and reruns) ran into this.
 | sweep `mid_3` train 2 h | ran `pip --version`, saw Python 3.14, wrote "torch wheels likely unavailable", never tried | numpy multinomial logistic |
 
 None of the three CPU fallbacks was caused by a missing wheel. Each came from a conclusion reached without checking. From 90865e0 the image pins the conda base to Python 3.12, which has wheels on every index above (cu121: torch 2.5.1; PyPI: 2.14.1+cu130), and is built as `/scratch/images/glyph-free-py312.sif`. 027cbdd makes that the default for the CLI and `RunConfig`. No libraries are preinstalled, so the five-minute install remains. The 3.14 image stays at `/scratch/images/glyph-free.sif`. The 18 sweep runs and the 8 reruns all used it, so record the image as a covariate when pooling them with later runs.
+
+## 2026-10-19 — free protocol: the `silent` arm (implementation; runs pending)
+
+The two arms differed in two things at once: the train container has a GPU, and its prompt says so. The `silent` arm separates them. Its container is the train arm's (one GPU, 24 cores, 160 GB, 35 GB, the same image), but the system prompt and the README have no Environment section at all: no GPU line, no core, memory or disk counts, and no mention of Ubuntu, conda or network access. Everything else is word for word the train arm's text, which a test checks by deleting the Environment section from the train text and comparing.
+
+| arm | GPU in the container | environment described |
+|---|---|---|
+| `train` | one | yes, "one NVIDIA H100 80GB HBM3 GPU, …" |
+| `no_train` | none | yes, "no GPU, …" |
+| `silent` | one | no |
+
+- **Code.** `free_prompts.ARMS`, `GPU_ARMS` and `environment_for_arm`; the harness attaches a GPU for `GPU_ARMS` and omits the section when the line is `None`. `--arm silent` is accepted by the CLI and the sweep runner, which gives it a GPU like `train`; the v2 harness rejects it.
+- **Measurement.** `tools/free_env_probes.py` scans a run's session files (main agent and subagents) for probes of the GPU, CPU, memory, disk, OS, Python environment and network, and reports for each the minute of the first probe and the count. It also reports the minute a shell command first printed evidence of a GPU, excluding text the harness wrote (the README's environment line), and the GPU busy time. On the earlier `low_3` 1 h train runs it gives a first GPU probe at 13.4 and 14.3 min.
+- **Also fixed.** `cli._free_fields` still defaulted to the Python 3.14 image for commands without `--image`; it now uses `free_sandbox.DEFAULT_IMAGE`.
+- **Planned run.** `low_3`, `T_p` 1 h, three replicates, compared with the three neutral-path replicates per arm from 2026-10-15. Those used the Python 3.14 image and these will use 3.12, so the image is a difference between the conditions.

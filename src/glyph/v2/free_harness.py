@@ -282,14 +282,16 @@ def run_free(rc) -> dict:
     session.probe_id_of = workspace.probe_ids_for(inst, session.probes)
 
     gpu_uuid = None
-    if rc.arm == "train":
+    if rc.arm not in FP.ARMS:
+        raise ValueError(f"unknown arm {rc.arm!r}; the free protocol has {FP.ARMS}")
+    if rc.arm in FP.GPU_ARMS:
         if rc.gpu_minor is None:
-            raise ValueError("the train arm needs --gpu-minor")
+            raise ValueError(f"the {rc.arm} arm needs --gpu-minor")
         gpu_uuid = rc.gpu_uuid or FS.probe_gpu_minors(rc.image).get(rc.gpu_minor)
         if gpu_uuid is None:
             raise RuntimeError(f"GPU minor {rc.gpu_minor} not found")
     gpu_name = gpu_name_for(gpu_uuid)
-    env_line = FP.environment_line(gpu_name, rc.cpus, rc.mem_gb, rc.disk_gb)
+    env_line = FP.environment_for_arm(rc.arm, gpu_name, rc.cpus, rc.mem_gb, rc.disk_gb)
     readme = FP.task_readme(env_line, rc.t_p_s, rc.t_f_s)
     paths.readme.write_text(readme)
     timer = paths.task / "timer.sh"
@@ -328,7 +330,7 @@ def run_free(rc) -> dict:
     }
     spec = FS.ContainerSpec(run_dir=run_dir, work_dir=paths.root, cli_path=cli_path,
                             overlay=overlay, scope=scope, image=rc.image,
-                            gpu_minor=rc.gpu_minor if rc.arm == "train" else None,
+                            gpu_minor=rc.gpu_minor if rc.arm in FP.GPU_ARMS else None,
                             cpus=rc.cpus, mem_gb=rc.mem_gb, env=env)
     wrapper = FS.write_free_wrapper(spec)
     samplers = FS.Samplers(scope, run_dir, gpu_uuid)

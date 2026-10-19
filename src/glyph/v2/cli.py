@@ -48,7 +48,7 @@ def _free_fields(args: argparse.Namespace) -> dict:
         "cpus": g("cpus", 24),
         "mem_gb": g("mem_gb", 160),
         "disk_gb": g("disk_gb", 35),
-        "image": g("image", "/scratch/images/glyph-free.sif"),
+        "image": g("image", FREE_DEFAULT_IMAGE),
         "scratch_root": g("scratch_root", "/scratch/glyph_free"),
     }
 
@@ -112,7 +112,8 @@ def _q_type(s: str):
 
 
 def _add_run_args(s: argparse.ArgumentParser) -> None:
-    s.add_argument("--arm", required=True, choices=["train", "no_train"])
+    s.add_argument("--arm", required=True, choices=["train", "no_train", "silent"],
+                   help="silent: free protocol only; a GPU like train, no environment description")
     s.add_argument("--preset", default="pi_mid")
     s.add_argument("--model", default="claude-opus-4-8")
     s.add_argument("--student-model", default="Qwen/Qwen3-0.6B",
@@ -134,7 +135,8 @@ def _add_run_args(s: argparse.ArgumentParser) -> None:
     f.add_argument("--protocol", default="v2", choices=["v2", "free"])
     f.add_argument("--t-p", type=float, default=4.0, help="practice wall-clock, hours")
     f.add_argument("--t-f", type=float, default=30.0, help="final wall-clock, minutes")
-    f.add_argument("--gpu-minor", type=int, default=None, help="/dev/nvidiaN for the train arm")
+    f.add_argument("--gpu-minor", type=int, default=None,
+                   help="/dev/nvidiaN for the train and silent arms")
     f.add_argument("--cpus", type=int, default=24)
     f.add_argument("--mem-gb", type=int, default=160)
     f.add_argument("--disk-gb", type=int, default=35)

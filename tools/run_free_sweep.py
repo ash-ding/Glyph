@@ -93,7 +93,7 @@ def main(argv=None) -> int:
                        "--usd-line", str(a.usd_line), "--cpus", str(a.cpus), "--mem-gb", str(a.mem_gb),
                        "--disk-gb", str(a.disk_gb), "--out-root", str(out)]
                 minor = None
-                if arm == "train":
+                if arm in ("train", "silent"):
                     if not free_minors:
                         raise SystemExit("not enough GPUs for wave t_p=%g" % t_p)
                     minor = free_minors.pop(0)

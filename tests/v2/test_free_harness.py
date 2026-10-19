@@ -217,3 +217,39 @@ def test_run_directory_does_not_name_the_arm(tmp_path):
     assert (run_dir / "run_name").read_text().strip() == "low_3_no_train_tp1h"
     with pytest.raises(FileExistsError):
         neutral_run_dir(tmp_path, "low_3_no_train_tp1h")
+
+
+ENV_WORDS = ("Environment", "GPU", "H100", "CPU", "cores", "memory", "disk", "Ubuntu", "conda", "network")
+
+
+def test_silent_text_has_no_environment_section():
+    env = FP.environment_for_arm("silent", "NVIDIA H100 80GB HBM3", 24, 160, 35)
+    assert env is None
+    for t in (FP.system_prompt(env, 3600, 1800), FP.task_readme(env, 3600, 1800)):
+        for w in ENV_WORDS:
+            assert not re.search(rf"\b{w}\b", t), w
+
+
+def test_silent_differs_from_train_only_by_the_environment_section():
+    line = FP.environment_for_arm("train", "NVIDIA H100 80GB HBM3", 24, 160, 35)
+    sp_train, sp_silent = FP.system_prompt(line, 3600, 1800), FP.system_prompt(None, 3600, 1800)
+    assert sp_train.replace(f"**Environment**\n\n{line}\n\n", "") == sp_silent
+    rd_train, rd_silent = FP.task_readme(line, 3600, 1800), FP.task_readme(None, 3600, 1800)
+    assert rd_train.replace(f"Environment:\n  {line}\n\n", "") == rd_silent
+
+
+def test_environment_for_arm():
+    assert "one NVIDIA H100 80GB HBM3 GPU" in FP.environment_for_arm("train", "NVIDIA H100 80GB HBM3", 24, 160, 35)
+    assert "no GPU" in FP.environment_for_arm("no_train", None, 24, 160, 35)
+    assert FP.GPU_ARMS == ("train", "silent")
+    with pytest.raises(ValueError):
+        FP.environment_for_arm("trian", None, 24, 160, 35)
+
+
+def test_cli_accepts_the_silent_arm():
+    from glyph.v2.cli import build_parser, build_run_config
+    from glyph.v2.free_sandbox import DEFAULT_IMAGE
+    ns = build_parser().parse_args(["run", "--arm", "silent", "--protocol", "free", "--t-p", "1",
+                                    "--gpu-minor", "2", "--instance-id", "low_3"])
+    rc = build_run_config(ns)
+    assert rc.arm == "silent" and rc.gpu_minor == 2 and rc.image == DEFAULT_IMAGE
