@@ -69,12 +69,14 @@ def session(tmp_path):
     return s
 
 
-def test_free_matrix_is_five_tools_in_both_arms():
-    for arm in ("train", "no_train"):
+def test_free_matrix_is_four_tools_in_every_arm():
+    for arm in ("train", "no_train", "silent"):
         practice = [n for n in ALL if tool_available_for(arm, "practice", n, "free")]
         final = [n for n in ALL if tool_available_for(arm, "final", n, "free")]
-        assert practice == ["query", "submit_validation_answer", "check_answers", "finish_practice"]
-        assert final == ["check_answers", "submit_final_answer"]
+        assert practice == ["query", "submit_validation_answer", "finish_practice"]
+        assert final == ["submit_final_answer"]
+    from glyph.v2.free_harness import FREE_TOOLS
+    assert "check_answers" not in FREE_TOOLS
     assert tool_available_for("train", "practice", "train_model", "v2")
 
 
@@ -319,3 +321,37 @@ def test_reserved_entries_are_off_outside_the_free_protocol(session):
 def test_readme_states_the_reserved_entry_rule():
     r = FP.task_readme(FP.environment_line(None, 24, 160, 35), 3600, 1800)
     assert "binary-operator\n    entry that a validation item needs" in r
+
+
+def _write_answers(path, session, legal=True):
+    items, id_of = T._final_items(session)
+    rows = [{"id": id_of(t), "answer": t.answer_src} for t in items]
+    if not legal:
+        rows = rows[:-1]          # a missing id
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("".join(json.dumps(r) + "\n" for r in rows))
+    return path
+
+
+def test_deadline_fallback_takes_the_newest_legal_answer_file(session, tmp_path):
+    import os
+    from glyph.v2.free_harness import latest_legal_answer_file
+    session.work_root = tmp_path
+    t0 = time.time() - 100
+    old = _write_answers(tmp_path / "old.jsonl", session)
+    os.utime(old, (t0 - 50, t0 - 50))                       # before the final began
+    good = _write_answers(tmp_path / "out" / "good.jsonl", session)
+    os.utime(good, (t0 + 10, t0 + 10))
+    bad = _write_answers(tmp_path / "bad.jsonl", session, legal=False)
+    os.utime(bad, (t0 + 20, t0 + 20))                       # newer, but illegal
+    inside_task = _write_answers(tmp_path / "task" / "x.jsonl", session)
+    os.utime(inside_task, (t0 + 30, t0 + 30))               # newest, but under task/
+    assert latest_legal_answer_file(session, t0) == str(good.resolve())
+    assert latest_legal_answer_file(session, t0 + 15) is None
+
+
+def test_free_text_has_no_check_answers():
+    env = FP.environment_line(None, 24, 160, 35)
+    for t in (FP.system_prompt(env, 3600, 1800), FP.task_readme(env, 3600, 1800)):
+        assert "check_answers" not in t
+    assert "most recently\n    written legal answer file" in FP.task_readme(env, 3600, 1800)

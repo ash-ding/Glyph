@@ -200,11 +200,18 @@ and when a shell command first showed it a GPU.
 |---|---|---|
 | `query` | ✓ | — |
 | `submit_validation_answer` | ✓ | — |
-| `check_answers` | ✓ | ✓ |
 | `finish_practice` | ✓ | — |
 | `submit_final_answer` | — | ✓ |
 
 The same in every arm (`session.py._FREE_MATRIX`). What changes from v2:
+
+- No `check_answers`. With no submission cap, `submit_validation_answer`
+  reports the same violations at no cost, and `submit_final_answer` rejects an
+  illegal file without committing it. If the final phase ends without a
+  commit, the run is scored on the most recently written legal answer file
+  under the work root, outside `task/`, written since the final began
+  (`free_harness.latest_legal_answer_file`; `final_commit` =
+  `auto_latest_legal`).
 
 - `query` also refuses any expression whose evaluation looks up a
   binary-operator entry that a validation item needs
