@@ -4077,3 +4077,180 @@ Spec: `docs/superpowers/specs/2026-10-15-free-protocol-design.md`.
 Two short real runs on `mid_3` (practice 5 min, final 3 min, about $1 each) exercised both arms, the deadline, the voluntary `finish_practice`, the final submission, the transcript copy-out and the cleanup.
 
 `pytest -q -m "not slow" tests/v2` → 156 passed.
+
+## 2026-10-15 — free protocol sweep: results
+
+Spec: `docs/superpowers/specs/2026-10-15-free-protocol-design.md`. 3 frozen instances (`low_3`, `mid_3`, `high_3`) × practice wall-clock `T_p` ∈ {1, 2, 4} h × 2 arms. The final phase was 30 min in every run. All 18 cells ran on lumen1, in three waves of six, and every cell has one valid run. Model: `claude-opus-4-8`, effort high. Per run: 24 CPU cores, 160 GB memory, a 35 GB overlay; the train arm had one H100 and the no_train arm none. Code: the PR-D branch (`free-docs`), plus the safety-line fix (723dfac) for the two reruns. Summary rows: `docs/benchmark/free_sweep_2026-10-15.json`. Run directories are on lumen1 at `/scratch/glyph_free/runs/` and backed up to `~/data/glyph_free_runs_2026-10-15/`.
+
+**Read these 18 runs together with "Path leak and neutral-path reruns" below.** Each run directory was named after its arm (`low_3_no_train_tp1h`), the agent saw that path in every message, and part of the train − no_train difference in this sweep comes from the name.
+
+#### Accuracy on the held-out test
+
+| instance | T_p | train | no_train | train − no_train | train iid / comp / depth | no_train iid / comp / depth |
+|---|---|---|---|---|---|---|
+| low_3 | 1 h | 0.893 | 0.771 | +0.122 | 0.884 / 0.916 / 0.897 | 0.744 / 0.848 / 0.769 |
+| low_3 | 2 h | 0.899 | 0.836 | +0.063 | 0.889 / 0.926 / 0.901 | 0.818 / 0.890 / 0.833 |
+| low_3 | 4 h | 0.921 | 0.827 | +0.094 | 0.915 / 0.934 / 0.927 | 0.809 / 0.878 / 0.828 |
+| mid_3 | 1 h | 0.659 | 0.887 | -0.229 | 0.709 / 0.517 / 0.658 | 0.919 / 0.755 / 0.971 |
+| mid_3 | 2 h | 0.923 | 0.923 | 0.000 | 0.943 / 0.836 / 0.981 | 0.946 / 0.831 / 0.979 |
+| mid_3 | 4 h | 0.942 | 0.931 | +0.012 | 0.959 / 0.874 / 0.985 | 0.951 / 0.848 / 0.978 |
+| high_3 | 1 h | 0.797 | 0.924 | -0.127 | 0.801 / 0.806 / 0.763 | 0.917 / 0.910 / 0.989 |
+| high_3 | 2 h | 0.912 | 0.958 | -0.046 | 0.908 / 0.912 / 0.934 | 0.954 / 0.950 / 0.993 |
+| high_3 | 4 h | 0.954 | 0.954 | 0.000 | 0.947 / 0.952 / 0.994 | 0.946 / 0.953 / 0.995 |
+
+#### All metrics
+
+| T_p | instance | arm | overall | headroom | iid | comp | depth | tail | probe atomic | probe structural |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 h | low_3 | train | 0.893 | 0.889 | 0.884 | 0.916 | 0.897 | 0.667 | 0.902 | 1.000 |
+| 1 h | low_3 | no_train | 0.771 | 0.762 | 0.744 | 0.848 | 0.769 | 0.288 | 0.604 | 1.000 |
+| 1 h | mid_3 | train | 0.659 | 0.555 | 0.709 | 0.517 | 0.658 | 0.000 | 0.600 | 0.781 |
+| 1 h | mid_3 | no_train | 0.887 | 0.853 | 0.919 | 0.755 | 0.971 | 0.493 | 0.826 | 0.781 |
+| 1 h | high_3 | train | 0.797 | 0.255 | 0.801 | 0.806 | 0.763 | 0.274 | 0.472 | 0.984 |
+| 1 h | high_3 | no_train | 0.924 | 0.721 | 0.917 | 0.910 | 0.989 | 0.000 | 0.600 | 0.984 |
+| 2 h | low_3 | train | 0.899 | 0.895 | 0.889 | 0.926 | 0.901 | 0.684 | 0.914 | 1.000 |
+| 2 h | low_3 | no_train | 0.836 | 0.830 | 0.818 | 0.890 | 0.833 | 0.491 | 0.836 | 1.000 |
+| 2 h | mid_3 | train | 0.923 | 0.899 | 0.943 | 0.836 | 0.981 | 0.655 | 0.908 | 0.781 |
+| 2 h | mid_3 | no_train | 0.923 | 0.900 | 0.946 | 0.831 | 0.979 | 0.656 | 0.892 | 0.781 |
+| 2 h | high_3 | train | 0.912 | 0.676 | 0.908 | 0.912 | 0.934 | 0.404 | 0.718 | 0.984 |
+| 2 h | high_3 | no_train | 0.958 | 0.845 | 0.954 | 0.950 | 0.993 | 0.443 | 0.806 | 0.984 |
+| 4 h | low_3 | train | 0.921 | 0.918 | 0.915 | 0.934 | 0.927 | 0.747 | 0.912 | 1.000 |
+| 4 h | low_3 | no_train | 0.827 | 0.820 | 0.809 | 0.878 | 0.828 | 0.459 | 0.802 | 1.000 |
+| 4 h | mid_3 | train | 0.942 | 0.925 | 0.959 | 0.874 | 0.985 | 0.743 | 0.920 | 0.781 |
+| 4 h | mid_3 | no_train | 0.931 | 0.910 | 0.951 | 0.848 | 0.978 | 0.691 | 0.900 | 0.781 |
+| 4 h | high_3 | train | 0.954 | 0.829 | 0.947 | 0.952 | 0.994 | 0.387 | 0.826 | 0.984 |
+| 4 h | high_3 | no_train | 0.954 | 0.829 | 0.946 | 0.953 | 0.995 | 0.386 | 0.842 | 0.984 |
+
+#### train − no_train headroom
+
+| instance | T_p 1 h | T_p 2 h | T_p 4 h |
+|---|---|---|---|
+| low_3 | +0.127 | +0.065 | +0.098 |
+| mid_3 | -0.298 | -0.001 | +0.015 |
+| high_3 | -0.467 | -0.169 | 0.000 |
+
+#### Behaviour
+
+| T_p | instance | arm | practice used | ended by | query expressions | unary coverage | val. submissions | GPU busy | spend |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 h | low_3 | train | 53.4 min | finish_practice | 130,797 | 1.000 | 7 | 12.2 min | $166 |
+| 1 h | low_3 | no_train | 44.0 min | finish_practice | 12,038 | 1.000 | 2 | 0.0 min | $64 |
+| 1 h | mid_3 | train | 46.3 min | finish_practice | 17,676 | 1.000 | 2 | 0.0 min | $32 |
+| 1 h | mid_3 | no_train | 51.9 min | finish_practice | 28,080 | 1.000 | 5 | 0.0 min | $43 |
+| 1 h | high_3 | train | 42.4 min | finish_practice | 1,869 | 0.019 | 3 | 0.0 min | $12 |
+| 1 h | high_3 | no_train | 38.0 min | finish_practice | 18,538 | 1.000 | 2 | 0.0 min | $40 |
+| 2 h | low_3 | train | 99.6 min | finish_practice | 168,795 | 1.000 | 2 | 0.0 min | $203 |
+| 2 h | low_3 | no_train | 96.8 min | finish_practice | 62,438 | 1.000 | 3 | 0.0 min | $142 |
+| 2 h | mid_3 | train | 94.9 min | finish_practice | 74,744 | 1.000 | 6 | 0.0 min | $121 |
+| 2 h | mid_3 | no_train | 120.1 min | deadline | 300,587 | 1.000 | 5 | 0.0 min | $485 |
+| 2 h | high_3 | train | 118.3 min | finish_practice | 7,578 | 0.689 | 7 | 0.0 min | $33 |
+| 2 h | high_3 | no_train | 83.6 min | finish_practice | 23,717 | 1.000 | 8 | 0.0 min | $67 |
+| 4 h | low_3 | train | 122.2 min | usd_line | 202,876 | 1.000 | 10 | 7.3 min | $527 |
+| 4 h | low_3 | no_train | 134.7 min | finish_practice | 84,767 | 1.000 | 3 | 0.0 min | $136 |
+| 4 h | mid_3 | train | 189.4 min | finish_practice | 220,249 | 1.000 | 10 | 8.8 min | $350 |
+| 4 h | mid_3 | no_train | 183.6 min | finish_practice | 67,527 | 1.000 | 5 | 0.0 min | $120 |
+| 4 h | high_3 | train | 165.6 min | finish_practice | 28,640 | 1.000 | 16 | 0.0 min | $69 |
+| 4 h | high_3 | no_train | 192.8 min | finish_practice | 43,229 | 1.000 | 6 | 0.0 min | $113 |
+
+Total model spend: $2,722 over 18 runs.
+Audit (hosted-LLM hosts contacted, benchmark lookups): none flagged.
+
+
+### What the agents did
+
+- **Skeleton and unary tables.** Every run decoded the skeleton (`s0` map, `s1` fold, `s2` identity, `s3` take-n, `s4` reverse) and bought all three unary tables, 3 × 4,913 cells, within about 30 minutes. The exceptions are the `high_3` train runs at 1 h and 2 h, which bought 2% and 69% of them. The baseline this gives (skeleton plus unary exact, binary unknown) is the 0.635 validation score that every `low_3` run started from.
+- **Unlimited queries make the unary tables a purchase.** 16 of 18 runs reached 100% unary coverage. Scores are therefore high everywhere (0.66–0.96). What remains is the binary tables: 2 × 4,913² = 48.3 M cells, of which the `low_3` test needs 6,346. No run bought more than 9.4% of the test-needed binary cells, so binary answers on the test are extrapolation.
+- **The arms converge as `T_p` grows.** The train − no_train headroom difference narrows from (+0.127, −0.298, −0.467) at 1 h to (+0.098, +0.015, 0.000) at 4 h for `low_3`, `mid_3` and `high_3`. The large 1 h deficits come from the agents' purchasing choices, not from training: `high_3` train at 1 h bought 2% of the unary tables, and `mid_3` train at 1 h scored 0 on the tail.
+- **`low_3` is the cell where training pays, in all three `T_p`.** It is the instance most dependent on binary tables (3,214 of the 10,000 test items need one). Reading the transcripts:
+  - **The train arm framed binary as supervised learning.** It bought 110k–460k random binary cells through subagents used as query couriers and fitted an MLP: per-digit embeddings, 3 output heads of 17 classes, ensembles over seeds. It iterated against validation, for example 0.636 → 0.808 → 0.827 → 0.858 → 0.878 → 0.883 at 1 h. Binary probe accuracy was 0.74–0.80.
+  - **The no_train arm looked for an exact rule.** It worked through carry chains, affine tests and per-digit dependence. It then settled for hand-derived carry classes (1 h), per-digit count tables with kNN (2 h: 0.57–0.61) or a per-digit majority table (4 h: 0.50). The 1 h run's binary probe of 0.01 comes mostly from an argument-order bug in the code it added in the final phase for bare probe rows; with the arguments put back its answers score 0.385. It bought fewer cells (≈3k–68k) and ended practice early each time, with 16, 23 and 105 minutes left. No `low_3` no_train agent tried a learned model, although CPU training was available. On `mid_3` two did: a random forest at 2 h and a torch MLP on CPU at 4 h.
+  - **The GPU mattered less than the framing.** At 2 h the train agent concluded that torch had no working build for the image's Python 3.14. The install had in fact not finished when it imported torch (see "Python 3.14 image and CPU fallbacks"). It wrote an MLP in numpy, trained it on CPU (GPU busy 0 min) and still beat no_train, 0.899 vs 0.836. The 1 h and 4 h train agents built their own conda environment with CUDA torch and trained on the GPU for 7–12 min.
+- **GPU use overall.** Only the `low_3` train runs at 1 h and 4 h and the `mid_3` train run at 4 h used the GPU. The `high_3` train agents never did.
+- **Validation was saturated by design of the query policy.** Validation items are refused by `query`, but the cells they need are not. `low_3` train at 2 h and `low_3` no_train at 4 h bought exactly the binary cells the validation set needs and scored 1.0 on validation. Only 1–2% of those cells overlap the test's need. The 4 h no_train agent said explicitly that the 1.0 was not an estimate of the test score. To keep validation informative, the policy should also refuse the cells that validation items need.
+- **Audit.** No run contacted a hosted-LLM API host, and no run looked up the benchmark. Both were checked in WebFetch URLs, WebSearch queries, Bash commands and sampled sockets.
+
+### Incidents
+
+- **Safety-line bug, fixed in 723dfac.** A practice phase that ended at the $500 safety line left the final phase already over the line. The final then stopped at the agent's first event, the run never answered, and it scored 0. This happened to `low_3` train and `mid_3` train at 4 h. Their practice phases are kept as `*.usdline-bug` and both cells were rerun with the fix, which gives the final phase a $100 allowance. In the `low_3` rerun, practice ended at the line, and the final phase submitted in 184 s and scored 0.921.
+- **Pilot directory renamed mid-run.** The sweep runner set aside the pilot's two running directories (`mid_3`, 1 h) for 78 s, because `--skip` was checked after the set-aside (fixed in 69121e0). Each pilot run saw one gateway 500 during that window, retried by the CLI. Spend is unaffected because the ledger is in memory; one gateway log line is missing per run. Both runs are kept.
+- **Gateway 403 on `count-tokens`.** The CLI's token-counting requests are refused by the pinned-model gateway; there are up to 1,000 per run. This is the same as v2 and is harmless.
+
+### Cost
+
+$2,722 for the 18 valid runs, plus $1,001 for the two runs zeroed by the bug: $3,723 in total, against the spec's estimate of $1,000–1,500. Spend is driven by parallel subagents and by context growth. Three runs reached about $500: `mid_3` no_train at 2 h ($485, ended at the deadline), `low_3` train at 4 h ($527, ended at the line) and the two bugged runs.
+
+### Caveats
+
+- One run per cell.
+- `high_3`'s probe and skeleton ceilings differ from `low_3`'s, so compare headroom, not overall, across instances.
+- The count of binary cells bought includes bare `bK(x,y)` queries only. `low_3` no_train at 1 h asked about 3k binary cells through two-element folds, so its count is understated.
+- The run directory named the arm; see the next sections.
+
+### Solution levels
+
+How each run answered binary cells it never bought, judged from the method behind its final submission. Binary probe is 100 random cells per operator, exact on all three digits; at most 2 of the 100 had been bought in any run.
+
+- **L1, lookup only or give up.** Unbought cells get a default.
+- **L2, hand-derived rules.** A carry rule or dependency graph derived from controlled queries, with the small tables it calls for filled by sweeps.
+- **L3, nonparametric statistics.** Count or majority tables keyed on a few digits, with backoff, and kNN. Nothing is optimised.
+- **L4, fitted models.** MLPs, multinomial logistic regression, tree ensembles.
+
+Each binary operator is a per-digit term plus a coupling term over all six input digits (`binary_coupling` 0.25). The best per-digit majority table therefore tops out at 0.537 / 0.551 (b0 / b1) on `low_3`, 0.550 / 0.604 on `mid_3` and 0.560 / 0.637 on `high_3`, measured over 60,000 random cells per operator. Only L4 passes that ceiling.
+
+| instance | arm | 1 h | 2 h | 4 h |
+|---|---|---|---|---|
+| low_3 | train | L4 GPU MLP ensemble (0.74 / 0.77) | L4 numpy MLP on CPU (0.77 / 0.80) | L4 GPU MLP (0.78 / 0.78) |
+| low_3 | no_train | L2 carry classes (0.01 / 0.01; 0.385 with the argument order fixed) | L3 count tables + kNN (0.57 / 0.61) | L3 majority table (0.51 / 0.50) |
+| mid_3 | train | L1 gave up (0 / 0) | L4 numpy multinomial logistic with pairwise features (0.76 / 0.78) | L4 GPU MLP (0.80 / 0.80) |
+| mid_3 | no_train | L3 per-coordinate table (0.56 / 0.57) | L4 random forest (0.76 / 0.70) | L4 torch MLP on CPU (0.76 / 0.74) |
+| high_3 | train | L2 per-digit arithmetic (0.46 / 0.55) | L2 ripple-carry tables (0.44 / 0.51) | L3 separable majority table (0.53 / 0.60) |
+| high_3 | no_train | L1 gave up (0 / 0) | L3 main-effect table, one digit exact (0.52 / 0.51) | L3 majority-vote tables (0.58 / 0.63) |
+
+L4 runs score 0.70–0.80 on the probe and every other run 0.63 or less. train reached L4 in 5 of 9 runs, no_train in 2 of 9. No `high_3` run did: only 757 of its 10,000 test items need binary, and a run that skips binary entirely still scores 0.924.
+
+### Path leak and neutral-path reruns
+
+**The leak.** A run's directory was `<instance>_<arm>_tp<T>h`. It appears in the practice opener ("The task files are in /scratch/glyph_free/runs/low_3_no_train_tp1h/work/task"), in the agent's working directory and in every tool call. `high_3` train at 4 h wrote: "Given the H100 GPU and "train" in the run name, the robust path is … learn binary from heavy sampling." Thinking is redacted, so other runs may have read it without saying so. The prompts otherwise differ only in the environment line, as the spec requires.
+
+**The fix (0432dd9).** A run now lives under an opaque `r<8 hex>` directory. The readable name is a host-side symlink, and a `run_name` file inside the directory records it. The overlay image and the systemd scope, which is readable in `/proc/self/cgroup`, take the opaque id too.
+
+**Reruns.** Same code and model as the sweep, on `low_3` only, with opaque directories under neutral output roots (`/scratch/glyph_free/runs2` … `runs5`). These runs still used the Python 3.14 image. Rows: `docs/benchmark/free_neutral_reruns_2026-10-15.json`.
+
+| T_p | arm | replicate | level, binary method | overall | probe b0 / b1 | binary cells | first ML or GPU mention | GPU busy | spend |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 h | train | 1 | L3 per-digit majority table | 0.819 | 0.52 / 0.58 | 42,884 | never | 0.0 min | $82 |
+| 1 h | train | 2 | L4 torch MLP on the GPU | 0.871 | 0.64 / 0.73 | 102,999 | 13.4 min | 1.4 min | $199 |
+| 1 h | train | 3 | L4 numpy MLP on CPU | 0.878 | 0.77 / 0.70 | 75,624 | 28.2 min | 0.0 min | $136 |
+| 1 h | no_train | 1 | L1 gave up | 0.679 | 0 / 0 | 416 | never | – | $33 |
+| 1 h | no_train | 2 | L4 sklearn HistGradientBoosting | 0.858 | 0.63 / 0.69 | 83,142 | 11.5 min | – | $153 |
+| 1 h | no_train | 3 | L1 gave up | 0.680 | 0 / 0 | 288 | never | – | $35 |
+| 2 h | train | 1 | L4 torch MLP on the GPU, after HistGradientBoosting | 0.908 | 0.81 / 0.83 | 290,127 | 22.6 min | 5.2 min | $431 |
+| 2 h | no_train | 1 | L4 random forest / extra trees | 0.859 | 0.64 / 0.72 | 118,143 | 22.4 min | – | $190 |
+
+$1,260 for the eight runs.
+
+- **Without the arm in the path, both arms fit models.** In the sweep, `low_3` train was L4 at every T_p and `low_3` no_train never was. Across the eight reruns, train reached L4 in 3 of 4 runs and no_train in 2 of 4. At 2 h both arms did.
+- **The first replicate pair at 1 h is the cleanest contrast with the sweep.** The train agent had the same H100 line in its prompt, never mentioned ML or the GPU, and stopped at a per-digit table: "Plateaued … More data won't help further."
+- **What separates L4 from the rest is a learnability test.** Every rerun that fitted a model on early data to see whether binary was learnable went on to L4. Every rerun that did not stayed at L1 or L3.
+- **The two no_train runs that gave up had lost their time to the unary tables.** Pasting expressions through subagents was slow, and they reached the 0.636 skeleton-plus-unary baseline at minute 37 and 40. The no_train run that reached L4 had it at minute 17.
+- **The GPU line still changes something.** At 2 h, both arms fitted models. The train agent moved to an MLP ("H100 MLP could beat GBM") and bought 2.5 times as many cells, which accounts for its +0.049.
+- **Variance is large.** The same 1 h configuration scored between 0.68 and 0.88. Four replicate pairs do not separate the arms statistically.
+
+Consequence for this entry: the `low_3` train − no_train gaps in the tables above combine the GPU line and the arm name in the path, and one run per cell cannot separate them.
+
+### Python 3.14 image and CPU fallbacks
+
+The image installed the latest Miniforge, whose base Python was 3.14. In that image a plain `pip install torch` works: it takes about 310 s and installs torch 2.14.1+cu130 (4.4 GB). The host driver, 580.159, supports CUDA 13.0. The older PyTorch CUDA indexes agents tend to use have no 3.14 wheels: cu121 stops at torch 2.5.1 and cu124 at 2.6.0, while torch supports 3.14 only from 2.9.0.
+
+Six train runs (sweep and reruns) ran into this.
+
+| run | what happened | outcome |
+|---|---|---|
+| sweep `low_3` train 1 h | installed from the cu121 index without checking the driver's CUDA version; built a Python 3.11 env | recovered, trained on the GPU |
+| rerun 2, `low_3` train 1 h | cu121 failed, then plain PyPI, waited a minute longer | recovered |
+| rerun, `low_3` train 2 h | built a Python 3.11 env | recovered |
+| sweep `low_3` train 2 h | imported torch while pip was still installing it, got `No module named 'torch._strobelight'`, concluded 3.14 had no torch | numpy MLP on CPU; torch was installed by the end of the run |
+| rerun 3, `low_3` train 1 h | imported mid-install, got a missing `libtorch_global_deps.so`, killed the install | numpy MLP on CPU |
+| sweep `mid_3` train 2 h | ran `pip --version`, saw Python 3.14, wrote "torch wheels likely unavailable", never tried | numpy multinomial logistic |
+
+None of the three CPU fallbacks was caused by a missing wheel. Each came from a conclusion reached without checking. From 90865e0 the image pins the conda base to Python 3.12, which has wheels on every index above (cu121: torch 2.5.1; PyPI: 2.14.1+cu130), and is built as `/scratch/images/glyph-free-py312.sif`. 027cbdd makes that the default for the CLI and `RunConfig`. No libraries are preinstalled, so the five-minute install remains. The 3.14 image stays at `/scratch/images/glyph-free.sif`. The 18 sweep runs and the 8 reruns all used it, so record the image as a covariate when pooling them with later runs.
