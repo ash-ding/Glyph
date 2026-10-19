@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 
 from glyph.v2.harness import RunConfig
+from glyph.v2.free_sandbox import DEFAULT_IMAGE as FREE_DEFAULT_IMAGE
 
 
 def build_run_config(args: argparse.Namespace) -> RunConfig:
@@ -32,7 +33,24 @@ def build_run_config(args: argparse.Namespace) -> RunConfig:
         n_val=args.n_val,
         max_turns=args.max_turns,
         out_root=args.out_root,
+        **_free_fields(args),
     )
+
+
+def _free_fields(args: argparse.Namespace) -> dict:
+    """The free protocol's RunConfig fields, defaulted when the flags are absent."""
+    g = lambda k, d: getattr(args, k, d)
+    return {
+        "protocol": g("protocol", "v2"),
+        "t_p_s": g("t_p", 4.0) * 3600,
+        "t_f_s": g("t_f", 30.0) * 60,
+        "gpu_minor": g("gpu_minor", None),
+        "cpus": g("cpus", 24),
+        "mem_gb": g("mem_gb", 160),
+        "disk_gb": g("disk_gb", 35),
+        "image": g("image", "/scratch/images/glyph-free.sif"),
+        "scratch_root": g("scratch_root", "/scratch/glyph_free"),
+    }
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -112,6 +130,16 @@ def _add_run_args(s: argparse.ArgumentParser) -> None:
     s.add_argument("--out-root", default=None)
     s.add_argument("--instance-id", default=None,
                     help="frozen instance id (e.g. high_3); overrides --preset/--seed")
+    f = s.add_argument_group("free protocol (--protocol free)")
+    f.add_argument("--protocol", default="v2", choices=["v2", "free"])
+    f.add_argument("--t-p", type=float, default=4.0, help="practice wall-clock, hours")
+    f.add_argument("--t-f", type=float, default=30.0, help="final wall-clock, minutes")
+    f.add_argument("--gpu-minor", type=int, default=None, help="/dev/nvidiaN for the train arm")
+    f.add_argument("--cpus", type=int, default=24)
+    f.add_argument("--mem-gb", type=int, default=160)
+    f.add_argument("--disk-gb", type=int, default=35)
+    f.add_argument("--image", default=FREE_DEFAULT_IMAGE)
+    f.add_argument("--scratch-root", default="/scratch/glyph_free")
 
 
 def build_parser() -> argparse.ArgumentParser:

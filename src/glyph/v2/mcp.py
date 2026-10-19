@@ -77,8 +77,11 @@ def _make_tool(sdk_tool, name, handler, schema, session, trace):
     return sdk_tool(name, _DESCRIPTIONS[name], schema)(_shim)
 
 
-def register_glyph_server(session, trace):
+def register_glyph_server(session, trace, names=None):
     """Build and return the in-process "glyph" MCP server for this run.
+
+    `names` restricts the tools registered; the free protocol registers its
+    five, so the model never sees a tool it may not use.
 
     Imports claude_agent_sdk lazily so importing this module does not require
     the SDK (the harness unit test runs SDK-free).
@@ -88,5 +91,6 @@ def register_glyph_server(session, trace):
     tools = [
         _make_tool(sdk_tool, name, handler, schema, session, trace)
         for name, (handler, schema) in _TOOL_SPECS.items()
+        if names is None or name in names
     ]
     return create_sdk_mcp_server(name="glyph", tools=tools)
