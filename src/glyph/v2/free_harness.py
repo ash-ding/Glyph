@@ -36,8 +36,7 @@ def final_usd_line(usd_line: float, spent_at_switch: float) -> float:
     """The final phase's safety line: the run's line, or what practice spent plus
     the allowance, whichever is higher."""
     return max(usd_line, spent_at_switch + FINAL_USD_ALLOWANCE)
-FREE_TOOLS = ("query", "submit_validation_answer", "check_answers",
-              "finish_practice", "submit_final_answer")
+FREE_TOOLS = ("query", "submit_validation_answer", "finish_practice", "submit_final_answer")
 FREE_ALLOWED_TOOLS = ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "WebFetch",
                       "WebSearch", "Task", "TodoWrite", "NotebookEdit", "mcp__glyph__*"]
 
@@ -247,6 +246,38 @@ def transcript_audit(agent_home: Path, llm_hosts=None) -> dict:
             "hosts": hosts, "llm_api_hosts": llm_hits, "benchmark_lookups": bench}
 
 
+def latest_legal_answer_file(session, since: float | None,
+                             max_bytes: int = 200 * 2**20) -> str | None:
+    """The newest legal answer file for final/test.jsonl under the work root.
+
+    The deadline fallback: a run whose final phase ends without a commit is
+    scored on the most recently written `.jsonl` file outside task/ that passes
+    the same legality check submit_final_answer applies. Only files written
+    since the final phase began are candidates, since a test answer file cannot
+    exist before the test set does.
+    """
+    from glyph.v2.answers import check_file
+    from glyph.v2.tools import _final_items, _work_root
+    root = Path(_work_root(session)).resolve()
+    items, id_of = _final_items(session)
+    cands = []
+    for p in root.rglob("*.jsonl"):
+        try:
+            rel = p.resolve().relative_to(root)
+            st = p.stat()
+        except (ValueError, OSError):
+            continue
+        if rel.parts[:1] == ("task",) or st.st_size > max_bytes:
+            continue
+        if since is not None and st.st_mtime < since:
+            continue
+        cands.append((st.st_mtime, str(p)))
+    for _, p in sorted(cands, reverse=True):
+        if check_file(p, items, session.inst.cfg, root, id_of).ok:
+            return p
+    return None
+
+
 def _entry_nproc(spec) -> int | None:
     """The nproc the container's entry script saw, from sandbox_meta/entry.txt."""
     try:
@@ -432,6 +463,7 @@ def run_free(rc) -> dict:
                 workspace.write_test_file(paths, inst, test_id_of, probes=session.probes,
                                           probe_id_of=session.probe_id_of)
                 t1 = time.time()
+                session.final_started_at = t1
                 final_line["usd"] = final_usd_line(rc.usd_line, ledger.spent_usd)
                 deadline = set_deadline(rc.t_f_s)
                 async def kill_f():
@@ -460,9 +492,9 @@ def run_free(rc) -> dict:
 
     session.turns_final = session.turns
     if getattr(session, "final_commit_path", None) is None:
-        last = getattr(session, "last_checked_test_path", None)
+        last = latest_legal_answer_file(session, getattr(session, "final_started_at", None))
         if last is not None:
-            session.final_commit_path, session.final_commit = last, "auto_checked_path"
+            session.final_commit_path, session.final_commit = last, "auto_latest_legal"
         else:
             session.final_commit = "none"
     session.run_status = status["run_status"]

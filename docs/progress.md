@@ -4313,3 +4313,13 @@ The real limits were readable only at `/sys/fs/cgroup/<path from /proc/self/cgro
 
 **Not changed.** Memory: `free` still reports the host, and an agent that allocates past 160 GB loses that process (`OOMPolicy=continue` keeps the run alive). No run so far has come near the limit. GPU and CPU block are not matched by NUMA node.
 
+## 2026-10-19 — free protocol: `check_answers` removed
+
+`check_answers` checked an answer file's legality without scoring it. Under the free protocol it did nothing the other tools did not:
+
+- **Usage in the 26 runs so far.** 43 calls. In practice there were 16 calls, 3 of them illegal, every one a `path_escape` (an answer file outside `work/`). `submit_validation_answer` reports the same violations, and it has no cap here; one of those runs had already been told by it. In final there were 27 calls, all legal: every run checked once before `submit_final_answer`.
+- **Final submissions.** `submit_final_answer` already rejects an illegal file with its violations and does not commit it, so a run can fix the file and submit again.
+- **The one thing only it did** was the deadline fallback: the last test file that passed `check_answers` was committed if the final ended without a submission. No run needed it; all 26 submitted.
+
+The tool is gone from the free protocol's matrix, tool list, system prompt and README. The fallback now takes the most recently written legal answer file: a `.jsonl` under the work root, outside `task/`, written since the final began and passing the same check `submit_final_answer` applies (`free_harness.latest_legal_answer_file`, `final_commit = "auto_latest_legal"`). The README states this, and says an illegal final file is rejected and can be resubmitted. v2 keeps `check_answers`, where submissions are capped and a free legality check saves one.
+

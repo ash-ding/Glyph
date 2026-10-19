@@ -42,12 +42,14 @@ _MATRIX = {
 }
 
 
-# The free protocol (spec 2026-10-15-free-protocol-design.md, section 4): five
-# tools, the same in both arms; availability depends on the phase only.
+# The free protocol (spec 2026-10-15-free-protocol-design.md, section 4): four
+# tools, the same in every arm; availability depends on the phase only.
+# check_answers is not among them: with no submission cap, submit_validation_answer
+# and submit_final_answer report the same violations, and an illegal final file is
+# not committed, so a separate legality check added nothing (2026-10-19).
 _FREE_MATRIX = {
     'query': {'practice'},
     'submit_validation_answer': {'practice'},
-    'check_answers': {'practice', 'final'},
     'finish_practice': {'practice'},
     'submit_final_answer': {'final'},
 }

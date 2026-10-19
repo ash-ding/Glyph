@@ -66,7 +66,6 @@ When a phase ends, every process still running in your container is stopped.
 
 - query: evaluate one or more expressions.
 - submit_validation_answer: score an answer file against the validation set; returns overall accuracy and accuracy by expression depth.
-- check_answers: check an answer file for legality; returns no score.
 - finish_practice: end the practice phase.
 - submit_final_answer: submit your answers for the test set; a legal file is accepted once and ends the run.
 
@@ -100,9 +99,9 @@ Phases:
     submit_validation_answer are no longer available.
   - The final phase lasts at most {_hm(t_f)}. It ends when you call
     submit_final_answer with a legal file, or when the time is up. When the
-    time is up, every running process is stopped; if one of your files passed
-    check_answers on the test set, the last such file is submitted for you;
-    otherwise the run scores zero.
+    time is up, every running process is stopped and the most recently
+    written legal answer file for final/test.jsonl is submitted for you; if
+    there is none, the run scores zero.
 
 Tools:
   - query: evaluates expressions. Validation and test items are refused, as
@@ -111,11 +110,10 @@ Tools:
     entry that a validation item needs. Refused expressions are not counted.
   - submit_validation_answer: scores an answer file against validation.jsonl
     and returns the overall accuracy and a breakdown by expression depth.
-  - check_answers: checks an answer file for legality (set="validation" or
-    set="test"). It returns no score.
   - finish_practice: ends the practice phase.
   - submit_final_answer: submits your answers for final/test.jsonl. A legal
-    file is accepted once and ends the run.
+    file is accepted once and ends the run; an illegal one is rejected with
+    the problems found, and you can submit again.
   Every tool result includes the seconds remaining in the current phase.
 
 Answer files:
