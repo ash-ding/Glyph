@@ -3,8 +3,12 @@
 Spec: docs/superpowers/specs/2026-10-15-free-protocol-design.md, section 6.
 Facts only: the task, the phases and clocks, the tools, the file formats, the
 environment, that running processes are stopped at the end of a phase, the
-submission rules and two rules. Nothing names a way to solve the task; the
-two arms differ only in the environment line.
+submission rules and two rules. Nothing names a way to solve the task.
+
+The arms differ only in the environment. `train` and `no_train` get one line
+describing the container (one GPU, or none). `silent` has a GPU like `train`
+but no Environment section at all, so whatever the agent knows about the
+machine it has found out itself.
 """
 
 from __future__ import annotations
@@ -20,11 +24,23 @@ def _hm(seconds: float) -> str:
     return f"{m} min"
 
 
+ARMS = ("train", "no_train", "silent")
+GPU_ARMS = ("train", "silent")
+
+
 def environment_line(gpu_name: str | None, cpus: int, mem_gb: int, disk_gb: int) -> str:
     gpu = f"one {gpu_name} GPU" if gpu_name else "no GPU"
     return (f"You are root in an Ubuntu 24.04 container with conda and network access. "
             f"This container has {gpu}, {cpus} CPU cores, {mem_gb} GB of memory and "
             f"{disk_gb} GB of disk.")
+
+
+def environment_for_arm(arm: str, gpu_name: str | None, cpus: int, mem_gb: int,
+                        disk_gb: int) -> str | None:
+    """The environment line an arm is shown, or None for `silent`, which is shown none."""
+    if arm not in ARMS:
+        raise ValueError(f"unknown arm {arm!r}; expected one of {ARMS}")
+    return None if arm == "silent" else environment_line(gpu_name, cpus, mem_gb, disk_gb)
 
 
 RULES = (
@@ -33,7 +49,8 @@ RULES = (
 )
 
 
-def system_prompt(env_line: str, t_p: float, t_f: float) -> str:
+def system_prompt(env_line: str | None, t_p: float, t_f: float) -> str:
+    env = f"**Environment**\n\n{env_line}\n\n" if env_line else ""
     return f"""You are solving a task in a small formal language whose syntax is public but whose semantics are private.
 
 **The run**
@@ -55,18 +72,15 @@ When a phase ends, every process still running in your container is stopped.
 
 You also have shell, file, web and subagent tools. Every Glyph tool result reports the seconds remaining in the current phase; task/timer.sh prints the same.
 
-**Environment**
-
-{env_line}
-
-**Rules**
+{env}**Rules**
 
 {RULES}
 
 The task README is at task/README.md."""
 
 
-def task_readme(env_line: str, t_p: float, t_f: float) -> str:
+def task_readme(env_line: str | None, t_p: float, t_f: float) -> str:
+    env = f"Environment:\n  {env_line}\n\n" if env_line else ""
     return f"""# Glyph task workspace
 
 Files in this directory:
@@ -110,10 +124,7 @@ Answer files:
   rows whose ids start with probe_; a legal final file covers them too.
   Answer files must be outside task/.
 
-Environment:
-  {env_line}
-
-Rules:
+{env}Rules:
 {RULES}
 """
 
