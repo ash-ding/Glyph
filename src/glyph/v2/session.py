@@ -84,6 +84,9 @@ class Session:
     protocol: str = 'v2'         # 'v2' | 'free'
     deadline: float | None = None    # free protocol: end of the current phase, on `clock`
     clock: Callable[[], float] = time.time
+    # free protocol: refuse queries that look up a binary entry a validation item needs
+    reserve_val_binary: bool = False
+    refused_reserved: int = 0
 
     def q_remaining(self) -> int | None:
         if self.q_cap is None:

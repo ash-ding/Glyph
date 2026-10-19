@@ -217,3 +217,69 @@ def test_run_directory_does_not_name_the_arm(tmp_path):
     assert (run_dir / "run_name").read_text().strip() == "low_3_no_train_tp1h"
     with pytest.raises(FileExistsError):
         neutral_run_dir(tmp_path, "low_3_no_train_tp1h")
+
+
+def _cell_expr(inst, op, i, j):
+    from glyph.data.grammar import render_value
+    return f"{op}({render_value(i, inst.cfg)}, {render_value(j, inst.cfg)})"
+
+
+def _fold_reaching(inst, cell):
+    """A two-element structural expression whose evaluation looks up `cell`."""
+    from glyph.data.grammar import parse, check
+    op, i, j = cell
+    xs = [_cell_expr(inst, op, i, j)[len(op) + 1:-1].split(", ")]
+    x, y = xs[0]
+    for s in sorted(inst.skeleton):
+        for lst in (f"[{x}, {y}]", f"[{y}, {x}]"):
+            src = f"{s}({lst}, {op})"
+            try:
+                e = parse(src, inst.cfg)
+                check(e, inst.cfg)
+                _, log = inst.P.eval_logged(e)
+            except Exception:
+                continue
+            if cell in log.binary and inst.query_violation(src) is None:
+                return src
+    return None
+
+
+def test_free_query_refuses_reserved_validation_entries(session):
+    session.reserve_val_binary = True
+    inst = session.inst
+    reserved = inst.reserved_binary()
+    assert reserved
+    cell = sorted(reserved)[0]
+    free_cell = next((op, i, j) for op in ("b0", "b1") for i in range(inst.cfg.n_values)
+                     for j in range(3) if (op, i, j) not in reserved)
+    out = T.t_query(session, exprs=[_cell_expr(inst, *cell), _cell_expr(inst, *free_cell)], why="t")
+    first, second = out["results"]
+    assert first.get("refused") == "needs_validation_entry"
+    assert "out" in second
+    assert session.q_used == 1 and session.refused_reserved == 1
+    assert cell not in inst.query_log.binary
+
+
+def test_free_query_refuses_a_fold_that_reaches_a_reserved_entry(session):
+    session.reserve_val_binary = True
+    inst = session.inst
+    found = next(((c, src) for c in sorted(inst.reserved_binary())
+                  if (src := _fold_reaching(inst, c))), None)
+    assert found, "no two-element fold reaches a reserved entry on this instance"
+    cell, src = found
+    out = T.t_query(session, exprs=[src], why="t")
+    assert out["results"][0].get("refused") == "needs_validation_entry"
+    assert cell not in inst.query_log.binary
+
+
+def test_reserved_entries_are_off_outside_the_free_protocol(session):
+    assert session.reserve_val_binary is False
+    inst = session.inst
+    cell = sorted(inst.reserved_binary())[0]
+    out = T.t_query(session, exprs=[_cell_expr(inst, *cell)], why="t")
+    assert "out" in out["results"][0]
+
+
+def test_readme_states_the_reserved_entry_rule():
+    r = FP.task_readme(FP.environment_line(None, 24, 160, 35), 3600, 1800)
+    assert "binary-operator\n    entry that a validation item needs" in r

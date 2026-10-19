@@ -4254,3 +4254,26 @@ Six train runs (sweep and reruns) ran into this.
 | sweep `mid_3` train 2 h | ran `pip --version`, saw Python 3.14, wrote "torch wheels likely unavailable", never tried | numpy multinomial logistic |
 
 None of the three CPU fallbacks was caused by a missing wheel. Each came from a conclusion reached without checking. From 90865e0 the image pins the conda base to Python 3.12, which has wheels on every index above (cu121: torch 2.5.1; PyPI: 2.14.1+cu130), and is built as `/scratch/images/glyph-free-py312.sif`. 027cbdd makes that the default for the CLI and `RunConfig`. No libraries are preinstalled, so the five-minute install remains. The 3.14 image stays at `/scratch/images/glyph-free.sif`. The 18 sweep runs and the 8 reruns all used it, so record the image as a covariate when pooling them with later runs.
+
+## 2026-10-19 — free protocol: validation's binary entries are reserved
+
+**Problem.** `query` refused validation and test items as whole expressions but not the table entries they need. Validation expressions are public, so an agent that has decoded the skeleton and bought the unary tables can compute which binary entries each validation item looks up, buy exactly those and answer validation perfectly. That takes few entries and teaches nothing about the test:
+
+| instance | validation items that need binary | binary entries they need | of which the test needs |
+|---|---|---|---|
+| `low_3` | 1,824 of 5,000 | 3,633 | 65 |
+| `mid_3` | 807 | 1,389 | 2 |
+| `high_3` | 416 | 545 | 0 |
+
+In the 2026-10-15 sweep `low_3` train at 2 h and `low_3` no_train at 4 h did this and scored 1.0 on validation. `high_3` train at 4 h declined: "querying exact validation pairs would inflate validation but give zero test benefit, so I won't."
+
+**Change.** Under the free protocol (`Session.reserve_val_binary`, set by `run_free`) a query is refused, uncharged, with reason `needs_validation_entry` if evaluating it would look up any entry in `GlyphInstance.reserved_binary()`, the union of the validation items' binary needs. The check evaluates the expression without charging or logging it, so a two-element fold that reaches a reserved entry is refused too; a test covers that case. The README's description of `query` says so. The report's usage block records `reserved_binary_entries` and `refused_reserved`. Validation now rests on unseen binary entries, as the test does.
+
+**Not reserved, on purpose.**
+- *Test entries.* The test is hidden during practice, so refusing its entries would tell the agent which entries the test needs. The incidental overlap is small: at most 9.4% of the test's binary entries were bought in any 2026-10-15 run (`low_3` train at 4 h), 1.6% or less in every other. It is better measured after the fact, as the probe already does with seen and unseen cells.
+- *Unary entries.* Validation needs 9,834 of `low_3`'s 14,739 unary entries; reserving them would make the unary tables unbuyable and change the task. The test can use bought unary tables too, so the two stay alike.
+
+**Cost.** None measurable. On `low_3`, 2,000 random bare binary queries run at 1,450–1,740 per second with or without the check, because the second evaluation hits the lookup cache. The busiest agents sent about 28 per second.
+
+Runs from here on are not comparable with earlier ones on validation scores; test scores are unaffected by the change except through what the agent does with honest feedback.
+
