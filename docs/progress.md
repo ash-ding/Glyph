@@ -4082,6 +4082,8 @@ Two short real runs on `mid_3` (practice 5 min, final 3 min, about $1 each) exer
 
 Spec: `docs/superpowers/specs/2026-10-15-free-protocol-design.md`. 3 frozen instances (`low_3`, `mid_3`, `high_3`) × practice wall-clock `T_p` ∈ {1, 2, 4} h × 2 arms. The final phase was 30 min in every run. All 18 cells ran on lumen1, in three waves of six, and every cell has one valid run. Model: `claude-opus-4-8`, effort high. Per run: 24 CPU cores, 160 GB memory, a 35 GB overlay; the train arm had one H100 and the no_train arm none. Code: the PR-D branch (`free-docs`), plus the safety-line fix (723dfac) for the two reruns. Summary rows: `docs/benchmark/free_sweep_2026-10-15.json`. Run directories are on lumen1 at `/scratch/glyph_free/runs/` and backed up to `~/data/glyph_free_runs_2026-10-15/`.
 
+**Read these 18 runs together with "Path leak and neutral-path reruns" below.** Each run directory was named after its arm (`low_3_no_train_tp1h`), the agent saw that path in every message, and part of the train − no_train difference in this sweep comes from the name.
+
 #### Accuracy on the held-out test
 
 | instance | T_p | train | no_train | train − no_train | train iid / comp / depth | no_train iid / comp / depth |
@@ -4161,8 +4163,8 @@ Audit (hosted-LLM hosts contacted, benchmark lookups): none flagged.
 - **The arms converge as `T_p` grows.** The train − no_train headroom difference narrows from (+0.127, −0.298, −0.467) at 1 h to (+0.098, +0.015, 0.000) at 4 h for `low_3`, `mid_3` and `high_3`. The large 1 h deficits come from the agents' purchasing choices, not from training: `high_3` train at 1 h bought 2% of the unary tables, and `mid_3` train at 1 h scored 0 on the tail.
 - **`low_3` is the cell where training pays, in all three `T_p`.** It is the instance most dependent on binary tables (3,214 of the 10,000 test items need one). Reading the transcripts:
   - **The train arm framed binary as supervised learning.** It bought 110k–460k random binary cells through subagents used as query couriers and fitted an MLP: per-digit embeddings, 3 output heads of 17 classes, ensembles over seeds. It iterated against validation, for example 0.636 → 0.808 → 0.827 → 0.858 → 0.878 → 0.883 at 1 h. Binary probe accuracy was 0.74–0.80.
-  - **The no_train arm looked for an exact rule.** It worked through carry chains, affine tests and per-digit dependence. It then settled for per-digit count tables (1 h, wrong factorisation: binary probe 0.01), per-digit kNN (2 h: 0.57–0.61) or a per-digit majority table (4 h: 0.50). It bought fewer cells (≈3k–68k) and ended practice early each time, with 16, 23 and 105 minutes left. No no_train agent tried a learned model, although CPU training was available.
-  - **The GPU mattered less than the framing.** At 2 h the train agent could not get torch working on the image's Python 3.14. It wrote an MLP in numpy, trained it on CPU (GPU busy 0 min) and still beat no_train, 0.899 vs 0.836. The 1 h and 4 h train agents built their own conda environment with CUDA torch and trained on the GPU for 7–12 min.
+  - **The no_train arm looked for an exact rule.** It worked through carry chains, affine tests and per-digit dependence. It then settled for hand-derived carry classes (1 h), per-digit count tables with kNN (2 h: 0.57–0.61) or a per-digit majority table (4 h: 0.50). The 1 h run's binary probe of 0.01 comes mostly from an argument-order bug in the code it added in the final phase for bare probe rows; with the arguments put back its answers score 0.385. It bought fewer cells (≈3k–68k) and ended practice early each time, with 16, 23 and 105 minutes left. No `low_3` no_train agent tried a learned model, although CPU training was available. On `mid_3` two did: a random forest at 2 h and a torch MLP on CPU at 4 h.
+  - **The GPU mattered less than the framing.** At 2 h the train agent concluded that torch had no working build for the image's Python 3.14. The install had in fact not finished when it imported torch (see "Python 3.14 image and CPU fallbacks"). It wrote an MLP in numpy, trained it on CPU (GPU busy 0 min) and still beat no_train, 0.899 vs 0.836. The 1 h and 4 h train agents built their own conda environment with CUDA torch and trained on the GPU for 7–12 min.
 - **GPU use overall.** Only the `low_3` train runs at 1 h and 4 h and the `mid_3` train run at 4 h used the GPU. The `high_3` train agents never did.
 - **Validation was saturated by design of the query policy.** Validation items are refused by `query`, but the cells they need are not. `low_3` train at 2 h and `low_3` no_train at 4 h bought exactly the binary cells the validation set needs and scored 1.0 on validation. Only 1–2% of those cells overlap the test's need. The 4 h no_train agent said explicitly that the 1.0 was not an estimate of the test score. To keep validation informative, the policy should also refuse the cells that validation items need.
 - **Audit.** No run contacted a hosted-LLM API host, and no run looked up the benchmark. Both were checked in WebFetch URLs, WebSearch queries, Bash commands and sampled sockets.
@@ -4182,3 +4184,73 @@ $2,722 for the 18 valid runs, plus $1,001 for the two runs zeroed by the bug: $3
 - One run per cell.
 - `high_3`'s probe and skeleton ceilings differ from `low_3`'s, so compare headroom, not overall, across instances.
 - The count of binary cells bought includes bare `bK(x,y)` queries only. `low_3` no_train at 1 h asked about 3k binary cells through two-element folds, so its count is understated.
+- The run directory named the arm; see the next sections.
+
+### Solution levels
+
+How each run answered binary cells it never bought, judged from the method behind its final submission. Binary probe is 100 random cells per operator, exact on all three digits; at most 2 of the 100 had been bought in any run.
+
+- **L1, lookup only or give up.** Unbought cells get a default.
+- **L2, hand-derived rules.** A carry rule or dependency graph derived from controlled queries, with the small tables it calls for filled by sweeps.
+- **L3, nonparametric statistics.** Count or majority tables keyed on a few digits, with backoff, and kNN. Nothing is optimised.
+- **L4, fitted models.** MLPs, multinomial logistic regression, tree ensembles.
+
+Each binary operator is a per-digit term plus a coupling term over all six input digits (`binary_coupling` 0.25). The best per-digit majority table therefore tops out at 0.537 / 0.551 (b0 / b1) on `low_3`, 0.550 / 0.604 on `mid_3` and 0.560 / 0.637 on `high_3`, measured over 60,000 random cells per operator. Only L4 passes that ceiling.
+
+| instance | arm | 1 h | 2 h | 4 h |
+|---|---|---|---|---|
+| low_3 | train | L4 GPU MLP ensemble (0.74 / 0.77) | L4 numpy MLP on CPU (0.77 / 0.80) | L4 GPU MLP (0.78 / 0.78) |
+| low_3 | no_train | L2 carry classes (0.01 / 0.01; 0.385 with the argument order fixed) | L3 count tables + kNN (0.57 / 0.61) | L3 majority table (0.51 / 0.50) |
+| mid_3 | train | L1 gave up (0 / 0) | L4 numpy multinomial logistic with pairwise features (0.76 / 0.78) | L4 GPU MLP (0.80 / 0.80) |
+| mid_3 | no_train | L3 per-coordinate table (0.56 / 0.57) | L4 random forest (0.76 / 0.70) | L4 torch MLP on CPU (0.76 / 0.74) |
+| high_3 | train | L2 per-digit arithmetic (0.46 / 0.55) | L2 ripple-carry tables (0.44 / 0.51) | L3 separable majority table (0.53 / 0.60) |
+| high_3 | no_train | L1 gave up (0 / 0) | L3 main-effect table, one digit exact (0.52 / 0.51) | L3 majority-vote tables (0.58 / 0.63) |
+
+L4 runs score 0.70–0.80 on the probe and every other run 0.63 or less. train reached L4 in 5 of 9 runs, no_train in 2 of 9. No `high_3` run did: only 757 of its 10,000 test items need binary, and a run that skips binary entirely still scores 0.924.
+
+### Path leak and neutral-path reruns
+
+**The leak.** A run's directory was `<instance>_<arm>_tp<T>h`. It appears in the practice opener ("The task files are in /scratch/glyph_free/runs/low_3_no_train_tp1h/work/task"), in the agent's working directory and in every tool call. `high_3` train at 4 h wrote: "Given the H100 GPU and "train" in the run name, the robust path is … learn binary from heavy sampling." Thinking is redacted, so other runs may have read it without saying so. The prompts otherwise differ only in the environment line, as the spec requires.
+
+**The fix (0432dd9).** A run now lives under an opaque `r<8 hex>` directory. The readable name is a host-side symlink, and a `run_name` file inside the directory records it. The overlay image and the systemd scope, which is readable in `/proc/self/cgroup`, take the opaque id too.
+
+**Reruns.** Same code and model as the sweep, on `low_3` only, with opaque directories under neutral output roots (`/scratch/glyph_free/runs2` … `runs5`). These runs still used the Python 3.14 image. Rows: `docs/benchmark/free_neutral_reruns_2026-10-15.json`.
+
+| T_p | arm | replicate | level, binary method | overall | probe b0 / b1 | binary cells | first ML or GPU mention | GPU busy | spend |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 h | train | 1 | L3 per-digit majority table | 0.819 | 0.52 / 0.58 | 42,884 | never | 0.0 min | $82 |
+| 1 h | train | 2 | L4 torch MLP on the GPU | 0.871 | 0.64 / 0.73 | 102,999 | 13.4 min | 1.4 min | $199 |
+| 1 h | train | 3 | L4 numpy MLP on CPU | 0.878 | 0.77 / 0.70 | 75,624 | 28.2 min | 0.0 min | $136 |
+| 1 h | no_train | 1 | L1 gave up | 0.679 | 0 / 0 | 416 | never | – | $33 |
+| 1 h | no_train | 2 | L4 sklearn HistGradientBoosting | 0.858 | 0.63 / 0.69 | 83,142 | 11.5 min | – | $153 |
+| 1 h | no_train | 3 | L1 gave up | 0.680 | 0 / 0 | 288 | never | – | $35 |
+| 2 h | train | 1 | L4 torch MLP on the GPU, after HistGradientBoosting | 0.908 | 0.81 / 0.83 | 290,127 | 22.6 min | 5.2 min | $431 |
+| 2 h | no_train | 1 | L4 random forest / extra trees | 0.859 | 0.64 / 0.72 | 118,143 | 22.4 min | – | $190 |
+
+$1,260 for the eight runs.
+
+- **Without the arm in the path, both arms fit models.** In the sweep, `low_3` train was L4 at every T_p and `low_3` no_train never was. Across the eight reruns, train reached L4 in 3 of 4 runs and no_train in 2 of 4. At 2 h both arms did.
+- **The first replicate pair at 1 h is the cleanest contrast with the sweep.** The train agent had the same H100 line in its prompt, never mentioned ML or the GPU, and stopped at a per-digit table: "Plateaued … More data won't help further."
+- **What separates L4 from the rest is a learnability test.** Every rerun that fitted a model on early data to see whether binary was learnable went on to L4. Every rerun that did not stayed at L1 or L3.
+- **The two no_train runs that gave up had lost their time to the unary tables.** Pasting expressions through subagents was slow, and they reached the 0.636 skeleton-plus-unary baseline at minute 37 and 40. The no_train run that reached L4 had it at minute 17.
+- **The GPU line still changes something.** At 2 h, both arms fitted models. The train agent moved to an MLP ("H100 MLP could beat GBM") and bought 2.5 times as many cells, which accounts for its +0.049.
+- **Variance is large.** The same 1 h configuration scored between 0.68 and 0.88. Four replicate pairs do not separate the arms statistically.
+
+Consequence for this entry: the `low_3` train − no_train gaps in the tables above combine the GPU line and the arm name in the path, and one run per cell cannot separate them.
+
+### Python 3.14 image and CPU fallbacks
+
+The image installed the latest Miniforge, whose base Python was 3.14. In that image a plain `pip install torch` works: it takes about 310 s and installs torch 2.14.1+cu130 (4.4 GB). The host driver, 580.159, supports CUDA 13.0. The older PyTorch CUDA indexes agents tend to use have no 3.14 wheels: cu121 stops at torch 2.5.1 and cu124 at 2.6.0, while torch supports 3.14 only from 2.9.0.
+
+Six train runs (sweep and reruns) ran into this.
+
+| run | what happened | outcome |
+|---|---|---|
+| sweep `low_3` train 1 h | installed from the cu121 index without checking the driver's CUDA version; built a Python 3.11 env | recovered, trained on the GPU |
+| rerun 2, `low_3` train 1 h | cu121 failed, then plain PyPI, waited a minute longer | recovered |
+| rerun, `low_3` train 2 h | built a Python 3.11 env | recovered |
+| sweep `low_3` train 2 h | imported torch while pip was still installing it, got `No module named 'torch._strobelight'`, concluded 3.14 had no torch | numpy MLP on CPU; torch was installed by the end of the run |
+| rerun 3, `low_3` train 1 h | imported mid-install, got a missing `libtorch_global_deps.so`, killed the install | numpy MLP on CPU |
+| sweep `mid_3` train 2 h | ran `pip --version`, saw Python 3.14, wrote "torch wheels likely unavailable", never tried | numpy multinomial logistic |
+
+None of the three CPU fallbacks was caused by a missing wheel. Each came from a conclusion reached without checking. From 90865e0 the image pins the conda base to Python 3.12, which has wheels on every index above (cu121: torch 2.5.1; PyPI: 2.14.1+cu130), and is built as `/scratch/images/glyph-free-py312.sif`. 027cbdd makes that the default for the CLI and `RunConfig`. No libraries are preinstalled, so the five-minute install remains. The 3.14 image stays at `/scratch/images/glyph-free.sif`. The 18 sweep runs and the 8 reruns all used it, so record the image as a covariate when pooling them with later runs.
