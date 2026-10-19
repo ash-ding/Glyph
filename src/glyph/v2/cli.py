@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 
 from glyph.v2.harness import RunConfig
+from glyph.v2.free_sandbox import DEFAULT_IMAGE as FREE_DEFAULT_IMAGE
 
 
 def build_run_config(args: argparse.Namespace) -> RunConfig:
@@ -137,7 +138,7 @@ def _add_run_args(s: argparse.ArgumentParser) -> None:
     f.add_argument("--cpus", type=int, default=24)
     f.add_argument("--mem-gb", type=int, default=160)
     f.add_argument("--disk-gb", type=int, default=35)
-    f.add_argument("--image", default="/scratch/images/glyph-free.sif")
+    f.add_argument("--image", default=FREE_DEFAULT_IMAGE)
     f.add_argument("--scratch-root", default="/scratch/glyph_free")
 
 

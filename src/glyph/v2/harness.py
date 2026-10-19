@@ -27,6 +27,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
+from glyph.v2.free_sandbox import DEFAULT_IMAGE as FREE_DEFAULT_IMAGE
+
 
 # ---------------------------------------------------------------------
 # client interface
@@ -223,7 +225,7 @@ class RunConfig:
     cpus: int = 24
     mem_gb: int = 160
     disk_gb: int = 35
-    image: str = "/scratch/images/glyph-free.sif"
+    image: str = FREE_DEFAULT_IMAGE
     scratch_root: str = "/scratch/glyph_free"
     delete_overlay: bool = True
 
