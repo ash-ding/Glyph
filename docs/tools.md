@@ -190,6 +190,11 @@ student tools are not registered at all, so the model never sees them; the
 agent instead has a root shell in an open Ubuntu container
 (`src/glyph/v2/free_sandbox.py`) with conda, network, web search and
 subagents. The `train` arm's container has one GPU, the `no_train` arm's none.
+A third arm, `silent`, has a GPU like `train`, but its system prompt and
+README have no Environment section, so the agent learns what the machine
+offers only by looking. `tools/free_env_probes.py` reports what a run
+checked (GPU, CPU, memory, disk, OS, Python environment, network), when,
+and when a shell command first showed it a GPU.
 
 | | practice | final |
 |---|---|---|
@@ -199,7 +204,7 @@ subagents. The `train` arm's container has one GPU, the `no_train` arm's none.
 | `finish_practice` | ✓ | — |
 | `submit_final_answer` | — | ✓ |
 
-The same in both arms (`session.py._FREE_MATRIX`). What changes from v2:
+The same in every arm (`session.py._FREE_MATRIX`). What changes from v2:
 
 - `query` also refuses any expression whose evaluation looks up a
   binary-operator entry that a validation item needs
