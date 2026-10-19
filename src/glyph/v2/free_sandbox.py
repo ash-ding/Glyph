@@ -280,12 +280,17 @@ class CpuLease:
         self._f = None
         blocks = cpu_blocks(size, node_root)
         for k, cpus in enumerate(blocks):
-            f = open(lock_dir / f"block{size}_{k}.lock", "w")
+            # Open without truncating: a file another run holds keeps its note,
+            # and only the holder of the lock rewrites it.
+            fd = os.open(lock_dir / f"block{size}_{k}.lock", os.O_RDWR | os.O_CREAT, 0o644)
+            f = os.fdopen(fd, "r+")
             try:
                 fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except OSError:
                 f.close()
                 continue
+            f.seek(0)
+            f.truncate()
             f.write(f"{os.getpid()} {format_cpulist(cpus)}\n")
             f.flush()
             self.cpus, self.block, self._f = cpus, k, f

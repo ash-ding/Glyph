@@ -216,3 +216,15 @@ def test_wrapper_pins_the_container_to_its_cpu_block(tmp_path):
     assert "taskset -c 24-47 apptainer exec --fakeroot" in w
     (tmp_path / "b").mkdir()
     assert "taskset" not in F.write_free_wrapper(_spec(tmp_path / "b", gpu=None)).read_text()
+
+
+def test_a_failed_lease_attempt_leaves_the_holders_note(tmp_path):
+    nodes = _fake_nodes(tmp_path / "node", "0-47")
+    a = F.CpuLease(tmp_path / "locks", 24, nodes)
+    note = (tmp_path / "locks" / f"block24_{a.block}.lock").read_text()
+    assert note.strip().endswith(a.cpulist)
+    b = F.CpuLease(tmp_path / "locks", 24, nodes)   # tries a's block first, then takes the other
+    assert (tmp_path / "locks" / f"block24_{a.block}.lock").read_text() == note
+    assert (tmp_path / "locks" / f"block24_{b.block}.lock").read_text().strip().endswith(b.cpulist)
+    a.release()
+    b.release()
