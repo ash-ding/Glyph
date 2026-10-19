@@ -50,6 +50,7 @@ def _free_fields(args: argparse.Namespace) -> dict:
         "disk_gb": g("disk_gb", 35),
         "image": g("image", FREE_DEFAULT_IMAGE),
         "scratch_root": g("scratch_root", "/scratch/glyph_free"),
+        "pin_cpus": not g("no_cpu_pin", False),
     }
 
 
@@ -142,6 +143,8 @@ def _add_run_args(s: argparse.ArgumentParser) -> None:
     f.add_argument("--disk-gb", type=int, default=35)
     f.add_argument("--image", default=FREE_DEFAULT_IMAGE)
     f.add_argument("--scratch-root", default="/scratch/glyph_free")
+    f.add_argument("--no-cpu-pin", action="store_true",
+                   help="do not pin the container to a block of --cpus CPUs (quota only)")
 
 
 def build_parser() -> argparse.ArgumentParser:

@@ -4291,3 +4291,25 @@ In the 2026-10-15 sweep `low_3` train at 2 h and `low_3` no_train at 4 h did thi
 **Cost.** None measurable. On `low_3`, 2,000 random bare binary queries run at 1,450–1,740 per second with or without the check, because the second evaluation hits the lookup cache. The busiest agents sent about 28 per second.
 
 Runs from here on are not comparable with earlier ones on validation scores; test scores are unaffected by the change except through what the agent does with honest feedback.
+
+## 2026-10-19 — free protocol: containers pinned to their CPU quota
+
+**Problem.** The container's CPU limit was a quota (`CPUQuota=2400%`, 24 cores' worth of time per period) with every host CPU still schedulable, and its memory limit a cgroup cap. Every common way of asking reported the host:
+
+| query in the container | reported | limit |
+|---|---|---|
+| `nproc`, `os.sched_getaffinity` | 160 | 24 |
+| `/proc/cpuinfo`, `os.cpu_count()` | 160 | 24 |
+| `free -g` | 1,763 GB | 160 GB |
+| `/sys/fs/cgroup/cpu.max`, `memory.max` | `max`, 1.7 TB (the root cgroup's) | 24 cores, 160 GiB |
+
+The real limits were readable only at `/sys/fs/cgroup/<path from /proc/self/cgroup>/cpu.max`. Libraries that size thread pools from the CPU count (OpenBLAS, OpenMP, `n_jobs=-1`, `multiprocessing.Pool()`) started 160 workers on a 24-core quota and were throttled. For the `silent` arm, which is told nothing about the machine, the more carefully an agent checked, the wronger the answer it got.
+
+**Change.** Each run leases a block of `--cpus` CPUs inside one NUMA node and the wrapper starts the container under `taskset -c <block>`. On lumen1 (2 nodes, CPUs 0–79 and 80–159, a core's two hyperthreads on adjacent ids) that gives six 24-CPU blocks: 0–23, 24–47, 48–71, 80–103, 104–127, 128–151. The lease is a non-blocking flock on `<scratch-root>/cpusets/block24_<k>.lock`, so concurrent sweeps with different output roots get disjoint blocks, and a run that dies frees its block. The quota stays as well. The report's `resources` records `cpu_list` and `nproc_in_container`, read from the entry script's output. `--no-cpu-pin` turns it off.
+
+`AllowedCPUs=` on the scope would be the stricter tool, but the user manager on the run hosts delegates only the cpu, memory and pids controllers, so systemd would ignore it. A process in the container can widen its own affinity with `taskset`; the quota still caps it at 24 cores' worth of time.
+
+**Verified.** Inside a pinned container, `nproc` and `os.sched_getaffinity` report 24 and a child process inherits it; `os.cpu_count()` still reports 160. A 3-minute `silent` smoke run leased CPUs 0–23, its entry script saw `nproc=24`, the report recorded both, and the block was free again after the run ($1.07).
+
+**Not changed.** Memory: `free` still reports the host, and an agent that allocates past 160 GB loses that process (`OOMPolicy=continue` keeps the run alive). No run so far has come near the limit. GPU and CPU block are not matched by NUMA node.
+

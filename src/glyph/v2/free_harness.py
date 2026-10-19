@@ -247,6 +247,17 @@ def transcript_audit(agent_home: Path, llm_hosts=None) -> dict:
             "hosts": hosts, "llm_api_hosts": llm_hits, "benchmark_lookups": bench}
 
 
+def _entry_nproc(spec) -> int | None:
+    """The nproc the container's entry script saw, from sandbox_meta/entry.txt."""
+    try:
+        for line in (Path(spec.meta_dir) / "entry.txt").read_text().splitlines():
+            if line.startswith("nproc="):
+                return int(line.split("=", 1)[1])
+    except (OSError, ValueError):
+        pass
+    return None
+
+
 def run_free(rc) -> dict:
     """A full free-protocol run over the real SDK. Returns the report dict."""
     import claude_agent_sdk
@@ -328,10 +339,12 @@ def run_free(rc) -> dict:
         "DISABLE_AUTOUPDATER": "1",
         "BASH_MAX_TIMEOUT_MS": str(int(max(rc.t_p_s, rc.t_f_s) * 1000)),
     }
+    cpu_lease = FS.CpuLease(Path(rc.scratch_root) / "cpusets", rc.cpus) if rc.pin_cpus else None
     spec = FS.ContainerSpec(run_dir=run_dir, work_dir=paths.root, cli_path=cli_path,
                             overlay=overlay, scope=scope, image=rc.image,
                             gpu_minor=rc.gpu_minor if rc.arm in FP.GPU_ARMS else None,
-                            cpus=rc.cpus, mem_gb=rc.mem_gb, env=env)
+                            cpus=rc.cpus, mem_gb=rc.mem_gb, env=env,
+                            cpu_list=cpu_lease.cpulist if cpu_lease else None)
     wrapper = FS.write_free_wrapper(spec)
     samplers = FS.Samplers(scope, run_dir, gpu_uuid)
     cli_stderr = run_dir / "cli_stderr.log"
@@ -442,6 +455,8 @@ def run_free(rc) -> dict:
             gw_task.cancel()
 
     asyncio.run(go())
+    if cpu_lease:
+        cpu_lease.release()
 
     session.turns_final = session.turns
     if getattr(session, "final_commit_path", None) is None:
@@ -489,7 +504,8 @@ def run_free(rc) -> dict:
                   "foreign_gpu_kills": audit["foreign_gpu_kills"]},
         "artifacts": artifacts,
         "resources": {"cpus": rc.cpus, "mem_gb": rc.mem_gb, "disk_gb": rc.disk_gb,
-                      "gpu_name": gpu_name, "image": rc.image},
+                      "gpu_name": gpu_name, "image": rc.image,
+                      "cpu_list": spec.cpu_list, "nproc_in_container": _entry_nproc(spec)},
     }
     (run_dir / "report.json").write_text(json.dumps(report, indent=2))
 
