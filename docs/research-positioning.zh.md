@@ -62,7 +62,7 @@ binary 的四个解法层次：
 
 | run | 发生了什么 | 结果 |
 |---|---|---|
-| 原 sweep `low_3` train 1h | 先跑 `nvidia-smi`（显示 CUDA 13.0），仍然用 cu121 索引；失败后自建 py3.11 环境 | 恢复，用上 GPU |
+| 原 sweep `low_3` train 1h | 没查驱动支持的 CUDA 版本，直接用 cu121 索引；失败后自建 py3.11 环境 | 恢复，用上 GPU |
 | runs3 train 1h | cu121 失败，改用默认 PyPI，多等了一分钟 | 恢复 |
 | runs5 train 2h | 发现装不上，自建 py3.11 环境 | 恢复 |
 | 原 sweep `low_3` train 2h | 安装还在后台进行时就去 import，看到 `No module named 'torch._strobelight'`，断定 "torch has no working wheel for Python 3.14" | 放弃，改写 numpy MLP；run 结束时 torch 其实已经装好 |
@@ -71,7 +71,7 @@ binary 的四个解法层次：
 
 前 3 个说明 agent 能根据环境调整。后 3 个的问题不是"不知道新版本"，而是用一个结论代替了验证：
 没确认安装进程是否已结束，或者根本没试就下了结论。挑索引也是凭习惯，没有根据驱动版本去选：
-`nvidia-smi` 已经显示 CUDA 13.0，agent 仍然用了 cu121。
+agent 跑的 `nvidia-smi` 只查了显卡型号和显存，没看驱动支持的 CUDA 版本（13.0），就直接用了 cu121。
 
 为了不让这类环境摩擦混进 binary 的测量，镜像已改为 Python 3.12（`glyph-free-py312.sif`，#81 上的 90865e0）。
 这样无论用旧索引还是新索引都能装上。库仍然不预装，所以约 5 分钟的安装时间还在。
