@@ -9,6 +9,7 @@
 # readable.
 set -euo pipefail
 OUT=${1:-/scratch/images}
+NAME=${2:-glyph-free-py312}
 HERE=$(cd "$(dirname "$0")" && pwd)
 export APPTAINER_CACHEDIR=${APPTAINER_CACHEDIR:-/scratch/.cache/apptainer}
 mkdir -p "$OUT" && cd "$OUT"
@@ -21,6 +22,6 @@ unshare --user --map-root-user bash -c '
   printf "nameserver 8.8.8.8\n" > noble-rootfs/etc/resolv.conf
   chmod -R u+rwX noble-rootfs/var/lib/snapd'
 apptainer build --fakeroot --force noble.sif noble-rootfs/
-apptainer build --fakeroot --force glyph-free.sif "$HERE/glyph-free.def"
+apptainer build --fakeroot --force "$NAME.sif" "$HERE/glyph-free.def"
 rm -rf noble-rootfs
-ls -la "$OUT/glyph-free.sif"
+ls -la "$OUT/$NAME.sif"
