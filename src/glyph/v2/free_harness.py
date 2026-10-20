@@ -310,12 +310,13 @@ def run_free(rc) -> dict:
     inst, preset, seed, instance_id = resolve_run_instance(rc)
     out_root = Path(rc.out_root) if rc.out_root else Path.cwd() / "runs"
     tag = f"tp{rc.t_p_s / 3600:g}h"
-    run_name = f"{instance_id or f'{preset}_{seed}'}_{rc.arm}_{tag}"
+    run_name = f"{instance_id or f'{preset}_{seed}'}_{rc.arm}_{tag}" + ("" if rc.bare_atomics else "_nobare")
     run_dir = neutral_run_dir(out_root, run_name)
     paths, val_id_of, test_id_of = workspace.build_workspace(inst, run_dir)
 
     ledger = Ledger()
     session = Session(inst, ledger, run_dir, arm=rc.arm, protocol="free", reserve_val_binary=True,
+                      refuse_bare_atomics=not rc.bare_atomics,
                       q_cap=None, submit_cap=None, tp=10**9, tf=10**9, usd_line=rc.usd_line)
     session.val_id_of, session.test_id_of = val_id_of, test_id_of
     session.queries_path, session.work_root = paths.queries, paths.root
@@ -334,7 +335,7 @@ def run_free(rc) -> dict:
             raise RuntimeError(f"GPU minor {rc.gpu_minor} not found")
     gpu_name = gpu_name_for(gpu_uuid)
     env_line = FP.environment_for_arm(rc.arm, gpu_name, rc.cpus, rc.mem_gb, rc.disk_gb)
-    readme = FP.task_readme(env_line, rc.t_p_s, rc.t_f_s)
+    readme = FP.task_readme(env_line, rc.t_p_s, rc.t_f_s, bare_atomics=rc.bare_atomics)
     paths.readme.write_text(readme)
     timer = paths.task / "timer.sh"
     timer.write_text(FP.TIMER_SH)
@@ -520,6 +521,8 @@ def run_free(rc) -> dict:
             "q_used": session.q_used,
             "reserved_binary_entries": len(inst.reserved_binary()),
             "refused_reserved": session.refused_reserved,
+            "bare_atomics": rc.bare_atomics,
+            "refused_bare": session.refused_bare,
             "validation_submissions": session.submissions,
             "unary_coverage": round(unary_coverage(inst), 4),
             "transcript_tokens": usage,
@@ -549,7 +552,7 @@ def run_free(rc) -> dict:
                     "instance_id": instance_id, "model": model, "t_p_s": rc.t_p_s,
                     "t_f_s": rc.t_f_s, "usd_line": rc.usd_line, "effort": rc.effort,
                     "cpus": rc.cpus, "mem_gb": rc.mem_gb, "disk_gb": rc.disk_gb,
-                    "gpu_uuid": gpu_uuid},
+                    "gpu_uuid": gpu_uuid, "bare_atomics": rc.bare_atomics},
             task_readme=readme,
             prompts={"system": system,
                      "practice_opener": FP.practice_opener(str(paths.task)),

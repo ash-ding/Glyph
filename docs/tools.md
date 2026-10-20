@@ -229,6 +229,14 @@ The same in every arm (`session.py._FREE_MATRIX`). What changes from v2:
   the quota instead of the host's 160 CPUs. `/proc/cpuinfo`, Python's
   `os.cpu_count()` and `free` still report the host. `--no-cpu-pin` turns
   pinning off.
+- `--no-bare-atomics` (option; off by default) makes `query` also refuse bare
+  atomic applications, `u*(value)` and `b*(value, value)` (refusal reason
+  `bare_atomic`, not counted). Table cells are then reachable only through
+  structural expressions, for example a map `s0(u0, [x, y])` or a two-element
+  fold `s1([x, y], b0)`, so an agent that wants cell-level data has to decode
+  the skeleton first and read cells back out of structural results. The README
+  states the rule; run names carry a `_nobare` suffix; the report records
+  `bare_atomics` and `refused_bare`.
 - No cap on queries, validation submissions or turns, and no idle rule. Each
   phase is bounded by wall-clock only (`T_p`, `T_f`); every result's
   remaining block is `{seconds_remaining}`, and `task/timer.sh` prints the

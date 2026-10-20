@@ -4323,3 +4323,12 @@ The real limits were readable only at `/sys/fs/cgroup/<path from /proc/self/cgro
 
 The tool is gone from the free protocol's matrix, tool list, system prompt and README. The fallback now takes the most recently written legal answer file: a `.jsonl` under the work root, outside `task/`, written since the final began and passing the same check `submit_final_answer` applies (`free_harness.latest_legal_answer_file`, `final_commit = "auto_latest_legal"`). The README states this, and says an illegal final file is rejected and can be resubmitted. v2 keeps `check_answers`, where submissions are capped and a free legality check saves one.
 
+## 2026-10-19 — free protocol: `--no-bare-atomics` (implementation)
+
+Under the free protocol a bare atomic application, `u0(v_a_b_c)` or `b1(v_x, v_y)`, buys one table cell per expression, and every run so far has used it for the bulk of its purchases (the unary tables by the tens of thousands, binary samples by the hundreds of thousands). `--no-bare-atomics` closes that channel: `query` refuses any bare atomic application with reason `bare_atomic`, uncharged. Cells are still reachable, but only through the skeleton: a map `s0(u0, [x, y])` returns two unary cells, and a two-element fold `s1([x, y], b0)` returns one binary cell with the arguments in whatever order the fold applies them. Reading cells back out of such results requires having decoded the structural operators first.
+
+The option exists to ask whether an agent will, on its own, turn structural queries into cell-level training data once the direct channel is gone, or whether it treats the loss of bare queries as the loss of the data. The test set still contains bare atomic rows (`probe_` ids), which the README says.
+
+- `Session.refuse_bare_atomics`, `GlyphInstance.is_bare_atomic`, the CLI and sweep flag, a `_nobare` suffix on run names, `bare_atomics` and `refused_bare` in the report, and a README sentence when the option is on. Off by default; the other refusal rules are unchanged.
+- Tests: bare unary and binary refused and uncharged while a map in the same call is answered and logs its cells; allowed by default; README sentence only when set; CLI flag. 177 pass.
+

@@ -89,6 +89,10 @@ class Session:
     # free protocol: refuse queries that look up a binary entry a validation item needs
     reserve_val_binary: bool = False
     refused_reserved: int = 0
+    # free protocol option: refuse u*(value) and b*(value, value); cells are then
+    # reachable only through structural expressions such as s0(u0, [..]) or s1([x, y], b0)
+    refuse_bare_atomics: bool = False
+    refused_bare: int = 0
 
     def q_remaining(self) -> int | None:
         if self.q_cap is None:

@@ -355,3 +355,39 @@ def test_free_text_has_no_check_answers():
     for t in (FP.system_prompt(env, 3600, 1800), FP.task_readme(env, 3600, 1800)):
         assert "check_answers" not in t
     assert "most recently\n    written legal answer file" in FP.task_readme(env, 3600, 1800)
+
+
+def test_bare_atomics_refused_when_the_option_is_on(session):
+    session.refuse_bare_atomics = True
+    inst = session.inst
+    from glyph.data.grammar import render_value
+    x, y = render_value(5, inst.cfg), render_value(7, inst.cfg)
+    out = T.t_query(session, exprs=[f"u0({x})", f"b0({x}, {y})", f"s0(u0, [{x}, {y}])"], why="t")
+    r = out["results"]
+    assert r[0].get("refused") == "bare_atomic" and r[1].get("refused") == "bare_atomic"
+    assert "out" in r[2], r[2]
+    assert session.q_used == 1 and session.refused_bare == 2
+    assert ("u0", 5) in inst.query_log.unary          # the map still buys the cell
+
+
+def test_bare_atomics_allowed_by_default(session):
+    from glyph.data.grammar import render_value
+    assert session.refuse_bare_atomics is False
+    out = T.t_query(session, exprs=[f"u0({render_value(5, session.inst.cfg)})"], why="t")
+    assert "out" in out["results"][0]
+
+
+def test_readme_states_the_bare_atomic_rule_only_when_set():
+    env = FP.environment_line(None, 24, 160, 35)
+    assert "Bare applications" not in FP.task_readme(env, 3600, 1800)
+    r = FP.task_readme(env, 3600, 1800, bare_atomics=False)
+    assert "u*(value) and b*(value, value), are\n    refused too" in r and "appear in the test set" in r
+
+
+def test_cli_no_bare_atomics_flag():
+    from glyph.v2.cli import build_parser, build_run_config
+    ns = build_parser().parse_args(["run", "--arm", "silent", "--protocol", "free", "--t-p", "1",
+                                    "--gpu-minor", "0", "--instance-id", "low_3", "--no-bare-atomics"])
+    assert build_run_config(ns).bare_atomics is False
+    ns = build_parser().parse_args(["run", "--arm", "silent", "--protocol", "free", "--gpu-minor", "0"])
+    assert build_run_config(ns).bare_atomics is True

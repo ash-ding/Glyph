@@ -229,6 +229,7 @@ class RunConfig:
     scratch_root: str = "/scratch/glyph_free"
     delete_overlay: bool = True
     pin_cpus: bool = True           # free protocol: lease a block of `cpus` CPUs as the affinity
+    bare_atomics: bool = True       # free protocol: may query u*(value) / b*(value, value) directly
 
 
 # ---------------------------------------------------------------------

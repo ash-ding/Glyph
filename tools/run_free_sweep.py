@@ -21,8 +21,8 @@ REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "src"))
 
 
-def run_name(inst: str, arm: str, t_p: float) -> str:
-    return f"{inst}_{arm}_tp{t_p:g}h"
+def run_name(inst: str, arm: str, t_p: float, suffix: str = "") -> str:
+    return f"{inst}_{arm}_tp{t_p:g}h{suffix}"
 
 
 def report_state(run_dir: Path) -> str | None:
@@ -45,6 +45,8 @@ def main(argv=None) -> int:
     ap.add_argument("--t-f", type=float, default=30.0, help="minutes")
     ap.add_argument("--out-root", default="/scratch/glyph_free/runs")
     ap.add_argument("--usd-line", type=float, default=500.0)
+    ap.add_argument("--no-bare-atomics", action="store_true",
+                    help="passed through: query refuses u*(value) and b*(value, value)")
     ap.add_argument("--cpus", type=int, default=24)
     ap.add_argument("--mem-gb", type=int, default=160)
     ap.add_argument("--disk-gb", type=int, default=35)
@@ -76,7 +78,7 @@ def main(argv=None) -> int:
         free_minors = list(minors)
         for inst in a.instances:
             for arm in a.arms:
-                name = run_name(inst, arm, t_p)
+                name = run_name(inst, arm, t_p, "_nobare" if a.no_bare_atomics else "")
                 st = report_state(out / name)
                 if st == "done":
                     status["runs"].setdefault(name, {})["state"] = "done"
@@ -88,7 +90,7 @@ def main(argv=None) -> int:
                     aside = out / f"{name}.failed-{time.strftime('%H%M%S')}"
                     (out / name).rename(aside)
                     status.setdefault("set_aside", []).append(str(aside))
-                cmd = [a.python, "-m", "glyph.v2", "run", "--protocol", "free",
+                cmd = [a.python, "-m", "glyph.v2", "run", "--protocol", "free"] + (["--no-bare-atomics"] if a.no_bare_atomics else []) + [
                        "--instance-id", inst, "--arm", arm, "--t-p", str(t_p), "--t-f", str(a.t_f),
                        "--usd-line", str(a.usd_line), "--cpus", str(a.cpus), "--mem-gb", str(a.mem_gb),
                        "--disk-gb", str(a.disk_gb), "--out-root", str(out)]

@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from .config import GlyphConfig
-from .grammar import (App, Expr, K_RANGE, Lit, SHAPE_RESULT, Val, check,
+from .grammar import (App, AtomApp, Expr, K_RANGE, Lit, SHAPE_RESULT, Val, check,
                       depth, enabled_ops, op_pairs, parse, render,
                       render_list, render_value, syntax_spec, unary_names,
                       binary_names)
@@ -305,6 +305,16 @@ class GlyphInstance:
         if self._reserved_b is None:
             self._reserved_b = frozenset().union(*(t.needs_b for t in self.val))
         return self._reserved_b
+
+    def is_bare_atomic(self, expr_src: str) -> bool:
+        """Is `expr_src` a bare atomic application, u*(value) or b*(value, value)?
+
+        A malformed expression returns False; the tool layer charges it.
+        """
+        try:
+            return isinstance(parse(expr_src, self.cfg), AtomApp)
+        except Exception:
+            return False
 
     def touches_reserved(self, expr_src: str) -> bool:
         """Would evaluating `expr_src` look up a reserved binary entry?
