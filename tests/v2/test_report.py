@@ -174,3 +174,43 @@ def test_report_probe_block_structural_ops_have_no_seen_split(tmp_path):
         if op not in struct_ops:
             assert by_op[op]["kind"] == "atomic"
             assert by_op[op]["seen"] is not None
+
+
+def test_report_scores_binary_probes_under_both_argument_orders(tmp_path):
+    import json
+    from glyph.data import PRESETS, generate, render_value
+    from glyph.data.probe import probe_set
+    from glyph.v2.ledger import Ledger
+    from glyph.v2.report import build_report
+    from glyph.v2.session import Session
+    from glyph.v2 import tools as T
+
+    inst = generate(1001, PRESETS["smoke"])
+    cfg = inst.cfg
+    s = Session(inst=inst, ledger=Ledger(), run_dir=tmp_path, arm="no_train")
+    s.phase = "final"
+    test_id_of = T.default_id_of("test", inst.test)
+    s.test_id_of = test_id_of
+    s.probes = probe_set(inst, n_per_op=8)
+    s.probe_id_of = T.default_id_of("probe", s.probes)
+
+    # answer every binary probe as if the arguments were the other way round
+    rows = [{"id": test_id_of(t), "answer": t.answer_src} for t in inst.test]
+    for t in s.probes:
+        a = t.answer_src
+        if len(t.needs_b) == 1 and not t.needs_u:
+            (op, i, j), = t.needs_b
+            a = render_value(inst.tables.apply_binary(op, j, i), cfg)
+        rows.append({"id": s.probe_id_of(t), "answer": a})
+    f = tmp_path / "final.jsonl"
+    f.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+
+    by_op = build_report(s, str(f), test_id_of)["probe"]["by_op"]
+    bins = [op for op in by_op if op.startswith("b")]
+    assert bins
+    for op in bins:
+        assert by_op[op]["swapped"]["acc"] == 1.0
+        assert by_op[op]["overall"] < 0.5          # the operator is not commutative
+    for op in by_op:
+        if not op.startswith("b"):
+            assert "swapped" not in by_op[op]

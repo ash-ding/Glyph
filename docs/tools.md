@@ -242,6 +242,11 @@ The same in every arm (`session.py._FREE_MATRIX`). What changes from v2:
   holds bare `probe_` rows, which the agent then meets without a description.
   Run names carry a `_nobare` suffix; the report records `bare_atomics` and
   `refused_bare`.
+- Each binary probe operator in the report also carries `swapped.acc`: the
+  100 bare rows `b(x, y)` scored against `b(y, x)`. An agent that met the
+  operator only inside folds cannot learn which order the bare application
+  uses, so under `--no-bare-atomics` the higher of `overall` and `swapped.acc`
+  is the orientation-free score.
 - No cap on queries, validation submissions or turns, and no idle rule. Each
   phase is bounded by wall-clock only (`T_p`, `T_f`); every result's
   remaining block is `{seconds_remaining}`, and `task/timer.sh` prints the
