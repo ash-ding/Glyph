@@ -335,7 +335,7 @@ def run_free(rc) -> dict:
             raise RuntimeError(f"GPU minor {rc.gpu_minor} not found")
     gpu_name = gpu_name_for(gpu_uuid)
     env_line = FP.environment_for_arm(rc.arm, gpu_name, rc.cpus, rc.mem_gb, rc.disk_gb)
-    readme = FP.task_readme(env_line, rc.t_p_s, rc.t_f_s, bare_atomics=rc.bare_atomics)
+    readme = FP.task_readme(env_line, rc.t_p_s, rc.t_f_s)
     paths.readme.write_text(readme)
     timer = paths.task / "timer.sh"
     timer.write_text(FP.TIMER_SH)

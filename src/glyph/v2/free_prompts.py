@@ -78,16 +78,8 @@ You also have shell, file, web and subagent tools. Every Glyph tool result repor
 The task README is at task/README.md."""
 
 
-NO_BARE_RULE = (
-    " Bare applications of an\n"
-    "    atomic operator to value literals, u*(value) and b*(value, value), are\n"
-    "    refused too; they are legal expressions and appear in the test set."
-)
-
-
-def task_readme(env_line: str | None, t_p: float, t_f: float, bare_atomics: bool = True) -> str:
+def task_readme(env_line: str | None, t_p: float, t_f: float) -> str:
     env = f"Environment:\n  {env_line}\n\n" if env_line else ""
-    no_bare = "" if bare_atomics else NO_BARE_RULE
     return f"""# Glyph task workspace
 
 Files in this directory:
@@ -115,8 +107,7 @@ Tools:
   - query: evaluates expressions. Validation and test items are refused, as
     are expressions containing a held-out operator pair, expressions deeper
     than the demos, and expressions whose evaluation needs a binary-operator
-    entry that a validation item needs.{no_bare} Refused expressions are not
-    counted.
+    entry that a validation item needs. Refused expressions are not counted.
   - submit_validation_answer: scores an answer file against validation.jsonl
     and returns the overall accuracy and a breakdown by expression depth.
   - finish_practice: ends the practice phase.

@@ -235,7 +235,9 @@ The same in every arm (`session.py._FREE_MATRIX`). What changes from v2:
   structural expressions, for example a map `s0(u0, [x, y])` or a two-element
   fold `s1([x, y], b0)`, so an agent that wants cell-level data has to decode
   the skeleton first and read cells back out of structural results. The README
-  states the rule; run names carry a `_nobare` suffix; the report records
+  and syntax say nothing about it: the refusal is the only signal, as in the
+  protocol before bare atomics existed (before 2026-09-30 the grammar had
+  none). Run names carry a `_nobare` suffix; the report records
   `bare_atomics` and `refused_bare`.
 - No cap on queries, validation submissions or turns, and no idle rule. Each
   phase is bounded by wall-clock only (`T_p`, `T_f`); every result's

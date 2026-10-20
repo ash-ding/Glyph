@@ -377,11 +377,11 @@ def test_bare_atomics_allowed_by_default(session):
     assert "out" in out["results"][0]
 
 
-def test_readme_states_the_bare_atomic_rule_only_when_set():
+def test_readme_does_not_mention_the_bare_atomic_rule():
+    # The agent is told nothing about it; a refused query (reason "bare_atomic") is the only signal.
     env = FP.environment_line(None, 24, 160, 35)
-    assert "Bare applications" not in FP.task_readme(env, 3600, 1800)
-    r = FP.task_readme(env, 3600, 1800, bare_atomics=False)
-    assert "u*(value) and b*(value, value), are\n    refused too" in r and "appear in the test set" in r
+    r = FP.task_readme(env, 3600, 1800)
+    assert "bare" not in r.lower() and "u*(value)" not in r
 
 
 def test_cli_no_bare_atomics_flag():
