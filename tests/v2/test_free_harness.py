@@ -355,3 +355,48 @@ def test_free_text_has_no_check_answers():
     for t in (FP.system_prompt(env, 3600, 1800), FP.task_readme(env, 3600, 1800)):
         assert "check_answers" not in t
     assert "most recently\n    written legal answer file" in FP.task_readme(env, 3600, 1800)
+
+
+def test_bare_atomics_refused_when_the_option_is_on(session):
+    session.refuse_bare_atomics = True
+    inst = session.inst
+    from glyph.data.grammar import render_value
+    x, y = render_value(5, inst.cfg), render_value(7, inst.cfg)
+    out = T.t_query(session, exprs=[f"u0({x})", f"b0({x}, {y})", f"s0(u0, [{x}, {y}])"], why="t")
+    r = out["results"]
+    assert r[0] == {"expr": f"u0({x})", "error": "malformed"}       # no reason that names the rule
+    assert r[1] == {"expr": f"b0({x}, {y})", "error": "malformed"}
+    assert "out" in r[2], r[2]
+    assert session.q_used == 1 and session.refused_bare == 2        # not charged
+    assert ("u0", 5) in inst.query_log.unary          # the map still buys the cell
+
+
+def test_bare_atomics_allowed_by_default(session):
+    from glyph.data.grammar import render_value
+    assert session.refuse_bare_atomics is False
+    out = T.t_query(session, exprs=[f"u0({render_value(5, session.inst.cfg)})"], why="t")
+    assert "out" in out["results"][0]
+
+
+def test_syntax_spec_omits_bare_atomics_when_asked():
+    from glyph.data.grammar import syntax_spec
+    full, bare_off = syntax_spec(CFG), syntax_spec(CFG, bare_atomics=False)
+    assert "applied directly to value literals" in full and "u*(value)" in full
+    assert "applied directly" not in bare_off and "u*(value)" not in bare_off and "bare" not in bare_off.lower()
+    assert "Structural operators" in bare_off and "Nesting depth is at most" in bare_off
+
+
+def test_readme_does_not_mention_the_bare_atomic_rule():
+    # The agent is told nothing about it; a refused query (reason "bare_atomic") is the only signal.
+    env = FP.environment_line(None, 24, 160, 35)
+    r = FP.task_readme(env, 3600, 1800)
+    assert "bare" not in r.lower() and "u*(value)" not in r
+
+
+def test_cli_no_bare_atomics_flag():
+    from glyph.v2.cli import build_parser, build_run_config
+    ns = build_parser().parse_args(["run", "--arm", "silent", "--protocol", "free", "--t-p", "1",
+                                    "--gpu-minor", "0", "--instance-id", "low_3", "--no-bare-atomics"])
+    assert build_run_config(ns).bare_atomics is False
+    ns = build_parser().parse_args(["run", "--arm", "silent", "--protocol", "free", "--gpu-minor", "0"])
+    assert build_run_config(ns).bare_atomics is True

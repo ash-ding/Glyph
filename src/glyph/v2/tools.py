@@ -104,6 +104,12 @@ def t_query(session, exprs: list, why: str) -> dict:
     results = []
     for expr in exprs:
         reason = session.inst.query_violation(expr, session.policy)
+        if not reason and session.refuse_bare_atomics and session.inst.is_bare_atomic(expr):
+            # Reported as the parser did before bare atomics existed: a syntax
+            # error, with no reason that names the rule. Not charged or logged.
+            session.refused_bare += 1
+            results.append({"expr": expr, "error": "malformed"})
+            continue
         if not reason and session.reserve_val_binary and session.inst.touches_reserved(expr):
             reason = "needs_validation_entry"
             session.refused_reserved += 1
