@@ -364,9 +364,10 @@ def test_bare_atomics_refused_when_the_option_is_on(session):
     x, y = render_value(5, inst.cfg), render_value(7, inst.cfg)
     out = T.t_query(session, exprs=[f"u0({x})", f"b0({x}, {y})", f"s0(u0, [{x}, {y}])"], why="t")
     r = out["results"]
-    assert r[0].get("refused") == "bare_atomic" and r[1].get("refused") == "bare_atomic"
+    assert r[0] == {"expr": f"u0({x})", "error": "malformed"}       # no reason that names the rule
+    assert r[1] == {"expr": f"b0({x}, {y})", "error": "malformed"}
     assert "out" in r[2], r[2]
-    assert session.q_used == 1 and session.refused_bare == 2
+    assert session.q_used == 1 and session.refused_bare == 2        # not charged
     assert ("u0", 5) in inst.query_log.unary          # the map still buys the cell
 
 
