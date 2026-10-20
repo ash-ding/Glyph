@@ -95,7 +95,7 @@ Rules:
 """
 
 
-def build_workspace(inst, run_dir) -> tuple[Paths, Callable[[Any], str], Callable[[Any], str]]:
+def build_workspace(inst, run_dir, bare_atomics: bool = True) -> tuple[Paths, Callable[[Any], str], Callable[[Any], str]]:
     """Create the per-run workspace under `run_dir/work/` and return its
     Paths plus the val/test id_of closures.
 
@@ -119,7 +119,7 @@ def build_workspace(inst, run_dir) -> tuple[Paths, Callable[[Any], str], Callabl
     )
 
     paths.readme.write_text(_README)
-    paths.syntax.write_text(inst.syntax_spec())
+    paths.syntax.write_text(inst.syntax_spec(bare_atomics))
 
     demos_lines = [json.dumps({"expr": e, "answer": a}) for e, a in inst.demos]
     paths.demos.write_text("\n".join(demos_lines) + ("\n" if demos_lines else ""))

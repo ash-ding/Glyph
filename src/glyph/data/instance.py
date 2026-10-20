@@ -238,8 +238,8 @@ class GlyphInstance:
         self._test_srcs = None
 
     # -- agent-visible, free ------------------------------------------
-    def syntax_spec(self) -> str:
-        return syntax_spec(self.cfg)
+    def syntax_spec(self, bare_atomics: bool = True) -> str:
+        return syntax_spec(self.cfg, bare_atomics)
 
     def demo_block(self) -> str:
         return "\n".join(f"  {a} -> {b}" for a, b in self.demos)

@@ -377,6 +377,14 @@ def test_bare_atomics_allowed_by_default(session):
     assert "out" in out["results"][0]
 
 
+def test_syntax_spec_omits_bare_atomics_when_asked():
+    from glyph.data.grammar import syntax_spec
+    full, bare_off = syntax_spec(CFG), syntax_spec(CFG, bare_atomics=False)
+    assert "applied directly to value literals" in full and "u*(value)" in full
+    assert "applied directly" not in bare_off and "u*(value)" not in bare_off and "bare" not in bare_off.lower()
+    assert "Structural operators" in bare_off and "Nesting depth is at most" in bare_off
+
+
 def test_readme_does_not_mention_the_bare_atomic_rule():
     # The agent is told nothing about it; a refused query (reason "bare_atomic") is the only signal.
     env = FP.environment_line(None, 24, 160, 35)

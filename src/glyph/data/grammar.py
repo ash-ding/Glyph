@@ -382,8 +382,12 @@ def check(e: Expr, cfg: GlyphConfig) -> None:
     walk(e, 0)
 
 
-def syntax_spec(cfg: GlyphConfig) -> str:
-    """The public description handed to the agent.  Semantics are absent."""
+def syntax_spec(cfg: GlyphConfig, bare_atomics: bool = True) -> str:
+    """The public description handed to the agent.  Semantics are absent.
+
+    With `bare_atomics=False` the spec reads as it did before 2026-09-30: no
+    mention of u*(value) / b*(value, value). The grammar still parses them.
+    """
     lines = [
         "You are facing a small language you have never seen before.",
         "The SYNTAX below is given to you.  The SEMANTICS -- what each",
@@ -403,14 +407,15 @@ def syntax_spec(cfg: GlyphConfig) -> str:
     }
     for name, shape in enabled_ops(cfg):
         lines.append(f"    {name}{sig[shape]}")
-    lines += [
-        "Atomic operators may also be applied directly to value literals:",
-        "    u*(value) -> value",
-        "    b*(value, value) -> value",
-        "Their arguments must be value literals -- no nesting, no lists.",
-        "A bare atomic application has nesting depth 0; the nesting-depth",
-        "cap below counts structural operators only.",
-    ]
+    if bare_atomics:
+        lines += [
+            "Atomic operators may also be applied directly to value literals:",
+            "    u*(value) -> value",
+            "    b*(value, value) -> value",
+            "Their arguments must be value literals -- no nesting, no lists.",
+            "A bare atomic application has nesting depth 0; the nesting-depth",
+            "cap below counts structural operators only.",
+        ]
     lo, hi = cfg.list_len_range
     lines += [
         f"Integer arguments are {K_RANGE[0]}..{K_RANGE[1]}.",

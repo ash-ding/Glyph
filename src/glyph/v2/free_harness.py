@@ -312,7 +312,7 @@ def run_free(rc) -> dict:
     tag = f"tp{rc.t_p_s / 3600:g}h"
     run_name = f"{instance_id or f'{preset}_{seed}'}_{rc.arm}_{tag}" + ("" if rc.bare_atomics else "_nobare")
     run_dir = neutral_run_dir(out_root, run_name)
-    paths, val_id_of, test_id_of = workspace.build_workspace(inst, run_dir)
+    paths, val_id_of, test_id_of = workspace.build_workspace(inst, run_dir, bare_atomics=rc.bare_atomics)
 
     ledger = Ledger()
     session = Session(inst, ledger, run_dir, arm=rc.arm, protocol="free", reserve_val_binary=True,
