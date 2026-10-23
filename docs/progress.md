@@ -4332,3 +4332,46 @@ The option exists to ask whether an agent will, on its own, turn structural quer
 - `Session.refuse_bare_atomics`, `GlyphInstance.is_bare_atomic`, the CLI and sweep flag, a `_nobare` suffix on run names, and `bare_atomics` and `refused_bare` in the report. Off by default; the other refusal rules are unchanged.
 - Tests: bare unary and binary come back as malformed and uncharged while a map in the same call is answered and logs its cells; allowed by default; the README never mentions the rule; the syntax spec omits bare applications when asked; CLI flag. 178 pass.
 
+## 2026-10-19 — the silent arm: nine runs, and nine more without bare atomic queries
+
+`low_3`, `claude-opus-4-8`, effort high, Python 3.12 image, CPU pinning, reserved validation entries, no `check_answers`. Three replicates at each `T_p` in {1, 2, 4} h, under opaque run directories. Rows: `docs/benchmark/free_silent_2026-10-19.json` and `docs/benchmark/free_silent_nobare_2026-10-19.json`.
+
+### The silent arm (a GPU in the container, no Environment section)
+
+| T_p | replicate 1 | replicate 2 | replicate 3 |
+|---|---|---|---|
+| 1 h | L2 0.685 | L1 0.680 | L3 0.775 |
+| 2 h | L3 0.821 | L1 0.679 | L3 0.823 |
+| 4 h | L3 0.840 | **L4 0.872** | L3 0.801 |
+
+$1,204 for the nine runs.
+
+- **No run looked at its machine.** Across the nine transcripts there is no `nvidia-smi`, `torch.cuda`, `nproc` or `lscpu`; one `free -g` at minute 213 of a 4 h run, to time the final evaluation. GPU busy time is 0 in every run, and the words GPU, CUDA and torch never appear.
+- **One run in nine fitted a model**, on CPU: replicate 2 at 4 h checked for sklearn at minute 26 ("a RandomForest per output digit could capture carry/cross-digit structure"), and after a first learnability test that lost to tables at 4,840 samples ("interactions are data-hungry"), estimated the samples it needed (~70 per cell, ~21k), collected them, retested at minute 44.7 ("Trees now beat pairmode") and finished with ExtraTrees and HistGradientBoosting per output digit on 204k cells: binary probe 0.73 / 0.71, test 0.872. The other eight stayed at L1–L3 with probes at or below the per-digit ceiling.
+- **Eight of nine read the coupling as a carry chain** and spent their binary effort trying to derive the carry rule, stopping when the carry model did not beat a per-digit majority table.
+- **Only one run considered a learning-based method at all.** Five of the eight non-L4 runs did fit and evaluate predictors, some of which they called models: EM-fitted carry classes, cross-validated 2- to 4-digit-key tables, additive and "bilinear" factorisations. In code each is a counting table under a different bucketing, fitted by majority votes and discrete reassignment; none has shared parameters, a gradient, or an import of sklearn or torch. They are L3 variants, and the plateaus they measured, 0.5–0.8 per digit, are the ceiling of counting tables, which they took for the ceiling of the problem ("a compact binary model tops out ~0.5/op"). Three runs fitted nothing and declared binary unlearnable from the dependency structure. So in eight runs a model that generalises across cells never came up as an option; these were not learnability tests in the sense of this document. The ninth run checked for sklearn at minute 26, and when its random forest lost to tables at 4,840 samples it could read the result as a data problem, collect more, and retest. The 2026-10-15 statement that every run which ran a learnability test reached L4 stands, with the test understood as fitting a model with shared parameters.
+- **Against the other arms** (neutral paths, 2026-10-15, 3.14 image): L4 at 1 h was train 2/3, no_train 1/3, silent 0/3; at 2 h train 1/1, no_train 1/1, silent 0/3. Mean accuracy at 1 h: train 0.856, no_train 0.739, silent 0.713. Silent sits below no_train as well as train, which is consistent with even the sentence "This container has no GPU" bringing the idea of a GPU into view; with these sample sizes it is a direction, not a result.
+- **The reserved validation entries did their job** (no validation score above 0.871) **and had a side effect**: two agents read the refusal as a hint about the task. Replicate 2 at 4 h: "the anti-cheat blocking binary entries implies binary must have exploitable structure"; the same replicate at 2 h: "validation's needed entries are blocked by design", and it abandoned binary. Same cue, opposite readings.
+- Caveat: these runs differ from the 2026-10-15 train and no_train runs in four ways at once (image, reserved entries, CPU pinning, tool list), so a clean three-arm comparison needs train and no_train rerun under the new code.
+
+### `--no-bare-atomics`: cells only through structural expressions
+
+Same nine cells, with `query` answering `u*(value)` and `b*(value, value)` with `malformed` and `syntax.md` not describing them (#95). The question: with the direct channel gone, does an agent read cells back out of structural results and still build training data?
+
+| T_p | replicate 1 | replicate 2 | replicate 3 |
+|---|---|---|---|
+| 1 h | L1 0.680 | L3 0.781 | failed 0.139 |
+| 2 h | L3 0.816 | L3 0.820 | L3 0.839 |
+| 4 h | L3 0.837 ($ line) | L3 0.819 | L3 0.804 ($ line) |
+
+$1,675 for the nine runs.
+
+- **Nobody tried a bare query.** All 21 `malformed` replies came from list literals of the wrong length. The agents treated `s1([x, y], b)` as the binary primitive and `s0(u, [four values])` as the unary one from their first minute, which is how the language read before 2026-09-30.
+- **Cells still came by the hundred thousand.** Eight runs bought all 14,739 unary cells through four-element maps; two-element folds yielded 0.6k–235k binary cells, the same order as with bare queries. The data channel was never the bottleneck.
+- **Still no model.** Zero L4 in nine, no ML words in any transcript, GPU busy 0 everywhere, no environment probes. Scores match the plain silent runs cell for cell except two: the one L4 run of the plain condition has no counterpart here, and replicate 3 at 1 h failed (its subagents had bought 6,145 of 14,739 unary cells when the deadline hit, and its final phase guessed the rest with majority tables). With nine against nine, both differences are within noise.
+- **Cost.** Two 4 h runs reached the $500 line (at 142 and 154 min); folds cost more tokens per cell than bare queries.
+
+**The binary probe is not meaningful here as scored.** `low_3`'s fold is `acc = b(next, acc)`, so `s1([x, y], b0)` evaluates `b0(y, x)`. An agent that defines its table from fold results, `B(p, q) := s1([p, q], b0)`, holds the transpose of `b0`; its fold rule, learned relative to `B`, is the mirror image of the real one, and the two mirrors cancel on every structural expression. Nothing observable through `s1` distinguishes `(b0, fold)` from `(b0ᵀ, mirrored fold)`; the demos are structural too. The 200 bare probe rows `b0(x, y)` are the only place the orientation shows, and every agent guessed list order equals argument order: exact matches 0–3 of 200, matches against `b(y, x)` 74–118 of 200 in the seven runs with a binary table (0.37–0.59, the L3 band). The unary probes, which have no order, were 300/300. The report now records `swapped.acc` for each binary probe operator; under this condition the higher of the two is the orientation-free score.
+
+What this variant showed: closing the bare channel changes what the agent types, not what it does with the data. It is not needed on the main line.
+

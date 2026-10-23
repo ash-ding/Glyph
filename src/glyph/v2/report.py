@@ -10,6 +10,8 @@ rather than by Session itself -- see Task 10/12.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from glyph.seal import headroom as _headroom
 from glyph.v2.answers import score_file
 
@@ -28,6 +30,21 @@ def _zero_score(items, cfg) -> dict:
         "by_split": {k: 0.0 for k in by_split},
         "by_depth": {k: 0.0 for k in by_depth},
     }
+
+
+def _swapped_binary(inst, items, p_id_of=None):
+    """Mirror images of bare binary probe items: the same expressions, answered as
+    if the operator's arguments were the other way round. None for other items."""
+    from glyph.data.grammar import render_value
+    if not items or any(len(t.needs_b) != 1 or t.needs_u for t in items):
+        return None
+    mirrored, ids = [], {}
+    for t in items:
+        (op, i, j), = t.needs_b
+        m = replace(t, answer_src=render_value(inst.tables.apply_binary(op, j, i), inst.cfg))
+        mirrored.append(m)
+        ids[id(m)] = t
+    return mirrored, (lambda m: p_id_of(ids[id(m)]))
 
 
 def build_report(session, committed_path, id_of) -> dict:
@@ -82,6 +99,16 @@ def build_report(session, committed_path, id_of) -> dict:
                 "seen": {"n": len(seen), "acc": _acc(seen)},
                 "unseen": {"n": len(unseen), "acc": _acc(unseen)},
             }
+            # A binary probe b(x, y) is also scored against b(y, x). An agent that
+            # met the operator only inside folds cannot learn which argument
+            # order the bare application uses (the table and the fold rule can
+            # be mirrored together without changing any structural result), so
+            # the higher of the two is the orientation-free score.
+            swapped = _swapped_binary(inst, its, p_id_of)
+            if swapped is not None:
+                mirrored, m_id_of = swapped
+                by_op[op]["swapped"] = {"acc": (0.0 if committed_path is None else
+                                                score_file(committed_path, mirrored, cfg, m_id_of)["overall"])}
         probe_block = {"by_op": by_op}
     else:
         probe_block = None
